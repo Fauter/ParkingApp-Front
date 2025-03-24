@@ -1,0 +1,216 @@
+  .contenidoCentral {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 60px);
+  }
+
+/* DATOS DE AUTO */ 
+
+.datosAuto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 400px;
+  background-color: #58A4B0;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  margin: 25px 0px 25px 60px;
+  gap: 20px;
+}
+
+.tipoVehiculo {
+  width: 100%;
+  color: black;
+  text-align: center;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 20px;
+}
+
+.patente {
+  width: 100%;
+  background-color: #373F51;
+  color: white;
+  text-align: center;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 10px;
+}
+
+.horarios {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: center;
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: black;
+  font-weight: bold;
+  padding: 2px 3px;
+  background-color: white;
+  border-radius: 5px;
+  border: 2px solid #ddd;
+  font-size: 14px;
+}
+
+.fotoAuto{
+  display: flex;
+  justify-content: center;
+}
+.fotoAuto img {
+  width: 90%;
+}
+
+
+
+/* DATOS DE PAGO */ 
+
+.datosPago {
+  flex: 1;
+  display: flex;
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.precioTotal {
+  font-size: 70px;
+  font-weight: bold;
+  color: white;
+}
+.precioContainer {
+  background-color: #648ABB;
+  border-top-right-radius: 40px;
+  border-top-left-radius: 40px; 
+  padding: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 500px;
+}
+
+.precioEspecificaciones {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  font-size: 20px;
+  background-color: #052233;
+  padding: 15px;
+  min-width: 500px;
+}
+.metodoDePago, .factura, .promo {
+  color: black;
+  font-weight: bold;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+}
+
+
+.title {
+  font-size: 15px;
+  font-weight: bold;
+  color:rgb(231, 243, 255);  /* Un gris oscuro para que resalte pero no sea tan fuerte */
+  margin-top: 20px;
+  margin-bottom: 10px;
+  position: relative;
+}
+.title::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0%;
+  width: 80%;
+  height: 2px;
+  background-color:rgba(90, 153, 215, 0.53); 
+  border-radius: 2px;
+}
+
+.promo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 5px;
+  color: black;
+  font-weight: bold;
+}
+.promoSelect {
+  padding: 8px;
+  border-radius: 5px;
+  border: 2px solid #C1C1C1;
+  font-size: 16px;
+  cursor: pointer;
+}
+.iconContainer {
+  background-color: white;
+  border: 2px solid #ddd;
+  border-radius: 200px;
+  padding: 3px;
+  display: flex; /* Establece un contenedor flexible */
+  justify-content: center; /* Centra horizontalmente */
+  align-items: center; 
+}
+.camIcon {
+  width: 25px;
+  height: 25px
+}
+
+.fondoSalida {
+  background-color: #052233;  
+  padding: 15px;
+  min-width: 500px;
+  border-bottom-right-radius: 20px;
+  border-bottom-left-radius: 20px; 
+  justify-content: center;
+
+}
+.salida {
+  background-color: #5A99D7;
+  color: white;
+  font-size: 20px;
+  font-weight: bold;
+  border-radius: 50px;
+  padding: 15px 25px;
+  text-decoration: none;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+  text-align: center;
+}
+.salida:hover {
+  background-color: #4A82B5;
+}
+.salida:focus {
+  outline: none; /* Elimina el contorno al hacer click */
+}
+.salida:active {
+  background-color: #3a72a2; /* Color más oscuro al hacer clic */
+}
+
+/* HOVERS SELECCIÓN */
+.metodoOption, .facturaOption {
+  padding: 10px 16px;
+  background-color: #F0F0F0;
+  border: 2px solid #C1C1C1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.metodoOption:hover, .facturaOption:hover {
+  background-color: #e0e0e0; /* Gris más oscuro en hover */
+}
+/* SELECCIONADO */
+.metodoOption.selected, .facturaOption.selected {
+  background-color: #8a8a8a; /* Gris oscuro cuando está seleccionado */
+  color: white;
+  border-color: #6d6d6d;
+}
+

@@ -1,0 +1,97 @@
+.right-side {
+  display: flex;
+  width: 125px; 
+  flex-direction: column; /* Organiza los elementos de arriba hacia abajo */
+  justify-content: space-between; 
+  background-color: #152233;
+}
+
+/* Apertura de Emergencia */
+.emergency-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center; 
+  text-decoration: none;
+}
+.emergency-btn img {
+  width: 75px; 
+  height: 75px;
+  cursor: pointer;
+}
+.emergency-btn div {
+  text-align: center; /* Centra el texto */
+  font-size: 15px; /* Ajusta el tamaño del texto si es necesario */
+  line-height: 0.2; /* Reduce la separación entre las palabras */
+  padding: 0px;
+  text-decoration: none;
+  color: white;
+}
+.emergency-btn p {
+  margin-top: 7px;
+}
+
+
+/* Iconos de Barrera */
+.barrier-icons {
+  display: flex; /* Alinea las barreras horizontalmente */
+  justify-content: center; /* Separa las barreras entre sí */
+}
+.barrier-low img,
+.barrier-high img {
+  width: 55px;
+  height: 55px;
+  filter: brightness(50%);
+  padding: 0px 3px 0px 3px
+}
+
+
+/* Autos Totales */
+.totals {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 40px;
+}
+.totalsTitle {
+  font-size: 20px;
+  color: white;
+  font-weight: bold; /* Le da el bold al título */
+  text-align: center; /* Centra el texto */
+}
+.totalsQuantity {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  color: black;
+  font-weight: bold; /* Hace el número más destacado */
+  border-radius: 5px; /* Esquinas redondeadas para los números */
+  padding: 3px 8px; /* Espacio alrededor del número y la imagen */
+  width: 100px; /* Limita el ancho */
+}
+.totalsQuantity img {
+  width: 13px;
+  height: 13px;
+}
+.totalsQuantity div {
+  flex-grow: 1; /* Asegura que el número ocupe el espacio disponible */
+  text-align: center; /* Centra el número dentro del contenedor */
+}
+.totals > div:first-child {
+  margin-bottom: 10px; /* Añade espacio entre "Total Fijos" y "Total Móvil" */
+}
+
+
+/* Contacto */
+.contact{
+  display: flex;
+  flex-direction: column; /* Coloca los iconos uno debajo del otro */
+  align-items: center; /* Centra los iconos horizontalmente */
+  justify-content: center; /* Centra los iconos verticalmente si hay espacio extra */
+}
+.contactIcon{
+  margin: 5px 0;
+}
+.contactIcon img{
+  width: 75px;
+  height: 75px;
+}
