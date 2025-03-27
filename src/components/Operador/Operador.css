@@ -1,82 +1,111 @@
-  .contenidoCentral {
-    display: flex;
-    flex: 1;
-    height: calc(100vh - 60px);
-  }
+.contenidoCentral {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 60px);
+}
+.contenidoCentral > *:first-child {
+  position: relative;
+}
+.contenidoCentral > *:first-child::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 10%;
+  bottom: 10%;
+  width: 2px;
+  background-color: rgba(173, 173, 202, 0.5); 
+}
 
-/* DATOS DE AUTO */ 
 
+/* DATOS DE AUTO SALIDA*/ 
 .datosAuto {
   display: flex;
+  flex: 1.3;
   flex-direction: column;
   align-items: center;
-  max-width: 400px;
-  background-color: #58A4B0;
-  border-radius: 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  justify-content: center;
   overflow: hidden;
-  margin: 25px 0px 25px 60px;
-  gap: 20px;
 }
 
-.tipoVehiculo {
-  width: 100%;
-  color: black;
+.patenteYTipo{
+  display:flex;
+  flex-direction: column;
   text-align: center;
-  font-size: 30px;
-  font-weight: bold;
-  padding: 20px;
-}
-
-.patente {
-  width: 100%;
-  background-color: #373F51;
   color: white;
-  text-align: center;
-  font-size: 30px;
-  font-weight: bold;
-  padding: 10px;
 }
-
-.horarios {
-  display: flex;
-  flex-direction: row;
-  gap: 10px;
-  justify-content: center;
-}
-
-.container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: black;
+.patente {
+  font-size: 40px;
   font-weight: bold;
-  padding: 2px 3px;
-  background-color: white;
-  border-radius: 5px;
-  border: 2px solid #ddd;
-  font-size: 14px;
 }
 
 .fotoAuto{
   display: flex;
   justify-content: center;
+  width: 100%;
+  padding: 15px 0px 15px 0px;
 }
 .fotoAuto img {
   width: 90%;
 }
 
+.horarios {
+  display: flex;
+  flex-direction: row;
+  gap: 50px;
+  font-weight: 500;
+  padding-bottom : 20px;
+}
+.container {
+  display: flex;
+  background-color: #1F4258;
+  align-items: center;
+  color: black;
+  padding: 2px 3px;
+  font-size: 17px;
+}
+
+/* DATOS DE AUTO ENTRADA */ 
+.formularioAuto {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 90%;
+  text-align: left;
+}
+label {
+  font-size: 14px;
+  color: white;
+  font-weight: bold;
+}
+.inputPatente {
+  padding: 8px;
+  border-radius: 5px;
+  border: none;
+  background-color: #1F4258;
+  color: white;
+  font-size: 16px;
+  text-transform: uppercase;
+  outline: none;
+}
+.selectVehiculo {
+  padding: 8px;
+  border-radius: 5px;
+  border: none;
+  background-color: #1F4258;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
 
 
 /* DATOS DE PAGO */ 
-
 .datosPago {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column; 
   align-items: center; 
   justify-content: center;
-  border-radius: 10px;
+  height: 100%
 }
 
 .precioTotal {
@@ -85,14 +114,9 @@
   color: white;
 }
 .precioContainer {
-  background-color: #648ABB;
-  border-top-right-radius: 40px;
-  border-top-left-radius: 40px; 
-  padding: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 500px;
 }
 
 .precioEspecificaciones {
@@ -100,23 +124,23 @@
   flex-direction: column;
   text-align: left;
   font-size: 20px;
-  background-color: #052233;
   padding: 15px;
-  min-width: 500px;
 }
-.metodoDePago, .factura, .promo {
+.metodoDePago, .factura {
+  background-color: #1F4258;
   color: black;
   font-weight: bold;
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  border-radius: 8px;
+  padding: 0px 2px 0px 2px;
 }
 
 
 .title {
   font-size: 15px;
   font-weight: bold;
-  color:rgb(231, 243, 255);  /* Un gris oscuro para que resalte pero no sea tan fuerte */
+  color:rgb(231, 243, 255); 
   margin-top: 20px;
   margin-bottom: 10px;
   position: relative;
@@ -136,14 +160,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  border-radius: 5px;
-  color: black;
-  font-weight: bold;
 }
 .promoSelect {
+  background-color: rgb(21, 49, 69);
+  border: 2px solid rgb(50, 88, 111);
   padding: 8px;
   border-radius: 5px;
-  border: 2px solid #C1C1C1;
   font-size: 16px;
   cursor: pointer;
 }
@@ -162,9 +184,7 @@
 }
 
 .fondoSalida {
-  background-color: #052233;  
   padding: 15px;
-  min-width: 500px;
   border-bottom-right-radius: 20px;
   border-bottom-left-radius: 20px; 
   justify-content: center;
@@ -195,21 +215,19 @@
 /* HOVERS SELECCIÓN */
 .metodoOption, .facturaOption {
   padding: 10px 16px;
-  background-color: #F0F0F0;
-  border: 2px solid #C1C1C1;
   border-radius: 8px;
   cursor: pointer;
   font-weight: bold;
   transition: all 0.3s ease;
   text-align: center;
-  margin-bottom: 10px;
+  margin: 5px 2.5px 5px 2.5px;
 }
 .metodoOption:hover, .facturaOption:hover {
   background-color: #e0e0e0; /* Gris más oscuro en hover */
 }
 /* SELECCIONADO */
 .metodoOption.selected, .facturaOption.selected {
-  background-color: #8a8a8a; /* Gris oscuro cuando está seleccionado */
+  background-color: #10222E;
   color: white;
   border-color: #6d6d6d;
 }

@@ -14,7 +14,7 @@ function Tabs() {
         </div>
         <div className="bottom">
             <div className="tab closedTab">
-                <img src={require('../../assets/planilla.png')} alt="Planillas" className="tab-icon" />
+                <img src={require('../../../assets/planilla.png')} alt="Planillas" className="tab-icon" />
             </div>
             <div className="tab closedTab">
                 <img src="https://icon-library.com/images/man-icon-png/man-icon-png-29.jpg" alt="Admin" className="tab-icon" />
