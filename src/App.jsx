@@ -1,18 +1,25 @@
 import './App.css';
-import React, { useEffect } from 'react'; // Importa React y useEffect
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'; // Importa los elementos de react-router-dom
+import React, { useEffect } from 'react'; 
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'; 
 import Interfaz from './components/Interfaz/Interfaz';
 import Login from './components/Login/Login.jsx';
 
 
 function App() {
   const navigate = useNavigate();
+  const redirectAfterLogin = localStorage.getItem('redirectAfterLogin');
   
   useEffect(() => {
-    const token = localStorage.getItem('token'); 
+    const token = localStorage.getItem('token');
+    const redirectAfterLogin = localStorage.getItem('redirectAfterLogin');
+
     if (!token) {
-      localStorage.setItem('redirectAfterLogin', window.location.pathname);
-      navigate('/login'); 
+      if (window.location.pathname !== '/login') {
+        localStorage.setItem('redirectAfterLogin', window.location.pathname);
+        navigate('/login');
+      }
+    } else if (window.location.pathname === '/login') {
+      navigate(redirectAfterLogin || '/', { replace: true });
     }
   }, [navigate]);
 

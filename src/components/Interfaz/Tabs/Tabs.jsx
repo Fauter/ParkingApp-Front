@@ -9,6 +9,11 @@ function Tabs({ toggleEntradaSalida }) {
     navigate(route);
   };
 
+  const handleAdminRedirect = () => {
+    window.location.href = 'https://admin.ofiflex.com.ar';
+  };
+
+
   return (
     <div className="tabs">
       <div className="upper-buttons">
@@ -34,7 +39,7 @@ function Tabs({ toggleEntradaSalida }) {
         </button>
         <button 
           className="tab-button" 
-          onClick={() => handleButtonClick('/admin')}
+          onClick={handleAdminRedirect}
         >
           Admin
         </button>

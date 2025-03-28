@@ -81,7 +81,21 @@ h1 {
 .login-button:hover {
     background-color: #1563b3;
 }
+.login-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
 
+.success-message {
+    color: green;
+    margin-top: 10px;
+    font-size: 14px;
+}
+.error-message {
+    color: red;
+    margin-top: 10px;
+    font-size: 14px;
+}
 
 /* Link de "Forgot Password" */
 .forgot-password {
