@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Tabs.css'; 
 
-function Tabs() {
+function Tabs({ toggleEntradaSalida }) {
   const navigate = useNavigate();
 
-  // Función para manejar el cambio de selección
   const handleButtonClick = (route) => {
     navigate(route);
   };
@@ -29,7 +28,7 @@ function Tabs() {
       <div className="lower-buttons">
         <button 
           className="tab-button" 
-          onClick={() => handleButtonClick('/planilla')}
+          onClick={toggleEntradaSalida}
         >
           Entr/Sal
         </button>

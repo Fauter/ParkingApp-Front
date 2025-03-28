@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import '../Operador.css';
+import "./DatosPago.css"
 
-function DatosPago() {
+function DatosPago({ mostrarEntrada }) {
     const [metodoPago, setMetodoPago] = useState('');
     const [factura, setFactura] = useState('');
 
@@ -12,8 +12,14 @@ function DatosPago() {
       setFactura(opcion);
     };
 
+    const datosPagoStyles = mostrarEntrada ? {
+        opacity: 0.2,
+        pointerEvents: 'none',
+        cursor: 'not-allowed',
+      } : {};
+
     return (
-            <div className="datosPago">
+            <div className="datosPago" style={datosPagoStyles}>
             {/* Precio Total */}
             <div className="precioTotal">
                 <div className="precioContainer">

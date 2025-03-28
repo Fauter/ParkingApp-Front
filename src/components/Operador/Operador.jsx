@@ -4,15 +4,17 @@ import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
 import DatosPago from './DatosPago/DatosPago'
 import DatosAutoEntrada from './DatosAutoEntrada/DatosAutoEntrada';
 
-function Operador() {
+function Operador({ mostrarEntrada }) {
   return (
     <div className="contenidoCentral">
 
-      <DatosAutoSalida />
+      {mostrarEntrada ? (
+        <DatosAutoEntrada />
+      ) : (
+        <DatosAutoSalida />
+      )}
 
-      {/* <DatosAutoEntrada /> */}
-
-      <DatosPago />
+      <DatosPago mostrarEntrada={mostrarEntrada} />
       
     </div>
   );

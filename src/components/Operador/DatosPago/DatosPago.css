@@ -1,0 +1,112 @@
+.datosPago {
+    display: flex;
+    flex: 1;
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center;
+    height: 100%;
+  }
+  
+  .precioTotal {
+    font-size: 70px;
+    font-weight: bold;
+    color: white;
+  }
+  .precioContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .precioEspecificaciones {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    font-size: 20px;
+    padding: 15px;
+  }
+  .metodoDePago, .factura {
+    background-color: #1F4258;
+    color: black;
+    font-weight: bold;
+    display: flex;
+    flex-direction: row;
+    border-radius: 8px;
+    padding: 0px 2px 0px 2px;
+  }
+  
+  
+  .title {
+    font-size: 15px;
+    font-weight: bold;
+    color:rgb(231, 243, 255); 
+    margin-top: 20px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .title::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 0%;
+    width: 80%;
+    height: 2px;
+    background-color:rgba(90, 153, 215, 0.53); 
+    border-radius: 2px;
+  }
+  
+  .promo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .promoSelect {
+    background-color: rgb(21, 49, 69);
+    border: 2px solid rgb(50, 88, 111);
+    padding: 8px;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .iconContainer {
+    background-color: white;
+    border: 2px solid #ddd;
+    border-radius: 200px;
+    padding: 3px;
+    display: flex; /* Establece un contenedor flexible */
+    justify-content: center; /* Centra horizontalmente */
+    align-items: center; 
+  }
+  .camIcon {
+    width: 25px;
+    height: 25px
+  }
+  
+  .fondoSalida {
+    padding: 15px;
+    border-bottom-right-radius: 20px;
+    border-bottom-left-radius: 20px; 
+    justify-content: center;
+  
+  }
+  .salida {
+    background-color: #5A99D7;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    border-radius: 50px;
+    padding: 15px 25px;
+    text-decoration: none;
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+    text-align: center;
+  }
+  .salida:hover {
+    background-color: #4A82B5;
+  }
+  .salida:focus {
+    outline: none; /* Elimina el contorno al hacer click */
+  }
+  .salida:active {
+    background-color: #3a72a2; /* Color más oscuro al hacer clic */
+  }
