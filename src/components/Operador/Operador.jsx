@@ -1,3 +1,4 @@
+import "./Operador.css";
 import React, { useState } from 'react';
 import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
 import DatosPago from './DatosPago/DatosPago'

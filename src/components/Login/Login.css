@@ -1,0 +1,92 @@
+.login {
+    font-family: Manrope, "Noto Sans", sans-serif;
+    background-color: #111a22;
+    color: white;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.logo svg {
+    width: 30px;
+    height: 30px;
+    color: white;
+}
+
+h2 {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+
+/* Formulario */
+.login-container {
+    text-align: center;
+    padding: 30px 0;
+}
+
+h1 {
+    font-size: 22px;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+
+/* Inputs */
+.input-label {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    margin-bottom: 15px;
+}
+.input-label p {
+    margin-bottom: 5px;
+    font-weight: 500;
+}
+
+.input-field {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #344d65;
+    background-color: #1a2632;
+    color: white;
+    border-radius: 10px;
+    font-size: 16px;
+}
+.input-field::placeholder {
+    color: #93adc8;
+}
+
+
+/* Botón */
+.login-button {
+    width: 100%;
+    padding: 12px;
+    background-color: #1980e6;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.login-button:hover {
+    background-color: #1563b3;
+}
+
+
+/* Link de "Forgot Password" */
+.forgot-password {
+    color: #93adc8;
+    font-size: 14px;
+    text-decoration: underline;
+    margin-top: 10px;
+}

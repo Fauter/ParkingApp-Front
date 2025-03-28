@@ -1,7 +1,7 @@
 .contenidoCentral {
-  display: flex;
-  flex: 1;
-  height: calc(100vh - 60px);
+  display: flex !important;
+  flex: 1 !important;
+  height: calc(100vh - 60px) !important;
 }
 .contenidoCentral > *:first-child {
   position: relative;
