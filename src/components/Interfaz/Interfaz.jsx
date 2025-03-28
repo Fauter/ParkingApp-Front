@@ -9,18 +9,13 @@ import Background from '../Background/Background';
 function Interfaz() {
     return (
       <div className="interfaz">
-        <Background />
-        <div>
-          
+          <Background />
           <Header />
           <div className="content">
             <Tabs />
             <Operador />
-            
-            <PanelDerecho /> 
+            <PanelDerecho />
           </div>
-          
-        </div>
       </div>
     );
   }

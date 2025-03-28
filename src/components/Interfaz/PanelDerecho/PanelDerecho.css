@@ -6,7 +6,7 @@
   justify-content: space-between; 
 }
 
-/* Apertura de Emergencia */
+/* Apertura de Emergencia
 .emergency-btn {
   display: flex;
   flex-direction: column;
@@ -93,4 +93,4 @@
 .contactIcon img{
   width: 75px;
   height: 75px;
-}
+} */

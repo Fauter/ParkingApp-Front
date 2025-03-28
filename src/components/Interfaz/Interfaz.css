@@ -1,9 +1,11 @@
+.interfaz {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; 
+}
 
-  /* Contenedor de contenido */
-  .content {
-    display: flex;
-  }
-
-  
-
+.content {
+  display: flex;
+  height: 100%;
+}
 
