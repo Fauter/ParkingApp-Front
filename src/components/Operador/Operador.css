@@ -1,7 +1,11 @@
 .contenidoCentral {
-  display: flex !important;
-  flex: 1 !important;
-  height: calc(100vh - 60px) !important;
+  display: flex;
+  height: calc(100vh - 60px); 
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 10px; 
+  box-sizing: border-box;
 }
 .contenidoCentral > *:first-child {
   position: relative;
@@ -9,115 +13,21 @@
 .contenidoCentral > *:first-child::after {
   content: "";
   position: absolute;
-  right: 0;
-  top: 10%;
-  bottom: 10%;
+  right: -1px; /* Coloca la línea al borde derecho */
+  top: 0;
+  bottom: 0;
   width: 2px;
-  background-color: rgba(173, 173, 202, 0.5); 
+  background-color: #1F4258; /* Color del separador */
 }
-
-
-/* DATOS DE AUTO SALIDA*/ 
-.datosAuto {
-  display: flex;
-  flex: 1.3;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.patenteYTipo{
-  display:flex;
-  flex-direction: column;
-  text-align: center;
-  color: white;
-}
-.patente {
-  font-size: 40px;
-  font-weight: bold;
-}
-
-.fotoAuto{
-  display: flex;
-  justify-content: center;
+.contenidoCentral img {
   width: 100%;
-  padding: 15px 0px 15px 0px;
-}
-.fotoAuto img {
-  width: 90%;
 }
 
-.horarios {
-  display: flex;
-  flex-direction: row;
-  gap: 50px;
-  font-weight: 500;
-  padding-bottom : 20px;
+.izquierda {
+  flex: 1;
+  padding: 2.5% 10px 10px 10px;
 }
-.container {
-  display: flex;
-  background-color: #1F4258;
-  align-items: center;
-  color: black;
-  padding: 2px 3px;
-  font-size: 17px;
+.derecha {
+  flex: 1.5;
+  padding: 2.5% 10px 10px 10px;
 }
-
-/* DATOS DE AUTO ENTRADA */ 
-.formularioAuto {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 90%;
-  text-align: left;
-}
-label {
-  font-size: 14px;
-  color: white;
-  font-weight: bold;
-}
-.inputPatente {
-  padding: 8px;
-  border-radius: 5px;
-  border: none;
-  background-color: #1F4258;
-  color: white;
-  font-size: 16px;
-  text-transform: uppercase;
-  outline: none;
-}
-.selectVehiculo {
-  padding: 8px;
-  border-radius: 5px;
-  border: none;
-  background-color: #1F4258;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-
-/* DATOS DE PAGO */ 
-
-
-/* HOVERS SELECCIÓN */
-.metodoOption, .facturaOption {
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s ease;
-  text-align: center;
-  margin: 5px 2.5px 5px 2.5px;
-}
-.metodoOption:hover, .facturaOption:hover {
-  background-color: #e0e0e0; /* Gris más oscuro en hover */
-}
-/* SELECCIONADO */
-.metodoOption.selected, .facturaOption.selected {
-  background-color: #10222E;
-  color: white;
-  border-color: #6d6d6d;
-}
-

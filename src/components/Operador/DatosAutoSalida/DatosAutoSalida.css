@@ -1,0 +1,57 @@
+/* DATOS DE AUTO SALIDA*/ 
+  .datosAutoSalida {
+    display: flex; 
+    align-items: stretch; 
+    color: white;
+  }
+  
+  .fotoAutoSalida{
+    display: flex;
+    width: 66.5%;
+    margin-bottom: 15px;
+  }
+  .fotoAutoSalida img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; 
+  }
+  
+  .detalleAutoSalida {
+    display: flex; 
+    flex-direction: column;
+    margin-left: 15px;
+    flex-grow: 1; 
+  }
+
+  .patenteYTipo{
+    display:flex;
+    flex-direction: column;
+    color: white;
+    padding-bottom: 15%
+  }
+  .patente {
+    font-size: 40px;
+    font-weight: bold;
+  }
+  
+  .horarios {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 15px;
+  }
+  
+  .container {
+    display: flex;
+    background-color: #1F4258; 
+    align-items: center;
+    justify-content: flex-start; 
+    color: white; 
+    padding: 8px 15px; 
+    border-radius: 5px;
+    max-width: 280px; 
+    width: 80%;
+  }
+  .container div {
+    margin-right: 10px; /* Espaciado entre el ícono y el texto */
+  }

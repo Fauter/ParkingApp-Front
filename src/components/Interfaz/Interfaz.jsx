@@ -17,7 +17,6 @@ function Interfaz() {
           <Background />
           <Header />
           <div className="content">
-            <Tabs toggleEntradaSalida={toggleEntradaSalida} /> 
             <Operador mostrarEntrada={mostrarEntrada} /> 
             <PanelDerecho />
           </div>

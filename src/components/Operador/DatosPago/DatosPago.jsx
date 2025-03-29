@@ -19,67 +19,12 @@ function DatosPago({ mostrarEntrada }) {
       } : {};
 
     return (
-            <div className="datosPago" style={datosPagoStyles}>
+        <div className="datosPago" style={datosPagoStyles}>
             {/* Precio Total */}
             <div className="precioTotal">
                 <div className="precioContainer">
                     $6.000,00
                 </div>
-            </div>
-            {/* Precio Especificaciones */}
-            <div className="precioEspecificaciones">
-                {/* Métodos De Pago */}
-                <div className="title">Método de Pago</div>
-                <div className="metodoDePago">
-                    <div
-                    className={`metodoOption ${metodoPago === 'Efectivo' ? 'selected' : ''}`}
-                    onClick={() => handleSelectMetodoPago('Efectivo')}
-                    >
-                    Efectivo
-                    </div>
-                    <div
-                    className={`metodoOption ${metodoPago === 'Débito' ? 'selected' : ''}`}
-                    onClick={() => handleSelectMetodoPago('Débito')}
-                    >
-                    Débito
-                    </div>
-                    <div
-                    className={`metodoOption ${metodoPago === 'Crédito' ? 'selected' : ''}`}
-                    onClick={() => handleSelectMetodoPago('Crédito')}
-                    >
-                    Crédito
-                    </div>
-                    <div
-                    className={`metodoOption ${metodoPago === 'QR' ? 'selected' : ''}`}
-                    onClick={() => handleSelectMetodoPago('QR')}
-                    >
-                    QR
-                    </div>
-                </div>
-                {/* Factura */}
-                <div className="title">Factura</div>
-                <div className="factura">
-                    <div
-                    className={`facturaOption ${factura === 'No' ? 'selected' : ''}`}
-                    onClick={() => handleSelectFactura('No')}
-                    >
-                    No
-                    </div>
-                    <div
-                    className={`facturaOption ${factura === 'A' ? 'selected' : ''}`}
-                    onClick={() => handleSelectFactura('A')}
-                    >
-                    A
-                    </div>
-                    <div
-                    className={`facturaOption ${factura === 'Final' ? 'selected' : ''}`}
-                    onClick={() => handleSelectFactura('Final')}
-                    >
-                    Final
-                    </div>
-                </div>
-                {/* Promo */}
-                <div className="title">Promo</div>
                 <div className="promo">
                     <select className="promoSelect">
                         <option value="none">Selecciona una Promo</option>
@@ -90,7 +35,67 @@ function DatosPago({ mostrarEntrada }) {
                         <img src="https://www.svgrepo.com/show/904/photo-camera.svg" alt="" className="camIcon" />
                     </a>
                 </div>
+            </div>
+            {/* Precio Especificaciones */}
+            <div className="precioEspecificaciones">
+                {/* Métodos De Pago */}
+                <div>
+                    <div className="title">Método de Pago</div>
+                    <div className="metodoDePago">
+                        
+                        <div
+                        className={`metodoOption ${metodoPago === 'Efectivo' ? 'selected' : ''}`}
+                        onClick={() => handleSelectMetodoPago('Efectivo')}
+                        >
+                        Efectivo
+                        </div>
+                        <div
+                        className={`metodoOption ${metodoPago === 'Débito' ? 'selected' : ''}`}
+                        onClick={() => handleSelectMetodoPago('Débito')}
+                        >
+                        Débito
+                        </div>
+                        <div
+                        className={`metodoOption ${metodoPago === 'Crédito' ? 'selected' : ''}`}
+                        onClick={() => handleSelectMetodoPago('Crédito')}
+                        >
+                        Crédito
+                        </div>
+                        <div
+                        className={`metodoOption ${metodoPago === 'QR' ? 'selected' : ''}`}
+                        onClick={() => handleSelectMetodoPago('QR')}
+                        >
+                        QR
+                        </div>
+                    </div>
                 </div>
+                {/* Factura */}
+                <div>
+                    <div className="title">Factura</div>
+                    <div className="factura">
+                        <div
+                        className={`facturaOption ${factura === 'No' ? 'selected' : ''}`}
+                        onClick={() => handleSelectFactura('No')}
+                        >
+                        No
+                        </div>
+                        <div
+                        className={`facturaOption ${factura === 'A' ? 'selected' : ''}`}
+                        onClick={() => handleSelectFactura('A')}
+                        >
+                        A
+                        </div>
+                        <div
+                        className={`facturaOption ${factura === 'Final' ? 'selected' : ''}`}
+                        onClick={() => handleSelectFactura('Final')}
+                        >
+                        Final
+                        </div>
+                    </div>
+                </div>
+                {/* Promo */}
+                
+            </div>
             {/* Botón de Salida */}
             <div className="fondoSalida">
             <div className="salida">

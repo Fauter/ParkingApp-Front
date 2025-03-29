@@ -1,0 +1,48 @@
+/* DATOS DE AUTO ENTRADA */ 
+.datosAutoEntrada {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+.fotoAutoEntrada {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 30px;
+}
+
+.formularioAuto {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 90%;
+    text-align: left;
+  }
+  label {
+    font-size: 14px;
+    color: white;
+    font-weight: bold;
+  }
+  .inputPatente {
+    padding: 8px;
+    border-radius: 5px;
+    border: none;
+    background-color: #1F4258;
+    color: white;
+    font-size: 16px;
+    text-transform: uppercase;
+    outline: none;
+  }
+  .selectVehiculo {
+    padding: 8px;
+    border-radius: 5px;
+    border: none;
+    background-color: #1F4258;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+  }  

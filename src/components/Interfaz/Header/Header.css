@@ -1,12 +1,43 @@
 .header {
-    height: 60px;
-    color: white;
-    display: flex;
-    align-items: center; /* Centra verticalmente */
-    padding: 0 20px;
-    background-color: rgb(12, 26, 34);
-  }
-  
-  .logo h1 {
-    font-size: 24px; /* Tamaño de la fuente que desees */
-  }
+  height: 60px;
+  color: white;
+  display: flex;
+  align-items: center; /* Centra verticalmente */
+  padding: 0 20px;
+  background-color: rgb(12, 26, 34);
+  justify-content: space-between; /* Esto mantendrá el logo y los botones en extremos opuestos */
+}
+
+.logo h1 {
+  font-size: 24px;
+  margin: 0;
+}
+
+/* Estilo para el contenedor de los botones */
+.buttons {
+  display: flex;
+  justify-content: space-evenly;
+  width: 100%;
+}
+
+/* Estilo general para los botones */
+.button {
+  background-color: rgb(39, 106, 145);
+  color: white;
+  border: none;
+  padding: 9px 12px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 8px; 
+  width: 100%;
+  max-width: 120px; 
+  text-align: center;
+}
+.button:hover {
+  background-color: #2a3a4c; 
+  transform: scale(1.05); 
+}
+.button:focus {
+  outline: none;
+  border: 2px solid #4c6a80; 
+}

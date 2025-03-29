@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import '../Operador.css';
+import "./DatosAutoEntrada.css"
 
 function DatosAutoEntrada() {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
 
   return (
-    <div className="datosAuto">
+    <div className="datosAutoEntrada">
       {/* Foto del Auto */}
-      <div className="fotoAuto">
+      <div className="fotoAutoEntrada">
         <img
           src="https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
           alt="Auto"
