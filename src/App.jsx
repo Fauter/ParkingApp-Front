@@ -4,7 +4,6 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import Interfaz from './components/Interfaz/Interfaz';
 import Login from './components/Login/Login.jsx';
 
-
 function App() {
   const navigate = useNavigate();
   const redirectAfterLogin = localStorage.getItem('redirectAfterLogin');

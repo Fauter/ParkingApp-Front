@@ -30,7 +30,7 @@ function Login() {
                 localStorage.setItem('token', data.token);
                 const redirectTo = localStorage.getItem('redirectAfterLogin') || '/';
                 localStorage.removeItem('redirectAfterLogin');
-                navigate(redirectTo, { replace: true });
+                window.location.href = redirectTo;
             } else {
                 setError(data.msg || 'Error en el login');
             }

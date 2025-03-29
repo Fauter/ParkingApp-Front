@@ -11,7 +11,7 @@ function Header() {
           <div className="button">Operador</div>
           <div className="button">Caja</div>
           <div className="button">Entr/Sal</div>
-          <div className="button">Admin</div>
+          <a href="https://admin.ofiflex.com.ar" className="button">Admin</a>
       </div>
     </div>
   );

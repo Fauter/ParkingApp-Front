@@ -19,6 +19,9 @@
   justify-content: space-evenly;
   width: 100%;
 }
+.buttons a {
+  text-decoration: none;
+}
 
 /* Estilo general para los botones */
 .button {
