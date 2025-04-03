@@ -100,6 +100,7 @@
     transition: background-color 0.3s ease;
     cursor: pointer;
     text-align: center;
+    border: none;
   }
   .salida:hover {
     background-color: #4A82B5;

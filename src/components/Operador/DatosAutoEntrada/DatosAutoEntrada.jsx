@@ -1,9 +1,74 @@
 import React, { useState } from 'react';
 import "./DatosAutoEntrada.css"
 
-function DatosAutoEntrada() {
+function DatosAutoEntrada({ setVehiculoLocal }) {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
+
+  const handleEntrada = async () => {
+    if (!patente || !tipoVehiculo) {
+      alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
+      return;
+    }
+
+    try {
+      // 1. Crear el vehículo si no existe
+      const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
+      });
+
+      const vehiculoData = await vehiculoResponse.json();
+      if (!vehiculoResponse.ok) {
+        throw new Error(vehiculoData.msg || "Error al registrar vehículo");
+      }
+
+      // 2. Registrar la entrada automáticamente
+      const entradaResponse = await fetch(
+        `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operador: "Carlos",
+            metodoPago: "Efectivo",
+            monto: 2400, // Monto por hora
+          }),
+        }
+      );
+
+      const entradaData = await entradaResponse.json();
+      if (!entradaResponse.ok) {
+        throw new Error(entradaData.msg || "Error al registrar entrada");
+      }
+
+      alert("Vehículo registrado y entrada confirmada.");
+      setPatente("");
+      setTipoVehiculo("");
+
+      setVehiculoLocal({
+        patente,
+        tipoVehiculo,
+        abonado: false,
+        abonoExpira: null,
+        cashback: 0,
+        historialEstadias: [
+          {
+            entrada: new Date().toISOString(), // Hora actual de entrada
+            salida: null, // Se llenará cuando salga
+            costoTotal: 0, // Se calculará cuando salga
+          },
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+    } catch (error) {
+      console.error("Error:", error.message);
+      alert(error.message);
+    }
+  };
 
   return (
     <div className="datosAutoEntrada">
@@ -37,8 +102,9 @@ function DatosAutoEntrada() {
           <option value="">Seleccione un tipo</option>
           <option value="auto">Auto</option>
           <option value="camioneta">Camioneta</option>
-          <option value="moto">Moto</option>
         </select>
+
+        <button onClick={handleEntrada}>Registrar Entrada</button>
       </div>
     </div>
   );
