@@ -4,6 +4,7 @@ import "./DatosAutoEntrada.css"
 function DatosAutoEntrada({ setVehiculoLocal }) {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
+  const [abonado, setAbonado] = useState(false);
 
   const handleEntrada = async () => {
     if (!patente || !tipoVehiculo) {
@@ -70,6 +71,33 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
     }
   };
 
+  const handleAbonar = async () => {
+    if (!patente || !tipoVehiculo) {
+      alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
+      return;
+    }
+  
+    try {
+      const response = await fetch("http://localhost:5000/api/vehiculos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patente, tipoVehiculo, abonado: true }), // Directamente se envía como abonado
+      });
+  
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.msg || "Error al registrar el vehículo como abonado");
+      }
+  
+      alert("Vehículo abonado registrado correctamente.");
+      setPatente("");
+      setTipoVehiculo("");
+    } catch (error) {
+      console.error("Error:", error.message);
+      alert(error.message);
+    }
+  };
+
   return (
     <div className="datosAutoEntrada">
       {/* Foto del Auto */}
@@ -105,6 +133,9 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
         </select>
 
         <button onClick={handleEntrada}>Registrar Entrada</button>
+        <button onClick={handleAbonar} disabled={abonado} className="botonAbono">
+          {abonado ? "Ya abonado" : "Registrar Abono"}
+        </button>
       </div>
     </div>
   );
