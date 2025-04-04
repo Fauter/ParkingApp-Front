@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import "./DatosAutoSalida.css";
 
 
-
-function DatosAutoSalida({ vehiculoLocal, limpiarVehiculo  }) {
-  const [metodoPago, setMetodoPago] = useState("Efectivo");
-  const [costoTotal, setCostoTotal] = useState(null);
+function DatosAutoSalida({ buscarVehiculo, vehiculoLocal, error, limpiarInputTrigger }) {
+  const [inputPatente, setInputPatente] = useState("");
 
   useEffect(() => {
-    console.log("vehiculoLocal:", vehiculoLocal);
-  }, [vehiculoLocal]);
-  
+    if (limpiarInputTrigger) {
+      setInputPatente("");
+    }
+  }, [limpiarInputTrigger]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      buscarVehiculo(inputPatente);
+    }
+  };
+
   return (
     <div className="datosAutoSalida">
         {/* 1) Foto del auto */}
@@ -20,10 +26,19 @@ function DatosAutoSalida({ vehiculoLocal, limpiarVehiculo  }) {
         <div className="detalleAutoSalida">
           {/* 2) Patente Auto/Camioneta */}
           <div className="patenteYTipo">
-            <div className="patente">{vehiculoLocal?.patente.toUpperCase() || "Sin datos"}</div>
+            <div className="patente">
+              <input
+                type="text"
+                className="input-patente"
+                placeholder="Ingresá la patente"
+                value={inputPatente}
+                onChange={(e) => setInputPatente(e.target.value.toUpperCase())}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
             <div className="tipoVehiculo">
-              {vehiculoLocal?.tipoVehiculo 
-                ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() + vehiculoLocal.tipoVehiculo.slice(1) 
+              {vehiculoLocal?.tipoVehiculo
+                ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() + vehiculoLocal.tipoVehiculo.slice(1)
                 : "Sin datos"}
             </div>
           </div>
@@ -40,14 +55,15 @@ function DatosAutoSalida({ vehiculoLocal, limpiarVehiculo  }) {
             <div className="container">
               <div>⬇</div>
               <div>
-                {vehiculoLocal?.historialEstadias?.[0]?.salida // Si hay salida, mostrarla
+                {vehiculoLocal?.historialEstadias?.[0]?.salida
                   ? new Date(vehiculoLocal.historialEstadias[0].salida).toLocaleString()
-                  : vehiculoLocal?.historialEstadias?.[0]?.entrada // Si no hay salida, pero hay entrada, mostrar la hora actual
-                  ? new Date(new Date(vehiculoLocal.historialEstadias[0].entrada).getTime() + 1000).toLocaleString() // Sumar 1 segundo a la entrada
-                  : "Sin Datos"}
+                  : vehiculoLocal?.historialEstadias?.[0]?.entrada
+                    ? new Date(new Date(vehiculoLocal.historialEstadias[0].entrada).getTime() + 1000).toLocaleString()
+                    : "Sin Datos"}
               </div>
             </div>
           </div>
+          {error && <div className="error">{error}</div>}
         </div>
     </div>
   );

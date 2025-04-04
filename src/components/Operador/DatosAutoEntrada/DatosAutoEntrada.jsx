@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import "./DatosAutoEntrada.css"
+import { preciosHora } from "../../../utils/precios";
 
-function DatosAutoEntrada({ setVehiculoLocal }) {
+
+function DatosAutoEntrada() {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
   const [abonado, setAbonado] = useState(false);
@@ -14,7 +16,7 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
 
     try {
       // 1. Crear el vehículo si no existe
-      const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+      const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
@@ -27,14 +29,14 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
 
       // 2. Registrar la entrada automáticamente
       const entradaResponse = await fetch(
-        `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+        `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             operador: "Carlos",
             metodoPago: "Efectivo",
-            monto: 2400, // Monto por hora
+            monto: preciosHora[tipoVehiculo], 
           }),
         }
       );
@@ -47,24 +49,6 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
       alert("Vehículo registrado y entrada confirmada.");
       setPatente("");
       setTipoVehiculo("");
-
-      setVehiculoLocal({
-        patente,
-        tipoVehiculo,
-        abonado: false,
-        abonoExpira: null,
-        cashback: 0,
-        historialEstadias: [
-          {
-            entrada: new Date().toISOString(), // Hora actual de entrada
-            salida: null, // Se llenará cuando salga
-            costoTotal: 0, // Se calculará cuando salga
-          },
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
     } catch (error) {
       console.error("Error:", error.message);
       alert(error.message);
@@ -78,7 +62,7 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
     }
   
     try {
-      const response = await fetch("http://localhost:5000/api/vehiculos", {
+      const response = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patente, tipoVehiculo, abonado: true }), // Directamente se envía como abonado
@@ -116,7 +100,7 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
           type="text"
           placeholder="Ingrese la patente"
           value={patente}
-          onChange={(e) => setPatente(e.target.value)}
+          onChange={(e) => setPatente(e.target.value.toUpperCase())}
           className="inputPatente"
         />
 
@@ -133,9 +117,6 @@ function DatosAutoEntrada({ setVehiculoLocal }) {
         </select>
 
         <button onClick={handleEntrada}>Registrar Entrada</button>
-        <button onClick={handleAbonar} disabled={abonado} className="botonAbono">
-          {abonado ? "Ya abonado" : "Registrar Abono"}
-        </button>
       </div>
     </div>
   );
