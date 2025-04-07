@@ -1,12 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import "./DatosAutoEntrada.css"
-import { preciosHora } from "../../../utils/precios";
 
 
 function DatosAutoEntrada() {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
   const [abonado, setAbonado] = useState(false);
+  const [precios, setPrecios] = useState({});
+
+  useEffect(() => {
+    const fetchPrecios = async () => {
+      try {
+        const response = await fetch("http://localhost:5000/api/precios");
+        const data = await response.json();
+        setPrecios(data);
+      } catch (error) {
+        console.error("Error al obtener los precios:", error);
+        alert("No se pudieron cargar los precios.");
+      }
+    };
+    fetchPrecios();
+  }, []);
 
   const handleEntrada = async () => {
     if (!patente || !tipoVehiculo) {
@@ -14,9 +28,14 @@ function DatosAutoEntrada() {
       return;
     }
 
+    if (!precios[tipoVehiculo]) {
+      alert("No se encontraron precios para el tipo de vehículo seleccionado.");
+      return;
+    }
+
     try {
       // 1. Crear el vehículo si no existe
-      const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
+      const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
@@ -29,14 +48,14 @@ function DatosAutoEntrada() {
 
       // 2. Registrar la entrada automáticamente
       const entradaResponse = await fetch(
-        `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
+        `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             operador: "Carlos",
             metodoPago: "Efectivo",
-            monto: preciosHora[tipoVehiculo], 
+            monto: precios[tipoVehiculo].hora, // precio por hora
           }),
         }
       );
@@ -60,19 +79,19 @@ function DatosAutoEntrada() {
       alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
       return;
     }
-  
+
     try {
-      const response = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
+      const response = await fetch("http://localhost:5000/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patente, tipoVehiculo, abonado: true }), // Directamente se envía como abonado
+        body: JSON.stringify({ patente, tipoVehiculo, abonado: true }),
       });
-  
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.msg || "Error al registrar el vehículo como abonado");
       }
-  
+
       alert("Vehículo abonado registrado correctamente.");
       setPatente("");
       setTipoVehiculo("");
@@ -114,6 +133,7 @@ function DatosAutoEntrada() {
           <option value="">Seleccione un tipo</option>
           <option value="auto">Auto</option>
           <option value="camioneta">Camioneta</option>
+          <option value="moto">Moto</option>
         </select>
 
         <button onClick={handleEntrada}>Registrar Entrada</button>

@@ -17,7 +17,7 @@ function Operador() {
   const buscarVehiculo = async (patente) => {
     try {
       const patenteMayuscula = patente.toUpperCase();
-      const putResponse = await fetch(`https://parkingapp-back.onrender.com/api/vehiculos/${patenteMayuscula}/registrarSalida`, {
+      const putResponse = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}/registrarSalida`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json"
@@ -33,7 +33,7 @@ function Operador() {
         throw new Error(err.msg || "Error al registrar salida");
       }
 
-      const response = await fetch(`https://parkingapp-back.onrender.com/api/vehiculos/${patenteMayuscula}`);
+      const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}`);
       if (!response.ok) {
         throw new Error("Vehículo no encontrado");
       }
@@ -62,7 +62,7 @@ function Operador() {
         <DatosPago
           vehiculoLocal={vehiculoLocal}
           limpiarVehiculo={limpiarVehiculo}
-        />
+        /> 
       </div>
     </div>
   );

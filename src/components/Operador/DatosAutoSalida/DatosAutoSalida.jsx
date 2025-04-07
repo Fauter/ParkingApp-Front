@@ -24,7 +24,7 @@ function DatosAutoSalida({ buscarVehiculo, vehiculoLocal, error, limpiarInputTri
           <img src="https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500" alt="" />
         </div>
         <div className="detalleAutoSalida">
-          {/* 2) Patente Auto/Camioneta */}
+          {/* 2) Patente Vehículo */}
           <div className="patenteYTipo">
             <div className="patente">
               <input
