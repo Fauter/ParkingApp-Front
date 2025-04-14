@@ -136,7 +136,7 @@ function DatosAutoEntrada() {
           <option value="moto">Moto</option>
         </select>
 
-        <button onClick={handleEntrada}>Registrar Entrada</button>
+        <button className="btn-entrada" onClick={handleEntrada}>Registrar Entrada</button>
       </div>
     </div>
   );

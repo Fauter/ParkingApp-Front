@@ -1,46 +1,54 @@
-.header {
-  height: 60px;
-  color: white;
+/* Estilo principal para el header */
+.topbar {
+  background-color: #2a2a38;
   display: flex;
-  align-items: center; /* Centra verticalmente */
-  padding: 0 20px;
-  background-color: rgb(12, 26, 34);
-  justify-content: space-between; /* Esto mantendrá el logo y los botones en extremos opuestos */
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  align-items: center;
 }
 
-.logo h1 {
-  font-size: 24px;
+/* Estilo del logo (el título Parking) */
+.topbar h1 {
+  font-size: 1.8rem;
   margin: 0;
+  color: white;
 }
 
 /* Estilo para el contenedor de los botones */
-.buttons {
+.menu {
   display: flex;
-  justify-content: space-evenly;
-  width: 100%;
-}
-.buttons a {
-  text-decoration: none;
 }
 
-/* Estilo general para los botones */
-.button {
-  background-color: rgb(39, 106, 145);
+/* Estilo para los botones en el menú */
+.menu button, .menu a {
+  margin-left: 1rem;
+  background-color: #444a5a;
   color: white;
   border: none;
-  padding: 9px 12px;
-  font-size: 16px;
+  padding: 0.6rem 1rem;
+  border-radius: 5px;
   cursor: pointer;
-  border-radius: 8px; 
-  width: 100%;
-  max-width: 120px; 
-  text-align: center;
+  transition: background-color 0.3s ease, transform 0.2s ease;
 }
-.button:hover {
-  background-color: #2a3a4c; 
-  transform: scale(1.05); 
+
+/* Efecto al pasar el mouse sobre los botones */
+.menu button:hover, .menu a:hover {
+  background-color: #00adb5;
+  transform: scale(1.05);
 }
-.button:focus {
-  outline: none;
-  border: 2px solid #4c6a80; 
+
+/* Estilo para el link de Admin, que será similar al de los botones */
+.menu-button {
+  text-decoration: none;
+  background-color: #444a5a; /* Mismo color que los botones */
+  padding: 0.6rem 1rem;
+  border-radius: 5px;
+  color: white;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+/* Efecto al pasar el mouse sobre el enlace de Admin */
+.menu-button:hover {
+  background-color: #00adb5;
+  transform: scale(1.05);
 }

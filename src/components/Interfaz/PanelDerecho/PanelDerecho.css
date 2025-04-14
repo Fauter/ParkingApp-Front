@@ -1,34 +1,10 @@
 .right-side {
   display: flex;
-  background-color: rgb(12, 26, 34);
+  background-color:rgba(0, 0, 0, 0.31);  
   width: 125px; 
   flex-direction: column; /* Organiza los elementos de arriba hacia abajo */
   justify-content: space-between; 
 }
-
-/* Apertura de Emergencia
-.emergency-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center; 
-  text-decoration: none;
-}
-.emergency-btn img {
-  width: 75px; 
-  height: 75px;
-  cursor: pointer;
-}
-.emergency-btn div {
-  text-align: center;
-  font-size: 15px;
-  line-height: 0.2; 
-  text-decoration: none;
-  color: white;
-}
-.emergency-btn p {
-  margin-top: 7px;
-}
-
 
 /* Iconos de Barrera */
 .barrier-icons {

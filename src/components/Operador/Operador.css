@@ -13,11 +13,12 @@
 .contenidoCentral > *:first-child::after {
   content: "";
   position: absolute;
-  right: -1px; /* Coloca la línea al borde derecho */
+  right: -1px;
   top: 0;
   bottom: 0;
   width: 2px;
-  background-color: #1F4258; /* Color del separador */
+  background-color: #2a2a38; /* o probá con #39414f */
+  height: 98%;
 }
 .contenidoCentral img {
   width: 100%;

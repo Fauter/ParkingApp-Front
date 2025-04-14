@@ -153,13 +153,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
                 </div>   
             </div>
             {/* Botón de Salida */}
-            <div className="fondoSalida">
-                <div className="salida">
-                    <button className="salida" onClick={registrarMovimiento}>
-                        ⬆ SALIDA
-                    </button>
-                </div>
-            </div>
+            <button className="btn-salida" onClick={registrarMovimiento}>⬆ SALIDA</button>
         </div>
     );
 }
