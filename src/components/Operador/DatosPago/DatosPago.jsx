@@ -11,7 +11,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
 
     // ⬇️ Fetch para traer los precios al cargar el componente
     useEffect(() => {
-        fetch("http://localhost:5000/api/precios")
+        fetch("https://parkingapp-back.onrender.com/api/precios")
             .then(res => res.json())
             .then(data => {
                 setPrecios(data);
@@ -77,7 +77,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
             descripcion: `Pago por x${tiempoEstadiaHoras} Hora/s`
         };
     
-        fetch("http://localhost:5000/api/movimientos/registrar", {
+        fetch("https://parkingapp-back.onrender.com/api/movimientos/registrar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(datosMovimiento),

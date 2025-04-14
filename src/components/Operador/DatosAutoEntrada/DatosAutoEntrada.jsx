@@ -11,7 +11,7 @@ function DatosAutoEntrada() {
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/precios");
+        const response = await fetch("https://parkingapp-back.onrender.com/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -35,7 +35,7 @@ function DatosAutoEntrada() {
 
     try {
       // 1. Crear el vehículo si no existe
-      const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+      const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
@@ -48,7 +48,7 @@ function DatosAutoEntrada() {
 
       // 2. Registrar la entrada automáticamente
       const entradaResponse = await fetch(
-        `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+        `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -81,7 +81,7 @@ function DatosAutoEntrada() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/api/vehiculos", {
+      const response = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patente, tipoVehiculo, abonado: true }),
