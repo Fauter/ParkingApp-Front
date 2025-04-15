@@ -27,45 +27,58 @@ function DatosAutoEntrada() {
       alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
       return;
     }
-
+  
     if (!precios[tipoVehiculo]) {
       alert("No se encontraron precios para el tipo de vehículo seleccionado.");
       return;
     }
-
+  
     try {
-      // 1. Crear el vehículo si no existe
-      const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
-      });
-
-      const vehiculoData = await vehiculoResponse.json();
-      if (!vehiculoResponse.ok) {
-        throw new Error(vehiculoData.msg || "Error al registrar vehículo");
+      // 1. Verificar si el vehículo ya existe
+      let existeVehiculo = false;
+  
+      const checkResponse = await fetch(`https://parkingapp-back.onrender.com/api/vehiculos/${patente}`);
+      if (checkResponse.ok) {
+        existeVehiculo = true;
       }
-
-      // 2. Registrar la entrada automáticamente
-      const entradaResponse = await fetch(
-        `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
-        {
-          method: "PUT",
+  
+      if (!existeVehiculo) {
+        // 2. Crear el vehículo (ya registra entrada automáticamente)
+        const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            operador: "Carlos",
-            metodoPago: "Efectivo",
-            monto: precios[tipoVehiculo].hora, // precio por hora
-          }),
+          body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
+        });
+  
+        const vehiculoData = await vehiculoResponse.json();
+        if (!vehiculoResponse.ok) {
+          throw new Error(vehiculoData.msg || "Error al registrar vehículo");
         }
-      );
-
-      const entradaData = await entradaResponse.json();
-      if (!entradaResponse.ok) {
-        throw new Error(entradaData.msg || "Error al registrar entrada");
+  
+        alert("Vehículo creado y entrada registrada.");
+      } else {
+        // 3. Registrar entrada si ya existe
+        const entradaResponse = await fetch(
+          `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              operador: "Carlos",
+              metodoPago: "Efectivo",
+              monto: precios[tipoVehiculo].hora,
+            }),
+          }
+        );
+  
+        const entradaData = await entradaResponse.json();
+        if (!entradaResponse.ok) {
+          throw new Error(entradaData.msg || "Error al registrar entrada");
+        }
+  
+        alert("Entrada registrada correctamente.");
       }
-
-      alert("Vehículo registrado y entrada confirmada.");
+  
       setPatente("");
       setTipoVehiculo("");
     } catch (error) {
