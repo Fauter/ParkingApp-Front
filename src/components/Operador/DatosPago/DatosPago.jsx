@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
+function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
     const [metodoPago, setMetodoPago] = useState('');
     const [factura, setFactura] = useState('');
     const [promo, setPromo] = useState('none');
     const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
     const [costoTotal, setCostoTotal] = useState(0);
-    const [precios, setPrecios] = useState(null); // ⬅️ Aca guardamos los precios del backend
+    const [precios, setPrecios] = useState(null);
 
-    // ⬇️ Fetch para traer los precios al cargar el componente
+    // Trae precios del backend (si querés seguir mostrando horas)
     useEffect(() => {
         fetch("https://parkingapp-back.onrender.com/api/precios")
             .then(res => res.json())
@@ -19,9 +19,9 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
             .catch(err => console.error("Error obteniendo precios:", err));
     }, []);
 
-    // ⬇️ Cuando cambia el vehículo, calculamos la estadía y el costo
+    // Cuando cambia el vehículo, obtiene la estadía y el costo total del backend
     useEffect(() => {
-        if (!vehiculoLocal || !precios) return;
+        if (!vehiculoLocal) return;
 
         if (vehiculoLocal.historialEstadias?.length > 0) {
             const ultimaEstadia = vehiculoLocal.historialEstadias[0];
@@ -32,17 +32,15 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
                 const horas = Math.ceil((salida - entrada) / (1000 * 60 * 60));
                 setTiempoEstadiaHoras(horas);
 
-                const tipo = vehiculoLocal.tipoVehiculo?.toLowerCase();
-                const precioPorHora = precios[tipo]?.hora;
-
-                if (precioPorHora) {
-                    setCostoTotal(horas * precioPorHora);
+                // ✅ Usar costoTotal desde el backend
+                if (ultimaEstadia.costoTotal != null) {
+                    setCostoTotal(ultimaEstadia.costoTotal);
                 } else {
-                    console.warn("No se encontró precio para tipo:", tipo);
+                    console.warn("No se encontró costoTotal en la última estadía.");
                 }
             }
         }
-    }, [vehiculoLocal, precios]);
+    }, [vehiculoLocal]);
 
     const handleSelectMetodoPago = (metodo) => {
         setMetodoPago(metodo);
@@ -65,7 +63,18 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
     const registrarMovimiento = () => {
         if (!vehiculoLocal?.patente) return;
     
-        const operador = "Carlos"; 
+        const operador = "Carlos";
+    
+        // 🔁 Determinar descripción según duración
+        let descripcion = '';
+    
+        if (tiempoEstadiaHoras <= 4) {
+            descripcion = `Pago por x${tiempoEstadiaHoras} Hora${tiempoEstadiaHoras > 1 ? 's' : ''}`;
+        } else if (tiempoEstadiaHoras <= 12) {
+            descripcion = 'Pago por Media Estadía';
+        } else {
+            descripcion = 'Pago por Estadía';
+        }
     
         const datosMovimiento = {
             patente: vehiculoLocal.patente,
@@ -74,7 +83,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
             metodoPago,
             factura,
             monto: costoTotal,
-            descripcion: `Pago por x${tiempoEstadiaHoras} Hora/s`
+            descripcion
         };
     
         fetch("https://parkingapp-back.onrender.com/api/movimientos/registrar", {
@@ -82,19 +91,18 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(datosMovimiento),
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data.movimiento) {
-                alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
-                limpiarVehiculo();       // Limpia los datos del vehículo
-                resetCamposPago();       // Resetea los selects y el precio
-            } else {
-                console.error("❌ Error al registrar movimiento:", data.msg);
-            }
-        })
-        .catch(err => console.error("❌ Error conectando al backend:", err));
+            .then(res => res.json())
+            .then(data => {
+                if (data.movimiento) {
+                    alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
+                    limpiarVehiculo();
+                    resetCamposPago();
+                } else {
+                    console.error("❌ Error al registrar movimiento:", data.msg);
+                }
+            })
+            .catch(err => console.error("❌ Error conectando al backend:", err));
     };
-
 
     return (
         <div className="datosPago">
@@ -150,7 +158,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo  }) {
                             </div>
                         ))}
                     </div>
-                </div>   
+                </div>
             </div>
             {/* Botón de Salida */}
             <button className="btn-salida" onClick={registrarMovimiento}>⬆ SALIDA</button>
