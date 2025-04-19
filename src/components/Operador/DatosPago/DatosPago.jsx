@@ -8,8 +8,8 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
     const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
     const [costoTotal, setCostoTotal] = useState(0);
     const [precios, setPrecios] = useState(null);
+    const [tarifaAplicada, setTarifaAplicada] = useState(null);
 
-    // Trae precios del backend (si querés seguir mostrando horas)
     useEffect(() => {
         fetch("https://parkingapp-back.onrender.com/api/precios")
             .then(res => res.json())
@@ -19,8 +19,8 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
             .catch(err => console.error("Error obteniendo precios:", err));
     }, []);
 
-    // Cuando cambia el vehículo, obtiene la estadía y el costo total del backend
     useEffect(() => {
+        console.log(vehiculoLocal);
         if (!vehiculoLocal) return;
 
         if (vehiculoLocal.historialEstadias?.length > 0) {
@@ -32,25 +32,29 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
                 const horas = Math.ceil((salida - entrada) / (1000 * 60 * 60));
                 setTiempoEstadiaHoras(horas);
 
-                // ✅ Usar costoTotal desde el backend
                 if (ultimaEstadia.costoTotal != null) {
                     setCostoTotal(ultimaEstadia.costoTotal);
                 } else {
                     console.warn("No se encontró costoTotal en la última estadía.");
                 }
+
+                // ✅ Seteamos tarifa aplicada para usarla después
+                if (ultimaEstadia.nombreTarifa) {
+                    setTarifaAplicada({ nombre: ultimaEstadia.nombreTarifa });
+                } else if (ultimaEstadia.tarifaAplicada?.nombre) {
+                    setTarifaAplicada({ nombre: ultimaEstadia.tarifaAplicada.nombre });
+                } else {
+                    console.warn("No se encontró nombreTarifa ni tarifaAplicada.nombre en la última estadía.");
+                    // Hardcodear a 'hora' si no hay tarifa
+                    setTarifaAplicada({ nombre: "hora" });
+                }
             }
         }
     }, [vehiculoLocal]);
 
-    const handleSelectMetodoPago = (metodo) => {
-        setMetodoPago(metodo);
-    };
-    const handleSelectFactura = (opcion) => {
-        setFactura(opcion);
-    };
-    const handleSelectPromo = (opcion) => {
-        setPromo(opcion);
-    };
+    const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
+    const handleSelectFactura = (opcion) => setFactura(opcion);
+    const handleSelectPromo = (opcion) => setPromo(opcion);
 
     const resetCamposPago = () => {
         setMetodoPago('');
@@ -58,24 +62,26 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
         setPromo('none');
         setTiempoEstadiaHoras(0);
         setCostoTotal(0);
+        setTarifaAplicada(null);
     };
 
     const registrarMovimiento = () => {
+        console.log(vehiculoLocal);
         if (!vehiculoLocal?.patente) return;
-    
+
         const operador = "Carlos";
-    
-        // 🔁 Determinar descripción según duración
+
+        // ✅ Determinar descripción según la tarifa recibida
         let descripcion = '';
-    
-        if (tiempoEstadiaHoras <= 4) {
+
+        const nombreTarifa = tarifaAplicada?.nombre?.toLowerCase() || "hora";
+
+        if (nombreTarifa === "hora") {
             descripcion = `Pago por x${tiempoEstadiaHoras} Hora${tiempoEstadiaHoras > 1 ? 's' : ''}`;
-        } else if (tiempoEstadiaHoras <= 12) {
-            descripcion = 'Pago por Media Estadía';
         } else {
-            descripcion = 'Pago por Estadía';
+            descripcion = `Pago por ${tarifaAplicada?.nombre}`;
         }
-    
+
         const datosMovimiento = {
             patente: vehiculoLocal.patente,
             operador,
@@ -85,7 +91,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
             monto: costoTotal,
             descripcion
         };
-    
+
         fetch("https://parkingapp-back.onrender.com/api/movimientos/registrar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -106,12 +112,10 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
 
     return (
         <div className="datosPago">
-            {/* Precio Total */}
             <div className="precioTotal">
                 <div className="precioContainer">
                     ${costoTotal.toLocaleString("es-AR")}
                 </div>
-                {/* Promo */}
                 <div className="promo">
                     <select 
                         className="promoSelect"
@@ -127,9 +131,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
                     </a>
                 </div>
             </div>
-            {/* Precio Especificaciones */}
             <div className="precioEspecificaciones">
-                {/* Métodos De Pago */}
                 <div>
                     <div className="title">Método de Pago</div>
                     <div className="metodoDePago">
@@ -144,7 +146,6 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
                         ))}
                     </div>
                 </div>
-                {/* Factura */}
                 <div>
                     <div className="title">Factura</div>
                     <div className="factura">
@@ -160,7 +161,6 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
                     </div>
                 </div>
             </div>
-            {/* Botón de Salida */}
             <button className="btn-salida" onClick={registrarMovimiento}>⬆ SALIDA</button>
         </div>
     );
