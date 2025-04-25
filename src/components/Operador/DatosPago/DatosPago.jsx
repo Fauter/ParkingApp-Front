@@ -11,7 +11,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
     const [tarifaAplicada, setTarifaAplicada] = useState(null);
 
     useEffect(() => {
-        fetch("https://parkingapp-back.onrender.com/api/precios")
+        fetch("http://localhost:5000/api/precios")
             .then(res => res.json())
             .then(data => {
                 setPrecios(data);
@@ -22,31 +22,38 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
     useEffect(() => {
         console.log(vehiculoLocal);
         if (!vehiculoLocal) return;
-
+    
         if (vehiculoLocal.historialEstadias?.length > 0) {
             const ultimaEstadia = vehiculoLocal.historialEstadias[0];
-
+    
             if (ultimaEstadia.entrada) {
                 const entrada = new Date(ultimaEstadia.entrada);
                 const salida = ultimaEstadia.salida ? new Date(ultimaEstadia.salida) : new Date();
                 const horas = Math.ceil((salida - entrada) / (1000 * 60 * 60));
                 setTiempoEstadiaHoras(horas);
-
+    
                 if (ultimaEstadia.costoTotal != null) {
                     setCostoTotal(ultimaEstadia.costoTotal);
                 } else {
                     console.warn("No se encontró costoTotal en la última estadía.");
                 }
-
-                // ✅ Seteamos tarifa aplicada para usarla después
+    
                 if (ultimaEstadia.nombreTarifa) {
-                    setTarifaAplicada({ nombre: ultimaEstadia.nombreTarifa });
+                    setTarifaAplicada({ 
+                        nombre: ultimaEstadia.nombreTarifa,
+                        tipo: ultimaEstadia.tipoTarifa || vehiculoLocal.tipoTarifa || "NN"
+                    });
                 } else if (ultimaEstadia.tarifaAplicada?.nombre) {
-                    setTarifaAplicada({ nombre: ultimaEstadia.tarifaAplicada.nombre });
+                    setTarifaAplicada({ 
+                        nombre: ultimaEstadia.tarifaAplicada.nombre,
+                        tipo: ultimaEstadia.tarifaAplicada.tipo || vehiculoLocal.tipoTarifa || "NN"
+                    });
                 } else {
                     console.warn("No se encontró nombreTarifa ni tarifaAplicada.nombre en la última estadía.");
-                    // Hardcodear a 'hora' si no hay tarifa
-                    setTarifaAplicada({ nombre: "hora" });
+                    setTarifaAplicada({ 
+                        nombre: "hora",
+                        tipo: vehiculoLocal.tipoTarifa || "NN"
+                    });
                 }
             }
         }
@@ -75,6 +82,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
         let descripcion = '';
 
         const nombreTarifa = tarifaAplicada?.nombre?.toLowerCase() || "hora";
+        const tipoTarifa = tarifaAplicada?.tipo?.toLowerCase() || "NN";
 
         if (nombreTarifa === "hora") {
             descripcion = `Pago por x${tiempoEstadiaHoras} Hora${tiempoEstadiaHoras > 1 ? 's' : ''}`;
@@ -89,10 +97,11 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
             metodoPago,
             factura,
             monto: costoTotal,
-            descripcion
+            descripcion,
+            tipoTarifa: tarifaAplicada?.tipo || "NN" 
         };
 
-        fetch("https://parkingapp-back.onrender.com/api/movimientos/registrar", {
+        fetch("http://localhost:5000/api/movimientos/registrar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(datosMovimiento),

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import "./DatosAutoEntrada.css";
+import "./DatosAutoEntradaAbono.css";
 
-function DatosAutoEntrada() {
+function DatosAutoEntradaAbono() {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
   const [abonado, setAbonado] = useState(false);
@@ -171,4 +171,4 @@ function DatosAutoEntrada() {
   );
 }
 
-export default DatosAutoEntrada;
+export default DatosAutoEntradaAbono;
