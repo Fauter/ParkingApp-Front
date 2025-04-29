@@ -38,6 +38,23 @@
   .abono-form input:focus {
     border-color: rgb(100, 108, 133);
   }
+  .abono-form input[type="number"] {
+    background-color: #1f1f28;
+    border: 1px solid #444a5a;
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
+    color: white;
+    width: 90%;
+    outline: none;
+    transition: border-color 0.3s;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .abono-form input[type="number"]::-webkit-outer-spin-button,
+  .abono-form input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; 
+    margin: 0;
+  }
   .abono-form button {
     background-color: #4caf50;
     border: none;
