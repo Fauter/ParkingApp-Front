@@ -7,7 +7,7 @@ function VehiculosDentro() {
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('https://parkingapp-back.onrender.com/api/vehiculos')
+    fetch('http://localhost:5000/api/vehiculos')
       .then(res => res.json())
       .then(data => {
         const filtrados = data.filter(v => v.estadiaActual?.entrada !== null);

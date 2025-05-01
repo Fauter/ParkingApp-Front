@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import './DatosAutoAbono.css';
 
-function DatosAutoAbono() {
+function DatosAutoAbono({ datosVehiculo }) {
   const [formData, setFormData] = useState({
     nombreApellido: "",
     domicilio: "",
@@ -12,12 +12,15 @@ function DatosAutoAbono() {
     domicilioTrabajo: "",
     telefonoTrabajo: "",
     email: "",
-    patente: "",
+    patente: datosVehiculo?.patente || "",
+    tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
     marca: "",
     modelo: "",
     color: "",
     anio: "",
     companiaSeguro: "",
+    metodoPago: "",
+    factura: "",
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
@@ -31,15 +34,37 @@ function DatosAutoAbono() {
     fotoCedulaAzul: false,
   });
 
+  const [tiposVehiculo, setTiposVehiculo] = useState([]);
+
+  useEffect(() => {
+    const fetchTipos = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const data = await res.json();
+        setTiposVehiculo(data);
+      } catch (err) {
+        console.error("Error al cargar tipos de vehículo:", err);
+      }
+    };
+    fetchTipos();
+  }, []);
+  useEffect(() => {
+    if (datosVehiculo) {
+      setFormData(prev => ({
+        ...prev,
+        patente: datosVehiculo?.patente || prev.patente,
+        tipoVehiculo: datosVehiculo?.tipoVehiculo || prev.tipoVehiculo,
+      }));
+    }
+  }, [datosVehiculo]);
+
   const handleChange = (e) => {
     const { name, value, files } = e.target;
-
     if (files && files.length > 0) {
       setFormData((prevData) => ({
         ...prevData,
         [name]: files[0],
       }));
-
       setFileUploaded((prevUploaded) => ({
         ...prevUploaded,
         [name]: true,
@@ -64,59 +89,104 @@ function DatosAutoAbono() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const fechaExpiracion = calcularFechaExpiracion(new Date());
     const data = new FormData();
 
-    // Añadimos todos los datos de formData a FormData
     for (const key in formData) {
       data.append(key, formData[key]);
     }
-
     data.append("fechaExpiracion", fechaExpiracion);
 
-    // Verificando el contenido de 'data' antes de enviar
-    for (let [key, value] of data.entries()) {
-      console.log("Archivo enviado o valor de campo:", key, value);
-    }
-
     try {
-      const response = await fetch("https://parkingapp-back.onrender.com/api/abonos", {
+      // 1. Obtener precios desde la API
+      const preciosResponse = await fetch("http://localhost:5000/api/precios");
+      if (!preciosResponse.ok) {
+        alert("Error al obtener los precios.");
+        return;
+      }
+      const precios = await preciosResponse.json();
+
+      // 2. Obtener el monto según tipo de vehículo
+      const tipo = formData.tipoVehiculo.toLowerCase();
+      const precioTipo = precios[tipo];
+      if (!precioTipo || !precioTipo.mensual) {
+        alert("No se encontró el precio mensual para el tipo de vehículo seleccionado.");
+        return;
+      }
+
+      const monto = precioTipo.mensual;
+
+      // 3. Crear el abono
+      const abonoResponse = await fetch("http://localhost:5000/api/abonos", {
         method: "POST",
         body: data,
       });
 
-      if (response.ok) {
-        alert("Abono guardado exitosamente.");
-        setFormData({
-          nombreApellido: "",
-          domicilio: "",
-          localidad: "",
-          telefonoParticular: "",
-          telefonoEmergencia: "",
-          domicilioTrabajo: "",
-          telefonoTrabajo: "",
-          email: "",
-          patente: "",
-          marca: "",
-          modelo: "",
-          color: "",
-          anio: "",
-          companiaSeguro: "",
-          fotoSeguro: null,
-          fotoDNI: null,
-          fotoCedulaVerde: null,
-          fotoCedulaAzul: null,
-        });
-        setFileUploaded({
-          fotoSeguro: false,
-          fotoDNI: false,
-          fotoCedulaVerde: false,
-          fotoCedulaAzul: false,
-        });
-      } else {
+      if (!abonoResponse.ok) {
         alert("Error al guardar el abono.");
+        return;
       }
+
+      // 4. Registrar el movimiento
+      const movimientoBody = {
+        patente: formData.patente,
+        operador: "Carlos",
+        tipoVehiculo: formData.tipoVehiculo,
+        metodoPago: formData.metodoPago,
+        factura: formData.factura,
+        monto,
+        descripcion: "Pago por Mensual",
+        tipoTarifa: "mensual",
+      };
+
+      const movimientoResponse = await fetch("http://localhost:5000/api/movimientos/registrar", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(movimientoBody),
+      });
+
+      if (!movimientoResponse.ok) {
+        console.error("Error al registrar el movimiento");
+        alert("Abono guardado, pero falló el registro del movimiento.");
+        return;
+      }
+
+      alert("Abono y movimiento guardados exitosamente.");
+
+      // 5. Resetear formulario
+      setFormData({
+        nombreApellido: "",
+        domicilio: "",
+        localidad: "",
+        telefonoParticular: "",
+        telefonoEmergencia: "",
+        domicilioTrabajo: "",
+        telefonoTrabajo: "",
+        email: "",
+        patente: "",
+        marca: "",
+        modelo: "",
+        color: "",
+        anio: "",
+        companiaSeguro: "",
+        metodoPago: "",
+        factura: "",
+        tipoVehiculo: "",
+        fotoSeguro: null,
+        fotoDNI: null,
+        fotoCedulaVerde: null,
+        fotoCedulaAzul: null,
+      });
+
+      setFileUploaded({
+        fotoSeguro: false,
+        fotoDNI: false,
+        fotoCedulaVerde: false,
+        fotoCedulaAzul: false,
+      });
+
     } catch (err) {
       console.error("Error de conexión:", err);
       alert("Error de conexión.");
@@ -147,7 +217,6 @@ function DatosAutoAbono() {
 
   return (
     <div className="abono-container">
-      <h2>Nuevo Abono</h2>
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
         <div className="grid-3cols">
           <div><label>Nombre y Apellido</label><input type="text" name="nombreApellido" value={formData.nombreApellido} onChange={handleChange} /></div>
@@ -174,6 +243,39 @@ function DatosAutoAbono() {
           <div><label>Color</label><input type="text" name="color" value={formData.color} onChange={handleChange} /></div>
           <div><label>Año</label><input type="number" name="anio" value={formData.anio} onChange={handleChange} /></div>
           <div><label>Compañía Seguro</label><input type="text" name="companiaSeguro" value={formData.companiaSeguro} onChange={handleChange} /></div>
+        </div>
+
+        <div className="grid-3cols">
+          <div>
+            <label>Método de Pago</label>
+            <select name="metodoPago" value={formData.metodoPago} onChange={handleChange} className="select-style">
+              <option value="">Seleccione</option>
+              <option value="Efectivo">Efectivo</option>
+              <option value="Débito">Débito</option>
+              <option value="Crédito">Crédito</option>
+              <option value="QR">QR</option>
+            </select>
+          </div>
+          <div>
+            <label>Factura</label>
+            <select name="factura" value={formData.factura} onChange={handleChange} className="select-style">
+              <option value="">Seleccione</option>
+              <option value="No">No</option>
+              <option value="A">A</option>
+              <option value="Final">Final</option>
+            </select>
+          </div>
+          <div>
+            <label>Tipo de Vehículo</label>
+            <select name="tipoVehiculo" value={formData.tipoVehiculo} onChange={handleChange} className="select-style">
+              <option value="">Seleccione</option>
+              {tiposVehiculo.map((tipo, index) => (
+                <option key={index} value={tipo}>
+                  {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <button type="submit">Guardar Abono</button>

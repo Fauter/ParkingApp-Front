@@ -1,13 +1,16 @@
   .abono-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: #2a2a38;
-    padding: 1rem;
     border-radius: 8px;
-    height: 93%;
+    height: 97%;
+    padding: 10px;
   }
   .abono-container h2 {
     color: rgb(255, 255, 255);
     font-size: 2rem;
-    margin: 0.5rem 0 1.4rem 0;
+    margin: 0;
     text-align: center;
   }
 
@@ -16,6 +19,7 @@
     flex-direction: column;
     gap: 0.8rem;
     height: 100%;
+    justify-content: center;
   }
   .abono-form label {
     font-size: 0.8rem;
@@ -155,3 +159,19 @@
     grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
   }
+
+  .select-style {
+    background-color: #1f1f28;
+    border: 1px solid #444a5a;
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
+    color: white;
+    width: 90%;
+    outline: none;
+    appearance: none;
+    font-size: 0.9rem;
+  }
+  .select-style:focus {
+    border-color: rgb(100, 108, 133);
+  }
+  

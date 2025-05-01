@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import "./DatosAutoEntradaAbono.css";
 
-function DatosAutoEntradaAbono() {
+function DatosAutoEntradaAbono({ setDatosVehiculo }) {
   const [patente, setPatente] = useState('');
   const [tipoVehiculo, setTipoVehiculo] = useState('');
-  const [abonado, setAbonado] = useState(false);
   const [precios, setPrecios] = useState({});
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("https://parkingapp-back.onrender.com/api/precios");
+        const response = await fetch("http://localhost:5000/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -22,7 +21,7 @@ function DatosAutoEntradaAbono() {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("https://parkingapp-back.onrender.com/api/tipos-vehiculo");
+        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -53,13 +52,13 @@ function DatosAutoEntradaAbono() {
     try {
       let existeVehiculo = false;
 
-      const checkResponse = await fetch(`https://parkingapp-back.onrender.com/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
       if (checkResponse.ok) {
         existeVehiculo = true;
       }
 
       if (!existeVehiculo) {
-        const vehiculoResponse = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
+        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
@@ -73,7 +72,7 @@ function DatosAutoEntradaAbono() {
         alert("Vehículo creado y entrada registrada.");
       } else {
         const entradaResponse = await fetch(
-          `https://parkingapp-back.onrender.com/api/vehiculos/${patente}/registrarEntrada`,
+          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -93,33 +92,10 @@ function DatosAutoEntradaAbono() {
         alert("Entrada registrada correctamente.");
       }
 
-      setPatente("");
-      setTipoVehiculo("");
-    } catch (error) {
-      console.error("Error:", error.message);
-      alert(error.message);
-    }
-  };
+      // ⬇️ Mandar datos al padre después de registrar entrada
+      setDatosVehiculo({ patente, tipoVehiculo });
 
-  const handleAbonar = async () => {
-    if (!patente || !tipoVehiculo) {
-      alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
-      return;
-    }
-
-    try {
-      const response = await fetch("https://parkingapp-back.onrender.com/api/vehiculos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patente, tipoVehiculo, abonado: true }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.msg || "Error al registrar el vehículo como abonado");
-      }
-
-      alert("Vehículo abonado registrado correctamente.");
+      // Limpiar campos
       setPatente("");
       setTipoVehiculo("");
     } catch (error) {
