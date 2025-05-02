@@ -39,7 +39,7 @@ function DatosAutoAbono({ datosVehiculo }) {
   useEffect(() => {
     const fetchTipos = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const res = await fetch("https://parkingapp-back.onrender.com/api/tipos-vehiculo");
         const data = await res.json();
         setTiposVehiculo(data);
       } catch (err) {
@@ -90,22 +90,16 @@ function DatosAutoAbono({ datosVehiculo }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const fechaExpiracion = calcularFechaExpiracion(new Date());
-    const data = new FormData();
-
-    for (const key in formData) {
-      data.append(key, formData[key]);
-    }
-    data.append("fechaExpiracion", fechaExpiracion);
-
+  
     try {
       // 1. Obtener precios desde la API
-      const preciosResponse = await fetch("http://localhost:5000/api/precios");
+      const preciosResponse = await fetch("https://parkingapp-back.onrender.com/api/precios");
       if (!preciosResponse.ok) {
         alert("Error al obtener los precios.");
         return;
       }
       const precios = await preciosResponse.json();
-
+  
       // 2. Obtener el monto según tipo de vehículo
       const tipo = formData.tipoVehiculo.toLowerCase();
       const precioTipo = precios[tipo];
@@ -113,21 +107,30 @@ function DatosAutoAbono({ datosVehiculo }) {
         alert("No se encontró el precio mensual para el tipo de vehículo seleccionado.");
         return;
       }
-
+  
       const monto = precioTipo.mensual;
-
-      // 3. Crear el abono
-      const abonoResponse = await fetch("http://localhost:5000/api/abonos", {
+  
+      // 3. Armar FormData con precio incluido
+      const data = new FormData();
+      for (const key in formData) {
+        data.append(key, formData[key]);
+      }
+      data.append("fechaExpiracion", fechaExpiracion);
+      data.append("precio", monto);
+      data.append("tipoTarifa", "mensual");
+  
+      // 4. Crear el abono
+      const abonoResponse = await fetch("https://parkingapp-back.onrender.com/api/abonos/registrar-mensual", {
         method: "POST",
         body: data,
       });
-
+  
       if (!abonoResponse.ok) {
         alert("Error al guardar el abono.");
         return;
       }
-
-      // 4. Registrar el movimiento
+  
+      // 5. Registrar el movimiento
       const movimientoBody = {
         patente: formData.patente,
         operador: "Carlos",
@@ -138,24 +141,24 @@ function DatosAutoAbono({ datosVehiculo }) {
         descripcion: "Pago por Mensual",
         tipoTarifa: "mensual",
       };
-
-      const movimientoResponse = await fetch("http://localhost:5000/api/movimientos/registrar", {
+  
+      const movimientoResponse = await fetch("https://parkingapp-back.onrender.com/api/movimientos/registrar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(movimientoBody),
       });
-
+  
       if (!movimientoResponse.ok) {
         console.error("Error al registrar el movimiento");
         alert("Abono guardado, pero falló el registro del movimiento.");
         return;
       }
-
+  
       alert("Abono y movimiento guardados exitosamente.");
-
-      // 5. Resetear formulario
+  
+      // 6. Resetear formulario
       setFormData({
         nombreApellido: "",
         domicilio: "",
@@ -179,19 +182,19 @@ function DatosAutoAbono({ datosVehiculo }) {
         fotoCedulaVerde: null,
         fotoCedulaAzul: null,
       });
-
+  
       setFileUploaded({
         fotoSeguro: false,
         fotoDNI: false,
         fotoCedulaVerde: false,
         fotoCedulaAzul: false,
       });
-
+  
     } catch (err) {
       console.error("Error de conexión:", err);
       alert("Error de conexión.");
     }
-  };
+  };  
 
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">

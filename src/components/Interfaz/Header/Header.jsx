@@ -8,7 +8,7 @@ function Header({ cambiarVista }) {
       <div className="menu">
         <button onClick={() => cambiarVista('operador')}>Operador</button>
         <button onClick={() => cambiarVista('vehiculos')}>Vehículos Dentro</button>
-        <button>Caja</button>
+        <button onClick={() => cambiarVista('turnos')}>Turnos</button>
         <button onClick={() => cambiarVista('abono')}>Abono</button>
         <a href="https://admin.ofiflex.com.ar" className="menu-button">Admin</a>
       </div>
