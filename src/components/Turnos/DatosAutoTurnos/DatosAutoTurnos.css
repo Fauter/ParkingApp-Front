@@ -3,10 +3,8 @@
     align-items: center;
     justify-content: center;
     background-color: #2a2a38;
-    border-radius: 8px;
-    height: 97%;
+    height: 100%;
     width: 100%;
-    padding: 10px;
   }
   
   .turno-form {

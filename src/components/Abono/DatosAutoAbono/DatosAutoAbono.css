@@ -3,8 +3,7 @@
     align-items: center;
     justify-content: center;
     background-color: #2a2a38;
-    border-radius: 8px;
-    height: 97%;
+    height: 100%;
     padding: 10px;
   }
   .abono-container h2 {
@@ -64,7 +63,6 @@
     border: none;
     border-radius: 4px;
     padding: 0.6rem;
-    margin-top: 9px;
     color: white;
     font-weight: bold;
     cursor: pointer;
@@ -172,6 +170,27 @@
     font-size: 0.9rem;
   }
   .select-style:focus {
+    border-color: rgb(100, 108, 133);
+  }
+  .selectorTarifa{
+    display: flex;
+    justify-content: center;
+  }
+  .select-style-tarifa {
+    background-color: #1f1f28;
+    border: 1px solid #444a5a;
+    border-radius: 4px;
+    padding: 0.4rem 0.5rem;
+    color: white;
+    width: 90%;
+    outline: none;
+    appearance: none;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center; 
+    text-align-last: center; 
+  }
+  .select-style-tarifa:focus {
     border-color: rgb(100, 108, 133);
   }
   

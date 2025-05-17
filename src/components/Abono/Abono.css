@@ -1,10 +1,12 @@
 
 
 .izquierdaAbono {
+    display: flex;
     flex: 1;
     padding: 6px 10px 10px 10px;
 }
 .derechaAbono {
+    display: flex;
     flex: 1.5;
     padding: 6px 10px 10px 10px;
     display: flex;

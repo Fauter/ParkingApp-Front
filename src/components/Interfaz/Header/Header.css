@@ -5,6 +5,9 @@
   justify-content: space-between;
   padding: 1rem 2rem;
   align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 9999;
 }
 
 /* Estilo del logo (el título Parking) */

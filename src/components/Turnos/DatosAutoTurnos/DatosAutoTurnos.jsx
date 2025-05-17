@@ -10,7 +10,7 @@ const DatosAutoTurnos = () => {
   const [precio, setPrecio] = useState(0);
 
   useEffect(() => {
-    fetch('https://parkingapp-back.onrender.com/api/tarifas/')
+    fetch('http://localhost:5000/api/tarifas/')
       .then((res) => res.json())
       .then((data) => {
         const turnosFiltrados = data.filter((t) => t.tipo === 'turno');
@@ -37,7 +37,7 @@ const DatosAutoTurnos = () => {
     fechaFin.setMinutes(fechaFin.getMinutes() + ((turnoData.dias || 0) * 1440) + ((turnoData.horas || 0) * 60) + (turnoData.minutos || 0));
   
     try {
-      const resPrecio = await fetch('https://parkingapp-back.onrender.com/api/precios/');
+      const resPrecio = await fetch('http://localhost:5000/api/precios/');
       const precios = await resPrecio.json();
   
       const precioAuto = precios.auto || {};
@@ -64,7 +64,7 @@ const DatosAutoTurnos = () => {
       // Aquí agregamos el console.log para ver el valor de metodoPago
       console.log('Método de pago seleccionado:', metodoPago);
   
-      const res = await fetch('https://parkingapp-back.onrender.com/api/turnos', {
+      const res = await fetch('http://localhost:5000/api/turnos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
