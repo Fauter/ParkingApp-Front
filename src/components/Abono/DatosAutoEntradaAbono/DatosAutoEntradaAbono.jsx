@@ -10,7 +10,7 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/precios");
+        const response = await fetch("https://api.garageia.com/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -21,7 +21,7 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const response = await fetch("https://api.garageia.com/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -52,13 +52,13 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
     try {
       let existeVehiculo = false;
 
-      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
       if (checkResponse.ok) {
         existeVehiculo = true;
       }
 
       if (!existeVehiculo) {
-        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+        const vehiculoResponse = await fetch("https://api.garageia.com/api/vehiculos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
@@ -72,7 +72,7 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
         alert("Vehículo creado y entrada registrada.");
       } else {
         const entradaResponse = await fetch(
-          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+          `https://api.garageia.com/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },

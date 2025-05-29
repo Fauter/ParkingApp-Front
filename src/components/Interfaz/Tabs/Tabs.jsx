@@ -10,7 +10,7 @@ function Tabs({ toggleEntradaSalida }) {
   };
 
   const handleAdminRedirect = () => {
-    window.location.href = 'https://admin.ofiflex.com.ar';
+    window.location.href = 'https://admin.garageia.com/';
   };
 
 

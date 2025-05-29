@@ -1,39 +1,27 @@
 import "./Operador.css";
 import React, { useState } from 'react';
 import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
-import DatosPago from './DatosPago/DatosPago'
+import DatosPago from './DatosPago/DatosPago';
 import DatosAutoEntrada from './DatosAutoEntrada/DatosAutoEntrada';
 
 function Operador() {
   const [vehiculoLocal, setVehiculoLocal] = useState(null);
   const [resetInput, setResetInput] = useState(false);
   const [error, setError] = useState(null);
-  
+  const [tarifaCalculada, setTarifaCalculada] = useState(null);
+
   const limpiarVehiculo = () => {
     setVehiculoLocal(null);
     setError(null);
     setResetInput(prev => !prev);
+    setTarifaCalculada(null);
   };
+
   const buscarVehiculo = async (patente) => {
     try {
       const patenteMayuscula = patente.toUpperCase();
-      const putResponse = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}/registrarSalida`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          metodoPago: "Efectivo",
-          factura: "No"
-        })
-      });
 
-      if (!putResponse.ok) {
-        const err = await putResponse.json();
-        throw new Error(err.msg || "Error al registrar salida");
-      }
-
-      const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}`);
+      const response = await fetch(`https://api.garageia.com/api/vehiculos/${patenteMayuscula}`);
       if (!response.ok) {
         throw new Error("Vehículo no encontrado");
       }
@@ -50,7 +38,7 @@ function Operador() {
   return (
     <div className="contenidoCentral">
       <div className="izquierda">
-        <DatosAutoEntrada/>
+        <DatosAutoEntrada />
       </div>
       <div className="derecha">
         <DatosAutoSalida
@@ -58,11 +46,14 @@ function Operador() {
           error={error}
           vehiculoLocal={vehiculoLocal}
           limpiarInputTrigger={resetInput}
+          onActualizarVehiculoLocal={setVehiculoLocal}
+          onTarifaCalculada={setTarifaCalculada}
         />
         <DatosPago
           vehiculoLocal={vehiculoLocal}
+          tarifaCalculada={tarifaCalculada}
           limpiarVehiculo={limpiarVehiculo}
-        /> 
+        />
       </div>
     </div>
   );

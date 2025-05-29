@@ -10,7 +10,7 @@ function Header({ cambiarVista }) {
         <button onClick={() => cambiarVista('vehiculos')}>Vehículos Dentro</button>
         <button onClick={() => cambiarVista('turnos')}>Turnos</button>
         <button onClick={() => cambiarVista('abono')}>Abono</button>
-        <a href="https://admin.ofiflex.com.ar" className="menu-button">Admin</a>
+        <a href="https://admin.garageia.com/" className="menu-button">Admin</a>
       </div>
     </header>
   );

@@ -1,62 +1,43 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
+function DatosPago({ vehiculoLocal, limpiarVehiculo,  }) {
     const [metodoPago, setMetodoPago] = useState('');
     const [factura, setFactura] = useState('');
     const [promo, setPromo] = useState('none');
     const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
     const [costoTotal, setCostoTotal] = useState(0);
-    const [precios, setPrecios] = useState(null);
     const [tarifaAplicada, setTarifaAplicada] = useState(null);
 
-    useEffect(() => {
-        fetch("http://localhost:5000/api/precios")
-            .then(res => res.json())
-            .then(data => {
-                setPrecios(data);
-            })
-            .catch(err => console.error("Error obteniendo precios:", err));
-    }, []);
+    // NO hace falta traer "precios" con otro fetch si ya usás este fetch para tarifas,
+    // por eso lo saco para simplificar el código.
 
+    // Aquí el useEffect que calcula tiempo y tarifa, según tu propuesta:
     useEffect(() => {
-        console.log(vehiculoLocal);
         if (!vehiculoLocal) return;
-    
-        if (vehiculoLocal.historialEstadias?.length > 0) {
-            const ultimaEstadia = vehiculoLocal.historialEstadias[0];
-    
-            if (ultimaEstadia.entrada) {
-                const entrada = new Date(ultimaEstadia.entrada);
-                const salida = ultimaEstadia.salida ? new Date(ultimaEstadia.salida) : new Date();
-                const horas = Math.ceil((salida - entrada) / (1000 * 60 * 60));
-                setTiempoEstadiaHoras(horas);
-    
-                if (ultimaEstadia.costoTotal != null) {
-                    setCostoTotal(ultimaEstadia.costoTotal);
-                } else {
-                    console.warn("No se encontró costoTotal en la última estadía.");
-                }
-    
-                if (ultimaEstadia.nombreTarifa) {
-                    setTarifaAplicada({ 
-                        nombre: ultimaEstadia.nombreTarifa,
-                        tipo: ultimaEstadia.tipoTarifa || vehiculoLocal.tipoTarifa || "NN"
-                    });
-                } else if (ultimaEstadia.tarifaAplicada?.nombre) {
-                    setTarifaAplicada({ 
-                        nombre: ultimaEstadia.tarifaAplicada.nombre,
-                        tipo: ultimaEstadia.tarifaAplicada.tipo || vehiculoLocal.tipoTarifa || "NN"
-                    });
-                } else {
-                    console.warn("No se encontró nombreTarifa ni tarifaAplicada.nombre en la última estadía.");
-                    setTarifaAplicada({ 
-                        nombre: "hora",
-                        tipo: vehiculoLocal.tipoTarifa || "NN"
-                    });
-                }
-            }
+
+        const estadia = vehiculoLocal.estadiaActual;
+
+        if (estadia && estadia.costoTotal != null) {
+            setCostoTotal(estadia.costoTotal);
+        } else {
+            setCostoTotal(0);
         }
+
+        // Asumo que la tarifa viene en estadia.tarifa o similar
+        if (estadia && estadia.tarifa) {
+            setTarifaAplicada(estadia.tarifa);
+        } else {
+            setTarifaAplicada(null);
+        }
+
+        // Podés calcular tiempo de estadía si lo necesitás, por ej:
+        if (estadia && estadia.tiempoHoras) {
+            setTiempoEstadiaHoras(estadia.tiempoHoras);
+        } else {
+            setTiempoEstadiaHoras(0);
+        }
+
     }, [vehiculoLocal]);
 
     const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
@@ -73,21 +54,20 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
     };
 
     const registrarMovimiento = () => {
-        console.log(vehiculoLocal);
         if (!vehiculoLocal?.patente) return;
 
         const operador = "Carlos";
 
-        // ✅ Determinar descripción según la tarifa recibida
-        let descripcion = '';
-
+        // Armar descripción según tarifa
         const nombreTarifa = tarifaAplicada?.nombre?.toLowerCase() || "hora";
         const tipoTarifa = tarifaAplicada?.tipo?.toLowerCase() || "NN";
 
+        let descripcion = '';
         if (nombreTarifa === "hora") {
-            descripcion = `Pago por x${tiempoEstadiaHoras} Hora${tiempoEstadiaHoras > 1 ? 's' : ''}`;
+            const horas = Math.max(parseInt(tiempoEstadiaHoras) || 0, 1); // Forzar número, mínimo 1
+            descripcion = `Pago por x${horas} Hora${horas > 1 ? 's' : ''}`;
         } else {
-            descripcion = `Pago por ${tarifaAplicada?.nombre}`;
+            descripcion = `Pago por ${tarifaAplicada?.nombre || 'Tarifa desconocida'}`;
         }
 
         const datosMovimiento = {
@@ -98,10 +78,10 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
             factura,
             monto: costoTotal,
             descripcion,
-            tipoTarifa: tarifaAplicada?.tipo || "NN" 
+            tipoTarifa: tarifaAplicada?.tipo || "NN"
         };
 
-        fetch("http://localhost:5000/api/movimientos/registrar", {
+        fetch("https://api.garageia.com/api/movimientos/registrar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(datosMovimiento),
@@ -118,6 +98,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo }) {
             })
             .catch(err => console.error("❌ Error conectando al backend:", err));
     };
+
 
     return (
         <div className="datosPago">

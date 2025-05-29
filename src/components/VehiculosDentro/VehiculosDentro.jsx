@@ -7,10 +7,10 @@ function VehiculosDentro() {
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/vehiculos')
+    fetch('https://api.garageia.com/api/vehiculos')
       .then(res => res.json())
       .then(data => {
-        const filtrados = data.filter(v => v.estadiaActual?.entrada !== null);
+        const filtrados = data.filter(v => v.estadiaActual && !v.estadiaActual.salida);
         setVehiculos(filtrados.reverse()); // ya los revierte acá
       })
       .catch(err => console.error('Error al cargar los vehículos:', err));

@@ -3,12 +3,12 @@
 .izquierdaAbono {
     display: flex;
     flex: 1;
-    padding: 6px 10px 10px 10px;
+    padding: 0px 10px 10px 10px;
 }
 .derechaAbono {
     display: flex;
     flex: 1.5;
-    padding: 6px 10px 10px 10px;
+    padding: 0px 10px 10px 10px;
     display: flex;
     align-items: center;
     justify-content: center;

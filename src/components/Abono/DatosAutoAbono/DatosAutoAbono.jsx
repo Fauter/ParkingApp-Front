@@ -35,7 +35,6 @@ function DatosAutoAbono({ datosVehiculo }) {
   });
 
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
-
   const [abonos, setAbonos] = useState([]);
   const [tarifaSeleccionadaId, setTarifaSeleccionadaId] = useState("");
   const [tarifaSeleccionada, setTarifaSeleccionada] = useState(null);
@@ -43,7 +42,7 @@ function DatosAutoAbono({ datosVehiculo }) {
   useEffect(() => {
     const fetchTipos = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const res = await fetch("https://api.garageia.com/api/tipos-vehiculo");
         const data = await res.json();
         setTiposVehiculo(data);
       } catch (err) {
@@ -52,6 +51,7 @@ function DatosAutoAbono({ datosVehiculo }) {
     };
     fetchTipos();
   }, []);
+
   useEffect(() => {
     if (datosVehiculo) {
       setFormData(prev => ({
@@ -61,6 +61,7 @@ function DatosAutoAbono({ datosVehiculo }) {
       }));
     }
   }, [datosVehiculo]);
+
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
       if (formData.nombreApellido.trim().length >= 3) {
@@ -70,17 +71,22 @@ function DatosAutoAbono({ datosVehiculo }) {
 
     return () => clearTimeout(delayDebounce);
   }, [formData.nombreApellido]);
+
   useEffect(() => {
     const fetchTarifas = async () => {
-      const res = await fetch("http://localhost:5000/api/tarifas");
-      const data = await res.json();
-      const abonosFiltrados = data.filter(t => t.tipo === "abono");
-      setAbonos(abonosFiltrados);
+      try {
+        const res = await fetch("https://api.garageia.com/api/tarifas");
+        const data = await res.json();
+        const abonosFiltrados = data.filter(t => t.tipo === "abono");
+        setAbonos(abonosFiltrados);
 
-      const abono = abonosFiltrados.find(t => t.nombre.toLowerCase() === "abono");
-      if (abono) {
-        setTarifaSeleccionadaId(abono._id);
-        setTarifaSeleccionada(abono);
+        const abono = abonosFiltrados.find(t => t.nombre.toLowerCase() === "abono");
+        if (abono) {
+          setTarifaSeleccionadaId(abono._id);
+          setTarifaSeleccionada(abono);
+        }
+      } catch (error) {
+        console.error("Error al cargar tarifas:", error);
       }
     };
     fetchTarifas();
@@ -88,7 +94,7 @@ function DatosAutoAbono({ datosVehiculo }) {
 
   const buscarClientePorNombre = async (nombre) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/clientes/${encodeURIComponent(nombre)}`);
+      const res = await fetch(`https://api.garageia.com/api/clientes/${encodeURIComponent(nombre)}`);
       if (res.ok) {
         const cliente = await res.json();
         if (cliente) {
@@ -157,111 +163,127 @@ function DatosAutoAbono({ datosVehiculo }) {
     }
 
     try {
-      // Obtener precios y monto
-      const preciosResponse = await fetch("http://localhost:5000/api/precios");
+      const preciosResponse = await fetch("https://api.garageia.com/api/precios");
+      if (!preciosResponse.ok) throw new Error("No se pudieron obtener los precios");
       const precios = await preciosResponse.json();
 
-      const tipo = formData.tipoVehiculo.toLowerCase();
-      const precioTipo = precios[tipo];
-      const monto = precioTipo.abono; // asumimos que ahí está el precio correcto
+      const tipoVehiculo = formData.tipoVehiculo;
+      if (!tipoVehiculo) throw new Error("Debe seleccionar tipo de vehículo");
 
-      // Crear FormData para enviar al backend
+      let nombreTarifa = tarifaSeleccionada.nombre.toLowerCase();
+      if (nombreTarifa.includes('mensual')) nombreTarifa = 'mensual';
+      else if (nombreTarifa.includes('quincena')) nombreTarifa = 'quincena';
+      else if (nombreTarifa.includes('semanal')) nombreTarifa = 'semanal';
+      else if (nombreTarifa.includes('abono')) nombreTarifa = 'abono';
+      else if (nombreTarifa.includes('día') || nombreTarifa.includes('dia')) nombreTarifa = 'dia';
+
+      const precioCalculado = precios[tipoVehiculo]?.[nombreTarifa];
+      if (!precioCalculado) throw new Error(`No se encontró precio para ${tipoVehiculo} con tarifa ${nombreTarifa}`);
+
+      // Armar FormData para abono
       const data = new FormData();
-
       for (const key in formData) {
-        data.append(key, formData[key]);
+        if (formData[key]) data.append(key, formData[key]);
       }
-      console.log(tarifaSeleccionada)
-      data.append("nombreTarifa", tarifaSeleccionada.nombre);
-      data.append("diasTarifa", tarifaSeleccionada.dias.toString());
+      data.append("precio", precioCalculado);
       data.append("tarifaSeleccionada", JSON.stringify(tarifaSeleccionada));
-      data.append("precio", monto);
-      data.append("tipoTarifa", "abono"); // o la que corresponda
 
-      // Enviar el abono al backend
-      const abonoResponse = await fetch("http://localhost:5000/api/abonos/registrar-abono", {
+      // Registrar abono
+      const res = await fetch("https://api.garageia.com/api/abonos/registrar-abono", {
         method: "POST",
         body: data,
       });
 
-      if (!abonoResponse.ok) {
-        alert("Error al guardar el abono.");
+      if (!res.ok) {
+        let errorMsg = "Error al registrar abono";
+        try {
+          const errorData = await res.json();
+          console.error("Error al registrar abono:", errorData);
+          errorMsg = errorData.message || errorMsg;
+        } catch (e) {
+          console.error("Respuesta no JSON al registrar abono");
+        }
+        alert(errorMsg);
         return;
       }
 
-      const abonoCreado = await abonoResponse.json();
+      const result = await res.json();
+      alert("¡Abono registrado correctamente!");
+      console.log("Respuesta abono:", result);
 
-      // Registrar movimiento general (Caja)
-      const movimientoBody = {
-        patente: formData.patente,
+      // ✅ Registrar MovimientoCliente
+      const movimientoClientePayload = {
+        nombreApellido: result.abono.nombreApellido?.trim() || "",
+        email: result.abono.email?.trim() || "",
+        descripcion: `Alta de abono: ${(result.abono.tipoAbono?.nombre || tarifaSeleccionada?.nombre || 'Desconocido')}`,
+        monto: Number(result.abono.precio) || 0,
+        tipoVehiculo: result.abono.tipoVehiculo?.trim() || "",
         operador: "Carlos",
-        tipoVehiculo: formData.tipoVehiculo,
-        metodoPago: formData.metodoPago,
-        factura: formData.factura,
-        monto,
-        descripcion: "Pago por Abono",
-        tipoTarifa: "abono",
+        patente: result.abono.patente?.trim() || "",
+        tipoMovimiento: "Alta Abono",
+        fecha: new Date().toISOString()
       };
 
-      const movimientoResponse = await fetch("http://localhost:5000/api/movimientos/registrar", {
+      const movimientoRes = await fetch("https://api.garageia.com/api/movimientosclientes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(movimientoBody),
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(movimientoClientePayload)
       });
 
-      if (!movimientoResponse.ok) {
-        alert("Abono guardado, pero falló el registro del movimiento en la caja.");
-        return;
+      if (!movimientoRes.ok) {
+        let movimientoErrorText = "Error al registrar MovimientoCliente";
+        try {
+          const movimientoError = await movimientoRes.json();
+          console.error("Error al registrar MovimientoCliente:", movimientoError);
+          movimientoErrorText = movimientoError.message || movimientoErrorText;
+        } catch (e) {
+          console.error("Respuesta no JSON al registrar MovimientoCliente");
+        }
+        alert(movimientoErrorText);
+      } else {
+        const movimientoResult = await movimientoRes.json();
+        console.log("MovimientoCliente registrado:", movimientoResult);
       }
 
-      // Registrar movimiento cliente: Cobro (-)
-      const movimientoCobro = {
-        nombreApellido: formData.nombreApellido,
-        email: formData.email,
-        descripcion: "Abono abono",
-        monto: -monto,
-        tipo: "Cobro",
-        operador: "Carlos",
-        patente: formData.patente,
-      };
-
-      const cobroResponse = await fetch("http://localhost:5000/api/movimientosclientes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(movimientoCobro),
+      // Resetear formulario
+      setFormData({
+        nombreApellido: '',
+        domicilio: '',
+        localidad: '',
+        telefonoParticular: '',
+        telefonoEmergencia: '',
+        domicilioTrabajo: '',
+        telefonoTrabajo: '',
+        email: '',
+        patente: '',
+        marca: '',
+        modelo: '',
+        color: '',
+        anio: '',
+        companiaSeguro: '',
+        metodoPago: '',
+        factura: '',
+        tipoVehiculo: '',
+        fotoSeguro: null,
+        fotoDNI: null,
+        fotoCedulaVerde: null,
+        fotoCedulaAzul: null,
       });
-
-      if (!cobroResponse.ok) {
-        alert("Error al registrar el movimiento de cobro del cliente.");
-        return;
-      }
-
-      // Registrar movimiento cliente: Pago (+)
-      const movimientoPago = {
-        nombreApellido: formData.nombreApellido,
-        email: formData.email,
-        descripcion: "Abono abono",
-        monto,
-        tipo: "Pago",
-        operador: "Carlos",
-        patente: formData.patente,
-      };
-
-      const pagoResponse = await fetch("http://localhost:5000/api/movimientosclientes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(movimientoPago),
+      setFileUploaded({
+        fotoSeguro: false,
+        fotoDNI: false,
+        fotoCedulaVerde: false,
+        fotoCedulaAzul: false,
       });
+      setTarifaSeleccionadaId("");
+      setTarifaSeleccionada(null);
 
-      if (!pagoResponse.ok) {
-        alert("Cobro registrado, pero falló el registro del pago del cliente.");
-        return;
-      }
-
-      alert("Abono, movimiento de caja y movimientos de cliente registrados exitosamente.");
-    } catch (error) {
-      console.error("Error al registrar:", error);
-      alert("Ocurrió un error al registrar el abono.");
+      alert("¡Abono y movimiento registrados correctamente!");
+    } catch (err) {
+      console.error("Error en handleSubmit:", err.message);
+      alert("Error al registrar el abono. Por favor, intentá nuevamente.");
     }
   };
 
