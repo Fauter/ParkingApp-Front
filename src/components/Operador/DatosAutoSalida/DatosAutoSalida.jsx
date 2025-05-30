@@ -41,39 +41,89 @@ function DatosAutoSalida({
 
         const data = await response.json();
 
-        const tieneEntrada = !!data.estadiaActual?.entrada;
-        const yaTieneSalida = !!data.estadiaActual?.salida;
-        const salidaTemporal = new Date().toISOString();
-
-        if (data.abonado && tieneEntrada && !yaTieneSalida) {
-          // Registrar salida automáticamente
-          const resSalida = await fetch(
-            `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                salida: salidaTemporal,
-                costo: 0,
-                tarifa: null,
-              }),
-            }
-          );
-
-          const dataSalida = await resSalida.json();
-
-          if (!resSalida.ok || dataSalida.error) {
-            console.error("❌ Error al registrar salida automática:", dataSalida?.msg || "Error desconocido");
-            alert("Error al registrar salida automática, intente nuevamente.");
-            return;
-          }
-
-          alert(`✅ Vehículo ${patenteBuscada} (abonado) salió automáticamente.`);
-          setInputPatente("");
+        // Validación: si no tiene estadía en curso (entrada null o inexistente)
+        if (!data.estadiaActual || !data.estadiaActual.entrada) {
+          alert("El vehículo no tiene estadía en curso.");
+          // No actualizar ni cargar nada
           return;
         }
 
-        // Si no es abonado, flujo normal
+        const tieneEntrada = !!data.estadiaActual.entrada;
+        const yaTieneSalida = !!data.estadiaActual.salida;
+        const salidaTemporal = new Date().toISOString();
+
+        if (tieneEntrada && !yaTieneSalida) {
+          if (data.abonado) {
+            // Salida automática abonado
+            const resSalida = await fetch(
+              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  salida: salidaTemporal,
+                  costo: 0,
+                  tarifa: null,
+                }),
+              }
+            );
+
+            const dataSalida = await resSalida.json();
+
+            if (!resSalida.ok || dataSalida.error) {
+              console.error("❌ Error al registrar salida automática (abonado):", dataSalida?.msg || "Error desconocido");
+              alert("Error al registrar salida automática, intente nuevamente.");
+              return;
+            }
+
+            alert(`✅ Vehículo ${patenteBuscada} (abonado) salió automáticamente.`);
+            setInputPatente("");
+            return;
+          } else if (data.turno) {
+            // Salida automática con turno
+            const resSalida = await fetch(
+              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  salida: salidaTemporal,
+                  costo: 0,
+                  tarifa: null,
+                }),
+              }
+            );
+
+            if (!resSalida.ok) {
+              const dataError = await resSalida.json();
+              console.error("❌ Error al registrar salida automática (turno):", dataError?.msg || "Error desconocido");
+              alert("Error al registrar salida automática, intente nuevamente.");
+              return;
+            }
+
+            // Desactivar turno
+            const resDesactivarTurno = await fetch(
+              `https://api.garageia.com/api/turnos/desactivar-por-patente/${patenteBuscada}`,
+              {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+
+            if (!resDesactivarTurno.ok) {
+              const errorTurno = await resDesactivarTurno.json();
+              console.error("❌ Error al desactivar turno:", errorTurno?.msg || "Error desconocido");
+              alert("Error al desactivar turno, intente nuevamente.");
+              return;
+            }
+
+            alert(`✅ Vehículo ${patenteBuscada} con turno salió automáticamente y se desactivó el turno.`);
+            setInputPatente("");
+            return;
+          }
+        }
+
+        // Flujo normal si no abonado ni turno o ya salida
         const actualizado = {
           ...data,
           estadiaActual: {

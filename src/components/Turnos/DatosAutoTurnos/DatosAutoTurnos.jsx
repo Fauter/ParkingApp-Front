@@ -52,11 +52,10 @@ const DatosAutoTurnos = () => {
       return;
     }
 
-    // Calcular duración en horas y fechaFin
     const duracionHoras = (turnoData.dias || 0) * 24 + (turnoData.horas || 0) + ((turnoData.minutos || 0) / 60);
     const ahora = new Date();
-    const fechaFin = new Date(ahora);
-    fechaFin.setMinutes(fechaFin.getMinutes() + ((turnoData.dias || 0) * 1440) + ((turnoData.horas || 0) * 60) + (turnoData.minutos || 0));
+    const fin = new Date(ahora);
+    fin.setMinutes(fin.getMinutes() + ((turnoData.dias || 0) * 1440) + ((turnoData.horas || 0) * 60) + (turnoData.minutos || 0));
 
     // Obtener precios para verificar (opcional, también lo hace el backend)
     try {
@@ -77,7 +76,7 @@ const DatosAutoTurnos = () => {
         metodoPago,
         factura,
         duracionHoras,
-        fechaFin,
+        fin,
         nombreTarifa: nombreTarifa // esto es clave para backend
       };
 
