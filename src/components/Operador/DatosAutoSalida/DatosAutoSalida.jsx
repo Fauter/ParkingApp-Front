@@ -41,20 +41,28 @@ function DatosAutoSalida({
 
         const data = await response.json();
 
-        // Al presionar Enter, definimos hora de salida como ahora
+        // Si ya tiene salida en la estadiaActual, NO la sobrescribas
         const salida = new Date().toISOString();
+
+        const tieneEntrada = !!data.estadiaActual?.entrada;
+        const salidaTemporal = new Date().toISOString();
+
+        // SIEMPRE usá una salida temporal nueva
         const actualizado = {
           ...data,
           estadiaActual: {
             ...data.estadiaActual,
-            salida,
+            salida: salidaTemporal,
           },
         };
 
+        if (onSalidaCalculada) {
+          onSalidaCalculada(salidaTemporal);
+        }
+
         onActualizarVehiculoLocal(actualizado);
 
-        // Notificamos a DatosPago cuál es la salida
-        if (onSalidaCalculada) {
+        if (onSalidaCalculada && !yaTieneSalida) {
           onSalidaCalculada(salida);
         }
 
@@ -66,23 +74,40 @@ function DatosAutoSalida({
   };
 
   useEffect(() => {
+    console.log("🚀 useEffect detectó cambio en vehiculoLocal");
+    const entrada = vehiculoLocal?.estadiaActual?.entrada;
+    const salida = vehiculoLocal?.estadiaActual?.salida;
+    const costoTotal = vehiculoLocal?.estadiaActual?.costoTotal;
+
+    console.log("Entrada:", entrada);
+    console.log("Salida:", salida);
+    console.log("Costo total:", costoTotal);
+    console.log("Ya actualizado?:", yaActualizado.current);
+
+    if (!salida) {
+      console.warn("⚠️ No hay salida, no se calcula tarifa");
+      return;
+    }
+
     const calcularTarifa = async () => {
       if (
-        vehiculoLocal?.estadiaActual?.entrada &&
-        vehiculoLocal?.estadiaActual?.salida &&
-        !yaActualizado.current
+        entrada &&
+        salida &&
+        (costoTotal === 0 || costoTotal === undefined || !yaActualizado.current)
       ) {
-        const entrada = new Date(vehiculoLocal.estadiaActual.entrada);
-        const salida = new Date(vehiculoLocal.estadiaActual.salida);
-        const diferenciaMs = salida - entrada;
+        const fechaEntrada = new Date(entrada);
+        const fechaSalida = new Date(salida);
+        const diferenciaMs = fechaSalida - fechaEntrada;
         const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
-        const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const horasFormateadas = `${String(horas).padStart(2, '0')}:00`;
+        const horas = Math.ceil(
+          (diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+        );
+        const horasFormateadas = `${String(horas).padStart(2, "0")}:00`;
 
         try {
           const result = await calcularTarifaAPI({
             tipoVehiculo: vehiculoLocal.tipoVehiculo,
-            inicio: entrada.toISOString(),
+            inicio: fechaEntrada.toISOString(),
             dias,
             hora: horasFormateadas,
             tarifaAbono: null,
@@ -117,7 +142,7 @@ function DatosAutoSalida({
                 const actualizado = await resActualizar.json();
                 yaActualizado.current = true;
 
-                // Actualizamos el costo también en vehiculoLocal por si otros componentes lo usan
+                // Actualizamos el estado para reflejar el costo actualizado
                 onActualizarVehiculoLocal({
                   ...actualizado.vehiculo,
                   costoTotal: costo,
@@ -135,6 +160,8 @@ function DatosAutoSalida({
         } catch (error) {
           console.error("Error al calcular tarifa:", error.message);
         }
+      } else {
+        console.log("❌ No se cumplen condiciones para calcular tarifa");
       }
     };
 

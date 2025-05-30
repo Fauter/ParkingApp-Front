@@ -49,6 +49,10 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
 
     }, [vehiculoLocal]);
 
+    useEffect(() => {
+        console.log("🚗 vehiculoLocal en DatosPago:", vehiculoLocal);
+    }, [vehiculoLocal]);
+
     const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
     const handleSelectFactura = (opcion) => setFactura(opcion);
     const handleSelectPromo = (opcion) => setPromo(opcion);
@@ -126,8 +130,11 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
 
             if (dataMovimiento.movimiento) {
                 alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
-                limpiarVehiculo();
-                resetCamposPago();
+
+                // 🔄 Limpiar todo después de registrar exitosamente
+                limpiarVehiculo();     // 🔹 Limpiás el estado del vehículo en el componente padre
+                resetCamposPago();     // 🔹 Reseteás todos los campos de pago
+
             } else {
                 console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
                 alert("Error al registrar movimiento, intente nuevamente.");
