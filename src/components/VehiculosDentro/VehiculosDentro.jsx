@@ -10,8 +10,13 @@ function VehiculosDentro() {
     fetch('https://api.garageia.com/api/vehiculos')
       .then(res => res.json())
       .then(data => {
-        const filtrados = data.filter(v => v.estadiaActual && !v.estadiaActual.salida);
-        setVehiculos(filtrados.reverse()); // ya los revierte acá
+        // Filtramos: solo estadía actual con entrada no nula y sin salida
+        const filtrados = data.filter(v =>
+          v.estadiaActual &&
+          v.estadiaActual.entrada &&
+          !v.estadiaActual.salida
+        );
+        setVehiculos(filtrados.reverse());
       })
       .catch(err => console.error('Error al cargar los vehículos:', err));
   }, []);
@@ -35,13 +40,21 @@ function VehiculosDentro() {
             </tr>
           </thead>
           <tbody>
-            {vehiculosPaginados.map(v => (
-              <tr key={v._id}>
-                <td>{v.patente}</td>
-                <td>{new Date(v.estadiaActual.entrada).toLocaleString()}</td>
-                <td>{v.tipoVehiculo.charAt(0).toUpperCase() + v.tipoVehiculo.slice(1)}</td>
-              </tr>
-            ))}
+            {vehiculosPaginados.map(v => {
+              const fechaEntrada = new Date(v.estadiaActual.entrada);
+              const entradaValida = v.estadiaActual.entrada && !isNaN(fechaEntrada);
+              return (
+                <tr key={v._id}>
+                  <td>{v.patente}</td>
+                  <td>
+                    {entradaValida
+                      ? fechaEntrada.toLocaleString()
+                      : 'Entrada no disponible'}
+                  </td>
+                  <td>{v.tipoVehiculo.charAt(0).toUpperCase() + v.tipoVehiculo.slice(1)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         <div className="paginado">
