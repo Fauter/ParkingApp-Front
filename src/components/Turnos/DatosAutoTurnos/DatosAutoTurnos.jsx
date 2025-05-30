@@ -157,7 +157,7 @@ const DatosAutoTurnos = () => {
             onChange={e => setFactura(e.target.value)}
             className="select-style"
           >
-            <option value="No">No</option>
+            <option value="CC">CC</option>
             <option value="A">A</option>
             <option value="Final">Consumidor Final</option>
           </select>

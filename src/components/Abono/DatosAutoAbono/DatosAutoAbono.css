@@ -3,7 +3,7 @@
     align-items: center;
     justify-content: center;
     background-color: #2a2a38;
-    height: 1000px;
+    height: 600px;
     padding: 10px;
   }
   .abono-container h2 {
@@ -194,3 +194,10 @@
     border-color: rgb(100, 108, 133);
   }
   
+
+  @media (max-height: 642px) {
+  /* Si la altura del viewport es menor (menos espacio vertical), bajamos el gap */
+  .abono-form {
+    gap: 0.5rem;
+  }
+}

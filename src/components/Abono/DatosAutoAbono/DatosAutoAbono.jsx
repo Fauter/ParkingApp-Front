@@ -369,7 +369,7 @@ function DatosAutoAbono({ datosVehiculo }) {
             <label>Factura</label>
             <select name="factura" value={formData.factura} onChange={handleChange} className="select-style">
               <option value="">Seleccione</option>
-              <option value="No">No</option>
+              <option value="CC">CC</option>
               <option value="A">A</option>
               <option value="Final">Final</option>
             </select>

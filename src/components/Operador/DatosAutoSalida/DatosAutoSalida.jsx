@@ -8,6 +8,8 @@ function DatosAutoSalida({
   error,
   limpiarInputTrigger,
   onActualizarVehiculoLocal,
+  onTarifaCalculada,
+  onSalidaCalculada,
 }) {
   const [inputPatente, setInputPatente] = useState("");
   const [tarifaCalculada, setTarifaCalculada] = useState(null);
@@ -28,11 +30,7 @@ function DatosAutoSalida({
 
       try {
         const response = await fetch(
-          `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-          }
+          `https://api.garageia.com/api/vehiculos/${patenteBuscada}`
         );
 
         if (!response.ok) {
@@ -42,9 +40,25 @@ function DatosAutoSalida({
         }
 
         const data = await response.json();
-        onActualizarVehiculoLocal(data.vehiculo);
+
+        // Al presionar Enter, definimos hora de salida como ahora
+        const salida = new Date().toISOString();
+        const actualizado = {
+          ...data,
+          estadiaActual: {
+            ...data.estadiaActual,
+            salida,
+          },
+        };
+
+        onActualizarVehiculoLocal(actualizado);
+
+        // Notificamos a DatosPago cuál es la salida
+        if (onSalidaCalculada) {
+          onSalidaCalculada(salida);
+        }
+
         setInputPatente(patenteBuscada);
-        yaActualizado.current = false; 
       } catch (err) {
         console.error("Error en la operación:", err);
       }
@@ -126,6 +140,57 @@ function DatosAutoSalida({
 
     calcularTarifa();
   }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal]);
+  useEffect(() => {
+    const calcularTarifaTemporal = async () => {
+      // Solo calcular si hay entrada y NO hay salida
+      if (vehiculoLocal?.estadiaActual?.entrada && !vehiculoLocal?.estadiaActual?.salida) {
+        const entrada = new Date(vehiculoLocal.estadiaActual.entrada);
+        const salida = new Date(); // salida temporal: ahora
+        const diferenciaMs = salida - entrada;
+        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
+        const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const horasFormateadas = `${String(horas).padStart(2, '0')}:00`;
+
+        try {
+          const result = await calcularTarifaAPI({
+            tipoVehiculo: vehiculoLocal.tipoVehiculo,
+            inicio: entrada.toISOString(),
+            dias,
+            hora: horasFormateadas,
+            tarifaAbono: null,
+            tipoTarifa: "estadia",
+            tarifas,
+            precios,
+            parametros,
+          });
+
+          const match = result?.detalle?.match(/Total:\s*\$?([0-9,.]+)/i);
+          const costo = match ? parseFloat(match[1].replace(",", "")) : null;
+
+          if (costo !== null) {
+            onTarifaCalculada({
+              costo,
+              salida: salida.toISOString(),
+            });
+
+            // Actualizo vehiculoLocal solo si no tenía salida
+            onActualizarVehiculoLocal({
+              ...vehiculoLocal,
+              estadiaActual: {
+                ...vehiculoLocal.estadiaActual,
+                salida: salida.toISOString(),
+                costoTotal: costo,
+              },
+            });
+          }
+        } catch (error) {
+          console.error("Error al calcular tarifa:", error.message);
+        }
+      }
+    };
+
+    calcularTarifaTemporal();
+  }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal, onTarifaCalculada]);
 
   const entradaDate = vehiculoLocal?.estadiaActual?.entrada
     ? new Date(vehiculoLocal.estadiaActual.entrada)

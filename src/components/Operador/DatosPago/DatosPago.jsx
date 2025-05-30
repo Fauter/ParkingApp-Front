@@ -1,18 +1,27 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo,  }) {
-    const [metodoPago, setMetodoPago] = useState('');
-    const [factura, setFactura] = useState('');
+function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
+    const [metodoPago, setMetodoPago] = useState('Efectivo');
+    const [factura, setFactura] = useState('CC');
     const [promo, setPromo] = useState('none');
     const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
     const [costoTotal, setCostoTotal] = useState(0);
     const [tarifaAplicada, setTarifaAplicada] = useState(null);
+    const [horaSalida, setHoraSalida] = useState(null);
 
-    // NO hace falta traer "precios" con otro fetch si ya usás este fetch para tarifas,
-    // por eso lo saco para simplificar el código.
+    useEffect(() => {
+        if (tarifaCalculada?.costo != null) {
+            setCostoTotal(tarifaCalculada.costo);
+        }
 
-    // Aquí el useEffect que calcula tiempo y tarifa, según tu propuesta:
+        if (tarifaCalculada?.salida) {
+            setHoraSalida(tarifaCalculada.salida);
+        }
+
+        console.log("tarifaCalculada recibida en DatosPago:", tarifaCalculada);
+    }, [tarifaCalculada]);
+
     useEffect(() => {
         if (!vehiculoLocal) return;
 
@@ -45,8 +54,8 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo,  }) {
     const handleSelectPromo = (opcion) => setPromo(opcion);
 
     const resetCamposPago = () => {
-        setMetodoPago('');
-        setFactura('');
+        setMetodoPago('Efectivo');
+        setFactura('CC');
         setPromo('none');
         setTiempoEstadiaHoras(0);
         setCostoTotal(0);
@@ -64,41 +73,71 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo,  }) {
 
         let descripcion = '';
         if (nombreTarifa === "hora") {
-            const horas = Math.max(parseInt(tiempoEstadiaHoras) || 0, 1); // Forzar número, mínimo 1
+            const horas = Math.max(parseInt(tiempoEstadiaHoras) || 0, 1);
             descripcion = `Pago por x${horas} Hora${horas > 1 ? 's' : ''}`;
         } else {
             descripcion = `Pago por ${tarifaAplicada?.nombre || 'Tarifa desconocida'}`;
         }
 
-        const datosMovimiento = {
-            patente: vehiculoLocal.patente,
-            operador,
-            tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
-            metodoPago,
-            factura,
-            monto: costoTotal,
-            descripcion,
-            tipoTarifa: tarifaAplicada?.tipo || "NN"
-        };
-
-        fetch("https://api.garageia.com/api/movimientos/registrar", {
-            method: "POST",
+        // Primero registrar la salida
+        fetch(`https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
+            method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(datosMovimiento),
+            body: JSON.stringify({
+                salida: tarifaCalculada?.salida,
+                costo: tarifaCalculada?.costo,
+                tarifa: tarifaCalculada?.tarifa || null,
+            }),
         })
-            .then(res => res.json())
-            .then(data => {
-                if (data.movimiento) {
-                    alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
-                    limpiarVehiculo();
-                    resetCamposPago();
-                } else {
-                    console.error("❌ Error al registrar movimiento:", data.msg);
-                }
-            })
-            .catch(err => console.error("❌ Error conectando al backend:", err));
-    };
+        .then(res => res.json())
+        .then(dataSalida => {
+            if (!dataSalida || dataSalida.error) {
+                console.error("❌ Error al registrar salida:", dataSalida?.msg || "Error desconocido");
+                alert("Error al registrar salida, intente nuevamente.");
+                return;
+            }
 
+            console.log("✅ Salida registrada correctamente:", dataSalida);
+
+            // Ahora que la salida está registrada, registrar el movimiento
+            const datosMovimiento = {
+                patente: vehiculoLocal.patente,
+                operador,
+                tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
+                metodoPago,
+                descripcion,
+                factura,
+                monto: costoTotal, 
+                tipoTarifa: tarifaAplicada?.nombre || "No especificada",
+            };
+            console.log("📦 Datos que se mandan al registrar movimiento:", datosMovimiento);
+            return fetch("https://api.garageia.com/api/movimientos/registrar", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(datosMovimiento),
+            });
+        })
+        .then(res => {
+            if (!res) return; // si hubo error previo, no continuar
+            return res.json();
+        })
+        .then(dataMovimiento => {
+            if (!dataMovimiento) return; // no seguir si no hay respuesta
+
+            if (dataMovimiento.movimiento) {
+                alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
+                limpiarVehiculo();
+                resetCamposPago();
+            } else {
+                console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
+                alert("Error al registrar movimiento, intente nuevamente.");
+            }
+        })
+        .catch(err => {
+            console.error("❌ Error conectando al backend:", err);
+            alert("Error en la conexión, intente nuevamente.");
+        });
+    };
 
     return (
         <div className="datosPago">
@@ -139,7 +178,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo,  }) {
                 <div>
                     <div className="title">Factura</div>
                     <div className="factura">
-                        {["No", "A", "Final"].map((opcion) => (
+                        {["CC", "A", "Final"].map((opcion) => (
                             <div
                                 key={opcion}
                                 className={`facturaOption ${factura === opcion ? 'selected' : ''}`}
