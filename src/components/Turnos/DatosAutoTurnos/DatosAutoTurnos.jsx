@@ -6,7 +6,7 @@ const DatosAutoTurnos = () => {
   const [patente, setPatente] = useState('');
   const [turnoSeleccionado, setTurnoSeleccionado] = useState('');
   const [metodoPago, setMetodoPago] = useState('Efectivo');
-  const [factura, setFactura] = useState('No');
+  const [factura, setFactura] = useState('CC');
   const [precio, setPrecio] = useState(0);
 
   useEffect(() => {

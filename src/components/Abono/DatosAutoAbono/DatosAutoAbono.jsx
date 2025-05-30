@@ -19,8 +19,8 @@ function DatosAutoAbono({ datosVehiculo }) {
     color: "",
     anio: "",
     companiaSeguro: "",
-    metodoPago: "",
-    factura: "",
+    metodoPago: "Efectivo",
+    factura: "CC",
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
@@ -180,7 +180,6 @@ function DatosAutoAbono({ datosVehiculo }) {
       const precioCalculado = precios[tipoVehiculo]?.[nombreTarifa];
       if (!precioCalculado) throw new Error(`No se encontró precio para ${tipoVehiculo} con tarifa ${nombreTarifa}`);
 
-      // Armar FormData para abono
       const data = new FormData();
       for (const key in formData) {
         if (formData[key]) data.append(key, formData[key]);
@@ -188,7 +187,6 @@ function DatosAutoAbono({ datosVehiculo }) {
       data.append("precio", precioCalculado);
       data.append("tarifaSeleccionada", JSON.stringify(tarifaSeleccionada));
 
-      // Registrar abono
       const res = await fetch("https://api.garageia.com/api/abonos/registrar-abono", {
         method: "POST",
         body: data,
@@ -211,7 +209,22 @@ function DatosAutoAbono({ datosVehiculo }) {
       alert("¡Abono registrado correctamente!");
       console.log("Respuesta abono:", result);
 
-      // ✅ Registrar MovimientoCliente
+      // ✅ POST adicional a /api/movimientos/registrar
+      await fetch("https://api.garageia.com/api/movimientos/registrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patente: formData.patente,
+          operador: "Carlos",
+          tipoVehiculo: formData.tipoVehiculo,
+          metodoPago: formData.metodoPago,
+          factura: formData.factura || "Sin factura",
+          monto: precioCalculado,
+          descripcion: `Pago Por Abono (${tarifaSeleccionada.nombre})`,
+          tipoTarifa: tarifaSeleccionada.nombre,
+        }),
+      });
+
       const movimientoClientePayload = {
         nombreApellido: result.abono.nombreApellido?.trim() || "",
         email: result.abono.email?.trim() || "",
@@ -247,7 +260,6 @@ function DatosAutoAbono({ datosVehiculo }) {
         console.log("MovimientoCliente registrado:", movimientoResult);
       }
 
-      // Resetear formulario
       setFormData({
         nombreApellido: '',
         domicilio: '',
@@ -286,6 +298,7 @@ function DatosAutoAbono({ datosVehiculo }) {
       alert("Error al registrar el abono. Por favor, intentá nuevamente.");
     }
   };
+
 
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">

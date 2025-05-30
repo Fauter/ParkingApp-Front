@@ -25,7 +25,6 @@ function DatosAutoSalida({
   const handleKeyDown = async (e) => {
     if (e.key === "Enter") {
       const patenteBuscada = inputPatente.trim().toUpperCase();
-
       if (!patenteBuscada) return;
 
       try {
@@ -36,18 +35,45 @@ function DatosAutoSalida({
         if (!response.ok) {
           const errorData = await response.json();
           console.error("Error:", errorData.msg);
+          alert("Error al buscar vehículo.");
           return;
         }
 
         const data = await response.json();
 
-        // Si ya tiene salida en la estadiaActual, NO la sobrescribas
-        const salida = new Date().toISOString();
-
         const tieneEntrada = !!data.estadiaActual?.entrada;
+        const yaTieneSalida = !!data.estadiaActual?.salida;
         const salidaTemporal = new Date().toISOString();
 
-        // SIEMPRE usá una salida temporal nueva
+        if (data.abonado && tieneEntrada && !yaTieneSalida) {
+          // Registrar salida automáticamente
+          const resSalida = await fetch(
+            `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                salida: salidaTemporal,
+                costo: 0,
+                tarifa: null,
+              }),
+            }
+          );
+
+          const dataSalida = await resSalida.json();
+
+          if (!resSalida.ok || dataSalida.error) {
+            console.error("❌ Error al registrar salida automática:", dataSalida?.msg || "Error desconocido");
+            alert("Error al registrar salida automática, intente nuevamente.");
+            return;
+          }
+
+          alert(`✅ Vehículo ${patenteBuscada} (abonado) salió automáticamente.`);
+          setInputPatente("");
+          return;
+        }
+
+        // Si no es abonado, flujo normal
         const actualizado = {
           ...data,
           estadiaActual: {
@@ -56,19 +82,15 @@ function DatosAutoSalida({
           },
         };
 
-        if (onSalidaCalculada) {
+        if (onSalidaCalculada && !yaTieneSalida) {
           onSalidaCalculada(salidaTemporal);
         }
 
         onActualizarVehiculoLocal(actualizado);
-
-        if (onSalidaCalculada && !yaTieneSalida) {
-          onSalidaCalculada(salida);
-        }
-
         setInputPatente(patenteBuscada);
       } catch (err) {
         console.error("Error en la operación:", err);
+        alert("Error al procesar la salida.");
       }
     }
   };
