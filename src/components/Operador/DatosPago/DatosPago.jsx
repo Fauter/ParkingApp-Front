@@ -1,14 +1,39 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
+function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
     const [metodoPago, setMetodoPago] = useState('Efectivo');
     const [factura, setFactura] = useState('CC');
-    const [promo, setPromo] = useState('none');
+    const [promos, setPromos] = useState('none');
+    const [promoSeleccionada, setPromoSeleccionada] = useState(null);
     const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
     const [costoTotal, setCostoTotal] = useState(0);
+    const [totalConDescuento, setTotalConDescuento] = useState(costoTotal);
     const [tarifaAplicada, setTarifaAplicada] = useState(null);
     const [horaSalida, setHoraSalida] = useState(null);
+
+    useEffect(() => {
+        fetch("https://api.garageia.com/api/promos")
+        .then(res => res.json())
+        .then(data => setPromos(data))
+        .catch(err => console.error("Error cargando promociones", err));
+    }, []);
+
+    useEffect(() => {
+        if (promoSeleccionada) {
+            const descuento = promoSeleccionada.descuento;
+            const nuevoTotal = costoTotal * (1 - descuento / 100);
+            setTotalConDescuento(nuevoTotal);
+        } else {
+            setTotalConDescuento(costoTotal);
+        }
+    }, [promoSeleccionada, costoTotal]);
+
+    const handleSeleccionPromo = (e) => {
+        const idSeleccionado = e.target.value;
+        const promo = promos.find(p => p._id === idSeleccionado);
+        setPromoSeleccionada(promo);
+    };
 
     useEffect(() => {
         if (tarifaCalculada?.costo != null) {
@@ -33,14 +58,12 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
             setCostoTotal(0);
         }
 
-        // Asumo que la tarifa viene en estadia.tarifa o similar
         if (estadia && estadia.tarifa) {
             setTarifaAplicada(estadia.tarifa);
         } else {
             setTarifaAplicada(null);
         }
 
-        // Podés calcular tiempo de estadía si lo necesitás, por ej:
         if (estadia && estadia.tiempoHoras) {
             setTiempoEstadiaHoras(estadia.tiempoHoras);
         } else {
@@ -55,12 +78,11 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
 
     const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
     const handleSelectFactura = (opcion) => setFactura(opcion);
-    const handleSelectPromo = (opcion) => setPromo(opcion);
 
     const resetCamposPago = () => {
         setMetodoPago('Efectivo');
         setFactura('CC');
-        setPromo('none');
+        setPromoSeleccionada(null);
         setTiempoEstadiaHoras(0);
         setCostoTotal(0);
         setTarifaAplicada(null);
@@ -69,9 +91,8 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
     const registrarMovimiento = () => {
         if (!vehiculoLocal?.patente) return;
 
-        const operador = "Carlos";
+        const operador = user?.nombre || "Operador Desconocido";
 
-        // Armar descripción según tarifa
         const nombreTarifa = tarifaAplicada?.nombre?.toLowerCase() || "hora";
         const tipoTarifa = tarifaAplicada?.tipo?.toLowerCase() || "NN";
 
@@ -83,13 +104,12 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
             descripcion = `Pago por ${tarifaAplicada?.nombre || 'Tarifa desconocida'}`;
         }
 
-        // Primero registrar la salida
         fetch(`https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 salida: tarifaCalculada?.salida,
-                costo: tarifaCalculada?.costo,
+                costo: totalConDescuento,
                 tarifa: tarifaCalculada?.tarifa || null,
             }),
         })
@@ -103,7 +123,6 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
 
             console.log("✅ Salida registrada correctamente:", dataSalida);
 
-            // Ahora que la salida está registrada, registrar el movimiento
             const datosMovimiento = {
                 patente: vehiculoLocal.patente,
                 operador,
@@ -111,7 +130,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
                 metodoPago,
                 descripcion,
                 factura,
-                monto: costoTotal, 
+                monto: totalConDescuento, 
                 tipoTarifa: tarifaAplicada?.nombre || "No especificada",
             };
             console.log("📦 Datos que se mandan al registrar movimiento:", datosMovimiento);
@@ -122,19 +141,16 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
             });
         })
         .then(res => {
-            if (!res) return; // si hubo error previo, no continuar
+            if (!res) return;
             return res.json();
         })
         .then(dataMovimiento => {
-            if (!dataMovimiento) return; // no seguir si no hay respuesta
+            if (!dataMovimiento) return;
 
             if (dataMovimiento.movimiento) {
                 alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
-
-                // 🔄 Limpiar todo después de registrar exitosamente
-                limpiarVehiculo();     // 🔹 Limpiás el estado del vehículo en el componente padre
-                resetCamposPago();     // 🔹 Reseteás todos los campos de pago
-
+                limpiarVehiculo();
+                resetCamposPago();
             } else {
                 console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
                 alert("Error al registrar movimiento, intente nuevamente.");
@@ -150,17 +166,20 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada }) {
         <div className="datosPago">
             <div className="precioTotal">
                 <div className="precioContainer">
-                    ${costoTotal.toLocaleString("es-AR")}
+                    ${totalConDescuento.toLocaleString("es-AR")}
                 </div>
                 <div className="promo">
                     <select 
                         className="promoSelect"
-                        value={promo}
-                        onChange={(e) => handleSelectPromo(e.target.value)}
+                        value={promoSeleccionada?._id || "none"}
+                        onChange={handleSeleccionPromo}
                     >
-                        <option value="none">Selecciona una Promo</option>
-                        <option value="camara">Cámara</option>
-                        <option value="otro">Otro</option>
+                        <option value="none">Seleccioná una Promo</option>
+                        {promos && Array.isArray(promos) && promos.map((promo) => (
+                            <option key={promo._id} value={promo._id}>
+                                {promo.nombre} ({promo.descuento}%)
+                            </option>
+                        ))}
                     </select>
                     <a href="" className="iconContainer">
                         <img src="https://www.svgrepo.com/show/904/photo-camera.svg" alt="" className="camIcon" />

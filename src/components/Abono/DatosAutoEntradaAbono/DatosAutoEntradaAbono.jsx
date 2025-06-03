@@ -37,6 +37,13 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
   const normalizar = (texto) => texto.toLowerCase();
 
   const handleEntrada = async () => {
+    const regexCompleto = /^[A-Z]{3}[0-9]{3}([A-Z]{2})?$/;
+
+    if (!regexCompleto.test(patente)) {
+      alert("La patente ingresada no es válida.");
+      return;
+    }
+
     if (!patente || !tipoVehiculo) {
       alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
       return;
@@ -104,6 +111,18 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
     }
   };
 
+  const handlePatenteChange = (e) => {
+    const valor = e.target.value.toUpperCase();
+
+    // Regex para validar la patente *parcialmente* mientras se escribe:
+    // Hasta 3 letras, luego hasta 3 números, luego hasta 2 letras
+    const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
+
+    if (valor === "" || regexParcial.test(valor)) {
+      setPatente(valor);
+    }
+  };
+
   return (
     <div className="datosAutoEntrada">
       <div className="fotoAutoEntrada">
@@ -120,8 +139,9 @@ function DatosAutoEntradaAbono({ setDatosVehiculo }) {
           type="text"
           placeholder="Ingrese la patente"
           value={patente}
-          onChange={(e) => setPatente(e.target.value.toUpperCase())}
+          onChange={handlePatenteChange}
           className="inputPatente"
+          maxLength={8}
         />
 
         <label htmlFor="tipoVehiculo">Tipo de Vehículo</label>

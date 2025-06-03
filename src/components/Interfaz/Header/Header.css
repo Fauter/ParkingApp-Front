@@ -55,3 +55,8 @@
   background-color: #00adb5;
   transform: scale(1.05);
 }
+
+.menu button.boton-activo {
+  background-color: #00adb5; /* mismo color que hover */
+  transform: scale(1.05);
+}

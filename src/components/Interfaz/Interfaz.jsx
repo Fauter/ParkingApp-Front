@@ -14,7 +14,8 @@ function Interfaz() {
   return (
     <div className="interfaz">
       <Background />
-      <Header cambiarVista={setVistaActual} />
+      {/* Acá le pasamos la prop vistaActiva */}
+      <Header cambiarVista={setVistaActual} vistaActiva={vistaActual} />
       <div className="content">
         {vistaActual === 'operador' && <Operador />}
         {vistaActual === 'vehiculos' && <VehiculosDentro />}

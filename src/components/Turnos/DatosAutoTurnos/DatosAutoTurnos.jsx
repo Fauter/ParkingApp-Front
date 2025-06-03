@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './DatosAutoTurnos.css';
 
-const DatosAutoTurnos = () => {
+const DatosAutoTurnos = ({ user }) => {
   const [turnos, setTurnos] = useState([]);
   const [patente, setPatente] = useState('');
   const [turnoSeleccionado, setTurnoSeleccionado] = useState('');
@@ -9,6 +9,7 @@ const DatosAutoTurnos = () => {
   const [factura, setFactura] = useState('CC');
   const [precio, setPrecio] = useState(0);
 
+  // Cargar las tarifas tipo "turno" al montar el componente
   useEffect(() => {
     fetch('https://api.garageia.com/api/tarifas/')
       .then(res => res.json())
@@ -33,7 +34,7 @@ const DatosAutoTurnos = () => {
       return;
     }
 
-    // Obtener tipoVehiculo desde API vehiculos
+    // Obtener tipoVehiculo desde API vehículos
     let tipoVehiculo;
     try {
       const resVehiculo = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
@@ -52,13 +53,14 @@ const DatosAutoTurnos = () => {
       return;
     }
 
+    // Calcular duración total en horas y fecha fin
     const duracionHoras = (turnoData.dias || 0) * 24 + (turnoData.horas || 0) + ((turnoData.minutos || 0) / 60);
     const ahora = new Date();
     const fin = new Date(ahora);
     fin.setMinutes(fin.getMinutes() + ((turnoData.dias || 0) * 1440) + ((turnoData.horas || 0) * 60) + (turnoData.minutos || 0));
 
-    // Obtener precios para verificar (opcional, también lo hace el backend)
     try {
+      // Obtener precios para mostrar/verificar (opcional)
       const resPrecio = await fetch('https://api.garageia.com/api/precios/');
       const precios = await resPrecio.json();
 
@@ -70,16 +72,17 @@ const DatosAutoTurnos = () => {
       }
       setPrecio(precioVehiculo);
 
-      // Preparar payload para backend (IMPORTANTE: enviar nombreTarifa)
+      // Preparar el payload para backend (Turno)
       const payload = {
         patente,
         metodoPago,
         factura,
         duracionHoras,
         fin,
-        nombreTarifa: nombreTarifa // esto es clave para backend
+        nombreTarifa
       };
 
+      // Crear el turno
       const res = await fetch('https://api.garageia.com/api/turnos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,7 +92,31 @@ const DatosAutoTurnos = () => {
       const data = await res.json();
 
       if (res.ok) {
-        alert('Turno registrado correctamente');
+        // Una vez creado el turno, crear movimiento
+        const datosMovimiento = {
+          patente,
+          descripcion: `Pago por Turno (${turnoData.nombre})`,
+          operador: user?.nombre || 'Desconocido',
+          tipoVehiculo,
+          metodoPago,
+          factura,
+          monto: precioVehiculo,
+          tipoTarifa: 'turno'
+        };
+
+        const resMovimiento = await fetch("https://api.garageia.com/api/movimientos/registrar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(datosMovimiento),
+        });
+
+        if (!resMovimiento.ok) {
+          const errorMov = await resMovimiento.json();
+          alert('Turno registrado, pero error al crear movimiento: ' + (errorMov.error || JSON.stringify(errorMov)));
+          return;
+        }
+
+        alert('Turno y movimiento registrados correctamente');
         setPatente('');
         setTurnoSeleccionado('');
       } else {
@@ -134,35 +161,38 @@ const DatosAutoTurnos = () => {
         </div>
 
         <div>
-          <label htmlFor="metodoPago">Método de Pago</label>
-          <select
-            id="metodoPago"
-            value={metodoPago}
-            onChange={e => setMetodoPago(e.target.value)}
-            className="select-style"
-          >
-            <option value="Efectivo">Efectivo</option>
-            <option value="Débito">Débito</option>
-            <option value="Crédito">Crédito</option>
-            <option value="QR">QR</option>
-          </select>
+          <label>Método de Pago</label>
+          <div className="paymentButtons">
+            {["Efectivo", "Débito", "Crédito", "QR"].map((metodo) => (
+              <button
+                key={metodo}
+                type="button"
+                className={metodoPago === metodo ? "boton-turno-seleccionado" : "boton-turno"}
+                onClick={() => setMetodoPago(metodo)}
+              >
+                {metodo}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div>
-          <label htmlFor="factura">Factura</label>
-          <select
-            id="factura"
-            value={factura}
-            onChange={e => setFactura(e.target.value)}
-            className="select-style"
-          >
-            <option value="CC">CC</option>
-            <option value="A">A</option>
-            <option value="Final">Consumidor Final</option>
-          </select>
+          <label>Factura</label>
+          <div className="paymentButtons">
+            {["CC", "A", "Final"].map((tipo) => (
+              <button
+                key={tipo}
+                type="button"
+                className={factura === tipo ? "boton-turno-seleccionado" : "boton-turno"}
+                onClick={() => setFactura(tipo)}
+              >
+                {tipo}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <button type="submit">Registrar Turno</button>
+        <button className="registrarTurno" type="submit">Registrar Turno</button>
       </form>
     </div>
   );

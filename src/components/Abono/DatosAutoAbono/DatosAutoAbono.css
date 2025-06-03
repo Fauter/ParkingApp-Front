@@ -180,15 +180,22 @@
     background-color: #1f1f28;
     border: 1px solid #444a5a;
     border-radius: 4px;
-    padding: 0.4rem 0.5rem;
+    padding: 0.4rem 2.5rem 0.4rem 0.5rem; /* Más padding right para la flecha */
     color: white;
     width: 90%;
     outline: none;
     appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
     font-size: 1rem;
     font-weight: 600;
-    text-align: center; 
-    text-align-last: center; 
+    text-align: center;
+    text-align-last: center;
+
+    background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1.5rem;
   }
   .select-style-tarifa:focus {
     border-color: rgb(100, 108, 133);

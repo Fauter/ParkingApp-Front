@@ -22,6 +22,12 @@ function DatosAutoSalida({
     }
   }, [limpiarInputTrigger]);
 
+  useEffect(() => {
+    if (!vehiculoLocal) {
+      setInputPatente("");
+    }
+  }, [vehiculoLocal]);
+
   const handleKeyDown = async (e) => {
     if (e.key === "Enter") {
       const patenteBuscada = inputPatente.trim().toUpperCase();
@@ -146,18 +152,11 @@ function DatosAutoSalida({
   };
 
   useEffect(() => {
-    console.log("🚀 useEffect detectó cambio en vehiculoLocal");
     const entrada = vehiculoLocal?.estadiaActual?.entrada;
     const salida = vehiculoLocal?.estadiaActual?.salida;
     const costoTotal = vehiculoLocal?.estadiaActual?.costoTotal;
 
-    console.log("Entrada:", entrada);
-    console.log("Salida:", salida);
-    console.log("Costo total:", costoTotal);
-    console.log("Ya actualizado?:", yaActualizado.current);
-
     if (!salida) {
-      console.warn("⚠️ No hay salida, no se calcula tarifa");
       return;
     }
 

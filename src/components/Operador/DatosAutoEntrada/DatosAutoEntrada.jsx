@@ -38,6 +38,13 @@ function DatosAutoEntrada() {
   const normalizar = (texto) => texto.toLowerCase();
 
   const handleEntrada = async () => {
+    const regexCompleto = /^[A-Z]{3}[0-9]{3}([A-Z]{2})?$/;
+
+    if (!regexCompleto.test(patente)) {
+      alert("La patente ingresada no es válida.");
+      return;
+    }
+
     if (!patente || !tipoVehiculo) {
       alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
       return;
@@ -101,30 +108,15 @@ function DatosAutoEntrada() {
     }
   };
 
-  const handleAbonar = async () => {
-    if (!patente || !tipoVehiculo) {
-      alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
-      return;
-    }
+  const handlePatenteChange = (e) => {
+    const valor = e.target.value.toUpperCase();
 
-    try {
-      const response = await fetch("https://api.garageia.com/api/vehiculos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patente, tipoVehiculo, abonado: true }),
-      });
+    // Regex para validar la patente *parcialmente* mientras se escribe:
+    // Hasta 3 letras, luego hasta 3 números, luego hasta 2 letras
+    const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.msg || "Error al registrar el vehículo como abonado");
-      }
-
-      alert("Vehículo abonado registrado correctamente.");
-      setPatente("");
-      setTipoVehiculo("");
-    } catch (error) {
-      console.error("Error:", error.message);
-      alert(error.message);
+    if (valor === "" || regexParcial.test(valor)) {
+      setPatente(valor);
     }
   };
 
@@ -144,8 +136,9 @@ function DatosAutoEntrada() {
           type="text"
           placeholder="Ingrese la patente"
           value={patente}
-          onChange={(e) => setPatente(e.target.value.toUpperCase())}
+          onChange={handlePatenteChange}
           className="inputPatente"
+          maxLength={8}
         />
 
         <label htmlFor="tipoVehiculo">Tipo de Vehículo</label>
