@@ -4,13 +4,13 @@ import './VehiculosDentro.css';
 function VehiculosDentro() {
   const [vehiculos, setVehiculos] = useState([]);
   const [paginaActual, setPaginaActual] = useState(1);
+  const [busqueda, setBusqueda] = useState('');
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('https://api.garageia.com/api/vehiculos')
+    fetch('http://localhost:5000/api/vehiculos')
       .then(res => res.json())
       .then(data => {
-        // Filtramos: solo estadía actual con entrada no nula y sin salida
         const filtrados = data.filter(v =>
           v.estadiaActual &&
           v.estadiaActual.entrada &&
@@ -21,8 +21,14 @@ function VehiculosDentro() {
       .catch(err => console.error('Error al cargar los vehículos:', err));
   }, []);
 
-  const totalPaginas = Math.ceil(vehiculos.length / ITEMS_POR_PAGINA);
-  const vehiculosPaginados = vehiculos.slice(
+  const normalizar = str => str?.toString().toLowerCase().trim();
+
+  const vehiculosFiltrados = vehiculos.filter(v =>
+    normalizar(v.patente).includes(normalizar(busqueda))
+  );
+
+  const totalPaginas = Math.ceil(vehiculosFiltrados.length / ITEMS_POR_PAGINA);
+  const vehiculosPaginados = vehiculosFiltrados.slice(
     (paginaActual - 1) * ITEMS_POR_PAGINA,
     paginaActual * ITEMS_POR_PAGINA
   );
@@ -30,6 +36,18 @@ function VehiculosDentro() {
   return (
     <div className="vehiculos-dentro">
       <h2 className="tituloDentro">Vehículos Dentro</h2>
+
+      <input
+        type="text"
+        placeholder="Buscar por patente..."
+        className="busqueda-clientes"
+        value={busqueda}
+        onChange={(e) => {
+          setBusqueda(e.target.value);
+          setPaginaActual(1); // Reinicia a la primera página al buscar
+        }}
+      />
+
       <div className="tabla-container">
         <table>
           <thead>
@@ -57,6 +75,7 @@ function VehiculosDentro() {
             })}
           </tbody>
         </table>
+
         <div className="paginado">
           <button
             disabled={paginaActual === 1}

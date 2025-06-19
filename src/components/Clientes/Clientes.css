@@ -1,0 +1,132 @@
+.clientes-dentro {
+  width: 100%;
+  background-color: #1f1f28;
+  color: #e0e0e0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tituloClientesDentro {
+  font-size: 24px;
+  margin-bottom: 15px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.tabla-container {
+  width: 100%;
+  max-width: 900px;
+  overflow-x: auto;
+  background-color: #2a2a38;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.clientes-dentro table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.clientes-dentro th,
+.clientes-dentro td {
+  border: 1px solid #444a5a;
+  padding: 8px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.clientes-dentro th {
+  background-color: #444a5a;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.clientes-dentro tr:nth-child(even) {
+  background-color: #242433;
+}
+
+.clientes-dentro tr:hover {
+  background-color: #3a3a4a;
+  transition: background-color 0.2s;
+}
+
+.paginado {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+  gap: 12px;
+  font-size: 16px;
+}
+
+.paginado button {
+  background-color: #444a5a;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.paginado button:disabled {
+  background-color: #2f2f3f;
+  cursor: not-allowed;
+}
+
+.paginado button:hover:not(:disabled) {
+  background-color: #5b6175;
+}
+
+.estado-abonado {
+  color: #3ed17b;
+  font-weight: bold;
+  background-color: #283c31;
+  padding: 5px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.estado-renovar {
+  color: #e26565;
+  font-weight: bold;
+  background-color: #3b2323;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.estado-renovar:hover {
+  background-color: #522c2c;
+}
+
+.busqueda-clientes {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px 14px;
+  margin: 0px auto 20px auto;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid #444a5a;
+  background-color: #2a2a38;
+  color: #e0e0e0;
+  font-size: 15px;
+  outline: none;
+  transition: 0.2s ease;
+}
+
+.busqueda-clientes::placeholder {
+  color: #888;
+}
+
+.busqueda-clientes:focus {
+  border-color: #5b6175;
+  box-shadow: 0 0 0 2px rgba(91, 97, 117, 0.3);
+}

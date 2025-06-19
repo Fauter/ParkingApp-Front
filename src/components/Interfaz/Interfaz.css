@@ -10,3 +10,50 @@
   height: 100%;
 }
 
+/* ---------- INPUTS ---------- */
+
+.modal-input {
+  width: 100%;
+  padding: 0.6rem;
+  margin-bottom: 0.8rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+  box-sizing: border-box;
+  resize: none; /* evita que se agrande el textarea */
+}
+
+/* Quita flechas de los inputs tipo number */
+.modal-input[type="number"]::-webkit-inner-spin-button,
+.modal-input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.modal-input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* ---------- BOTONES ---------- */
+
+.modal-btn {
+  background-color: #444a5a;
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  margin: 0.4rem 0.3rem;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 1rem;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.modal-btn:hover {
+  background-color: #5a6275;
+}
+
+.modal-btn:disabled {
+  background-color: #999;
+  cursor: not-allowed;
+}

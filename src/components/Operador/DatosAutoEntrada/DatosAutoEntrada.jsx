@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import "./DatosAutoEntrada.css";
 
-function DatosAutoEntrada() {
-  const [patente, setPatente] = useState('');
-  const [tipoVehiculo, setTipoVehiculo] = useState('');
-  const [abonado, setAbonado] = useState(false);
+function DatosAutoEntrada({ user }) {
+  const [patente, setPatente] = useState("");
+  const [tipoVehiculo, setTipoVehiculo] = useState("");
   const [precios, setPrecios] = useState({});
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
+  // Al montar el componente, traemos precios, tipos y perfil usuario
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/precios");
+        const response = await fetch("http://localhost:5000/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -22,7 +22,7 @@ function DatosAutoEntrada() {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -31,14 +31,57 @@ function DatosAutoEntrada() {
       }
     };
 
+    const fetchUserProfile = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("No estás logueado");
+        return;
+      }
+      try {
+        const response = await fetch("http://localhost:5000/api/auth/profile", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setUser(data);
+        } else {
+          if (response.status === 401) {
+            localStorage.removeItem("token");
+            setUser(null);
+            // Aquí podés navegar a login si usás react-router
+            // navigate("/login");
+            alert("Sesión expirada, por favor logueate de nuevo.");
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error);
+      }
+    };
+
     fetchPrecios();
     fetchTiposVehiculo();
+    fetchUserProfile();
   }, []);
 
   const normalizar = (texto) => texto.toLowerCase();
 
   const handleEntrada = async () => {
-    const regexCompleto = /^[A-Z]{3}[0-9]{3}([A-Z]{2})?$/;
+    console.log("Usuario recibido en DatosAutoEntrada:", user); // <-- log del user
+
+    if (!user) {
+      alert("No estás logueado");
+      return;
+    }
+
+    console.log("Nombre del operador para enviar:", user.nombre);
+    
+    const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
 
     if (!regexCompleto.test(patente)) {
       alert("La patente ingresada no es válida.");
@@ -60,16 +103,16 @@ function DatosAutoEntrada() {
     try {
       let existeVehiculo = false;
 
-      const checkResponse = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
       if (checkResponse.ok) {
         existeVehiculo = true;
       }
 
       if (!existeVehiculo) {
-        const vehiculoResponse = await fetch("https://api.garageia.com/api/vehiculos", {
+        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patente, tipoVehiculo, abonado: false }),
+          body: JSON.stringify({ patente, tipoVehiculo, abonado: false, operador: user.nombre }),
         });
 
         const vehiculoData = await vehiculoResponse.json();
@@ -79,13 +122,14 @@ function DatosAutoEntrada() {
 
         alert("Vehículo creado y entrada registrada.");
       } else {
+        // Acá mandás el nombre del operador desde user.nombre
         const entradaResponse = await fetch(
-          `https://api.garageia.com/api/vehiculos/${patente}/registrarEntrada`,
+          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              operador: "Carlos",
+              operador: user.nombre,
               metodoPago: "Efectivo",
               monto: precios[tipoNormalizado].hora,
             }),
@@ -112,7 +156,6 @@ function DatosAutoEntrada() {
     const valor = e.target.value.toUpperCase();
 
     // Regex para validar la patente *parcialmente* mientras se escribe:
-    // Hasta 3 letras, luego hasta 3 números, luego hasta 2 letras
     const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
 
     if (valor === "" || regexParcial.test(valor)) {

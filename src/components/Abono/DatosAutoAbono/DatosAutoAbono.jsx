@@ -40,10 +40,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const [tarifaSeleccionadaId, setTarifaSeleccionadaId] = useState("");
   const [tarifaSeleccionada, setTarifaSeleccionada] = useState(null);
   
+  const [clientes, setClientes] = useState([]);
+  const [nombreTemporal, setNombreTemporal] = useState(formData.nombreApellido);
+  const [sugerencias, setSugerencias] = useState([]);
+  
   useEffect(() => {
     const fetchTipos = async () => {
       try {
-        const res = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const res = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const data = await res.json();
         setTiposVehiculo(data);
       } catch (err) {
@@ -51,6 +55,22 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
     };
     fetchTipos();
+  }, []);
+
+  useEffect(() => {
+    const fetchClientes = async () => {
+      try {
+        const res = await fetch("http://localhost:5000/api/clientes");
+        if (res.ok) {
+          const data = await res.json();
+          setClientes(data);
+        }
+      } catch (err) {
+        console.error("Error al traer todos los clientes:", err);
+      }
+    };
+
+    fetchClientes();
   }, []);
 
   useEffect(() => {
@@ -76,7 +96,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchTarifas = async () => {
       try {
-        const res = await fetch("https://api.garageia.com/api/tarifas");
+        const res = await fetch("http://localhost:5000/api/tarifas");
         const data = await res.json();
         const abonosFiltrados = data.filter(t => t.tipo === "abono");
         setAbonos(abonosFiltrados);
@@ -95,7 +115,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const buscarClientePorNombre = async (nombre) => {
     try {
-      const res = await fetch(`https://api.garageia.com/api/clientes/${encodeURIComponent(nombre)}`);
+      const res = await fetch(`http://localhost:5000/api/clientes/${encodeURIComponent(nombre)}`);
       if (res.ok) {
         const cliente = await res.json();
         if (cliente) {
@@ -121,6 +141,36 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     } catch (error) {
       console.error("Error buscando cliente:", error);
     }
+  };
+
+  useEffect(() => {
+    if (nombreTemporal.trim().length >= 3) {
+      const coincidencias = clientes.filter((c) =>
+        c.nombreApellido.toLowerCase().includes(nombreTemporal.trim().toLowerCase())
+      );
+      setSugerencias(coincidencias);
+    } else {
+      setSugerencias([]);
+    }
+  }, [nombreTemporal, clientes]);
+
+  const seleccionarCliente = (cliente) => {
+    setFormData({
+      ...formData,
+      nombreApellido: cliente.nombreApellido,
+      domicilio: cliente.domicilio || "",
+      localidad: cliente.localidad || "",
+      telefonoParticular: cliente.telefonoParticular || "",
+      telefonoEmergencia: cliente.telefonoEmergencia || "",
+      domicilioTrabajo: cliente.domicilioTrabajo || "",
+      telefonoTrabajo: cliente.telefonoTrabajo || "",
+      email: cliente.email || "",
+    });
+    setNombreTemporal(cliente.nombreApellido);
+    setSugerencias([]);
+    
+    // Hacer que el input pierda foco, usando ref (ver punto 3)
+    if (inputRef.current) inputRef.current.blur();
   };
 
   const handleChange = (e) => {
@@ -173,19 +223,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!tarifaSeleccionada) {
-      alert("Por favor seleccioná una tarifa.");
-      return;
-    }
-
-    const dias = Number(tarifaSeleccionada.dias);
-    if (isNaN(dias)) {
-      alert("La duración no es un número válido");
-      return;
-    }
-
-    // 1) Validar formato de patente (ejemplo de formato válido: 3 letras + 3 números o 2 letras + 3 números + 2 letras)
-    // Ajusta el regex según el formato exacto que uses
+    // Validar formato de patente
     const patente = formData.patente?.toUpperCase() || "";
     const patenteRegex = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/;
     if (!patenteRegex.test(patente)) {
@@ -196,26 +234,25 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     console.log("Patente válida:", patente);
 
     try {
-      // Primero, buscar patente en GET /api/vehiculos
-      const vehiculosRes = await fetch("https://api.garageia.com/api/vehiculos");
+      // Obtener lista de vehículos para validar si ya existe la patente
+      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
 
-      // Buscar si ya existe
+      // Buscar si ya existe vehículo con esa patente
       const vehiculoExistente = vehiculos.find(v => v.patente.toUpperCase() === patente);
       if (vehiculoExistente) {
         console.log("Vehículo ya existe:", vehiculoExistente);
-        // Seguir con abono normalmente
+        // Seguimos normalmente
       } else {
         console.log("Vehículo no existe, creando...");
-        // Crear vehículo con POST /api/vehiculos/sin-entrada
         const tipoVehiculo = formData.tipoVehiculo;
         if (!tipoVehiculo) {
           alert("Debe seleccionar tipo de vehículo");
           return;
         }
 
-        const crearVehiculoRes = await fetch("https://api.garageia.com/api/vehiculos/sin-entrada", {
+        const crearVehiculoRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -230,115 +267,117 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             const errorData = await crearVehiculoRes.json();
             console.error("Error al crear vehículo:", errorData);
             errorMsg = errorData.message || errorMsg;
-          } catch (e) {
+          } catch {
             console.error("Respuesta no JSON al crear vehículo");
           }
           alert(errorMsg);
-          return; // Parar todo si no pudo crearse
+          return;
         }
         const nuevoVehiculo = await crearVehiculoRes.json();
         console.log("Vehículo creado:", nuevoVehiculo);
       }
 
-      // A partir de acá va el código que ya tenías para registrar el abono...
-
-      const preciosResponse = await fetch("https://api.garageia.com/api/precios");
-      if (!preciosResponse.ok) throw new Error("No se pudieron obtener los precios");
-      const precios = await preciosResponse.json();
-
-      const tipoVehiculo = formData.tipoVehiculo;
-      if (!tipoVehiculo) throw new Error("Debe seleccionar tipo de vehículo");
-
-      let nombreTarifa = tarifaSeleccionada.nombre.toLowerCase();
-      if (nombreTarifa.includes('mensual')) nombreTarifa = 'mensual';
-      else if (nombreTarifa.includes('quincena')) nombreTarifa = 'quincena';
-      else if (nombreTarifa.includes('semanal')) nombreTarifa = 'semanal';
-      else if (nombreTarifa.includes('abono')) nombreTarifa = 'abono';
-      else if (nombreTarifa.includes('día') || nombreTarifa.includes('dia')) nombreTarifa = 'dia';
-
-      const precioCalculado = precios[tipoVehiculo]?.[nombreTarifa];
-      if (!precioCalculado) throw new Error(`No se encontró precio para ${tipoVehiculo} con tarifa ${nombreTarifa}`);
-
-      const data = new FormData();
+      // Preparar formData para enviar abono (sin precio ni tarifaSeleccionada)
+      const abonoFormData = new FormData();
       for (const key in formData) {
-        if (formData[key]) data.append(key, formData[key]);
+        if (formData[key]) abonoFormData.append(key, formData[key]);
       }
-      data.append("precio", precioCalculado);
-      data.append("tarifaSeleccionada", JSON.stringify(tarifaSeleccionada));
 
-      const res = await fetch("https://api.garageia.com/api/abonos/registrar-abono", {
+      // POST para registrar abono
+      const abonoRes = await fetch("http://localhost:5000/api/abonos/registrar-abono", {
         method: "POST",
-        body: data,
+        body: abonoFormData,
       });
 
-      if (!res.ok) {
+      if (!abonoRes.ok) {
         let errorMsg = "Error al registrar abono";
         try {
-          const errorData = await res.json();
+          const errorData = await abonoRes.json();
           console.error("Error al registrar abono:", errorData);
           errorMsg = errorData.message || errorMsg;
-        } catch (e) {
+        } catch {
           console.error("Respuesta no JSON al registrar abono");
         }
         alert(errorMsg);
         return;
       }
 
-      const result = await res.json();
+      const abonoJson = await abonoRes.json();
       alert("¡Abono registrado correctamente!");
-      console.log("Respuesta abono:", result);
+      console.log("Respuesta abono:", abonoJson);
 
-      // POST adicional a /api/movimientos/registrar
-      await fetch("https://api.garageia.com/api/movimientos/registrar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patente: formData.patente,
-          operador: user.nombre,
-          tipoVehiculo: formData.tipoVehiculo,
-          metodoPago: formData.metodoPago,
-          factura: formData.factura || "Sin factura",
-          monto: precioCalculado,
-          descripcion: `Pago Por Abono (${tarifaSeleccionada.nombre})`,
-          tipoTarifa: tarifaSeleccionada.nombre,
-        }),
-      });
+      // Obtener precio calculado desde backend en la respuesta del abono
+      const precioCalculadoBackend = abonoJson.abono.precio || 0;
 
-      const movimientoClientePayload = {
-        nombreApellido: result.abono.nombreApellido?.trim() || "",
-        email: result.abono.email?.trim() || "",
-        descripcion: `Alta de abono: ${(result.abono.tipoAbono?.nombre || tarifaSeleccionada?.nombre || 'Desconocido')}`,
-        monto: Number(result.abono.precio) || 0,
-        tipoVehiculo: result.abono.tipoVehiculo?.trim() || "",
-        operador: "Carlos",
-        patente: result.abono.patente?.trim() || "",
-        tipoMovimiento: "Alta Abono",
-        fecha: new Date().toISOString()
+      // Preparar payload para registrar movimiento usando precio calculado
+      const movimientoPayload = {
+        patente: formData.patente,
+        operador: user.nombre,
+        tipoVehiculo: formData.tipoVehiculo,
+        metodoPago: formData.metodoPago,
+        factura: formData.factura || "Sin factura",
+        monto: precioCalculadoBackend,
+        descripcion: "Pago Por Abono",
+        tipoTarifa: "abono",
+        dniCuitCuil: formData.dniCuitCuil || "",
       };
 
-      const movimientoRes = await fetch("https://api.garageia.com/api/movimientosclientes", {
+      console.log("Preparando datos para registrar movimiento...");
+      console.log("Datos enviados a movimientos/registrar:", movimientoPayload);
+
+      const movimientoRes = await fetch("http://localhost:5000/api/movimientos/registrar", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(movimientoClientePayload)
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(movimientoPayload),
       });
 
+      console.log("Respuesta de movimientos/registrar recibida:", movimientoRes.status, movimientoRes.statusText);
+
       if (!movimientoRes.ok) {
-        let movimientoErrorText = "Error al registrar MovimientoCliente";
+        let errorData = {};
         try {
-          const movimientoError = await movimientoRes.json();
-          console.error("Error al registrar MovimientoCliente:", movimientoError);
-          movimientoErrorText = movimientoError.message || movimientoErrorText;
-        } catch (e) {
-          console.error("Respuesta no JSON al registrar MovimientoCliente");
+          errorData = await movimientoRes.json();
+          console.error("Error al crear movimiento (detalle):", errorData);
+        } catch {
+          console.error("No se pudo parsear JSON del error de movimientos/registrar");
         }
-        alert(movimientoErrorText);
-      } else {
-        const movimientoResult = await movimientoRes.json();
-        console.log("MovimientoCliente registrado:", movimientoResult);
+        alert(`Error al crear movimiento: ${errorData.message || movimientoRes.statusText}`);
+        return; // Paramos aquí porque no tiene sentido seguir si no se crea el movimiento
       }
 
+      const movimientoResult = await movimientoRes.json();
+      console.log("Movimiento registrado con éxito:", movimientoResult);
+
+      // --- Aquí creamos el MovimientoCliente ---
+      const movimientoClientePayload = {
+        nombreApellido: formData.nombreApellido,
+        email: formData.email,
+        descripcion: `Abono`,
+        monto: precioCalculadoBackend,
+        tipoVehiculo: formData.tipoVehiculo,
+        operador: user.nombre || 'Carlos', // usar el operador correcto
+        patente: formData.patente,
+      };
+
+      const movimientoClienteRes = await fetch("http://localhost:5000/api/movimientosclientes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(movimientoClientePayload),
+      });
+
+      if (!movimientoClienteRes.ok) {
+        const err = await movimientoClienteRes.json();
+        console.error("Error al registrar MovimientoCliente:", err);
+        alert(`Error al registrar MovimientoCliente: ${err.message || 'Error desconocido'}`);
+        return;
+      }
+
+      const movimientoClienteResult = await movimientoClienteRes.json();
+      console.log("MovimientoCliente registrado con éxito:", movimientoClienteResult);
+
+      alert("¡Abono, movimiento y movimiento cliente registrados correctamente!");
+
+      // Reseteo de formulario y estados
       setFormData({
         nombreApellido: '',
         domicilio: '',
@@ -361,6 +400,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         fotoDNI: null,
         fotoCedulaVerde: null,
         fotoCedulaAzul: null,
+        dniCuitCuil: '',
       });
       setFileUploaded({
         fotoSeguro: false,
@@ -371,7 +411,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       setTarifaSeleccionadaId("");
       setTarifaSeleccionada(null);
 
-      alert("¡Abono y movimiento registrados correctamente!");
     } catch (err) {
       console.error("Error en handleSubmit:", err.message);
       alert("Error al registrar el abono. Por favor, intentá nuevamente.");
@@ -403,32 +442,47 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   return (
     <div className="abono-container">
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
-        <div className="selectorTarifa">
-          <select
-            name="tarifaSeleccionada"
-            value={tarifaSeleccionadaId}
-            onChange={handleAbonoChange}
-            className="select-style-tarifa"
-          >
-            <option value="" disabled hidden>-- Elegí una tarifa --</option>
-            {abonos.map((tarifa) => (
-              <option key={tarifa._id} value={tarifa._id}>
-                {tarifa.nombre} ({tarifa.dias} días)
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* DATOS CLIENTE */}
         <div className="grid-3cols">
-          <div><label>Nombre y Apellido</label><input type="text" name="nombreApellido" value={formData.nombreApellido} onChange={handleChange} /></div>
+          <div><label>Nombre y Apellido</label>
+          <input
+            type="text"
+            name="nombreApellido"
+            value={nombreTemporal}
+            onChange={(e) => {
+              setNombreTemporal(e.target.value);
+              handleChange(e);
+            }}
+            autoComplete="off"
+          />
+
+          {sugerencias.length > 0 && (
+            <ul className="sugerencias-lista">
+              {sugerencias.map((cliente, index) => (
+                <li
+                  key={index}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    seleccionarCliente(cliente);
+                  }}
+                  className="sugerencia-item"
+                >
+                  {cliente.nombreApellido}
+                </li>
+              ))}
+            </ul>
+          )}</div>
+          <div><label>DNI/CUIT/CUIL</label><input type="text" name="dniCuitCuil" value={formData.dniCuitCuil} onChange={handleChange} /></div>
+          <div><label>Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} /></div>
           <div><label>Domicilio</label><input type="text" name="domicilio" value={formData.domicilio} onChange={handleChange} /></div>
           <div><label>Localidad</label><input type="text" name="localidad" value={formData.localidad} onChange={handleChange} /></div>
+          <div><label>Domicilio Trabajo</label><input type="text" name="domicilioTrabajo" value={formData.domicilioTrabajo} onChange={handleChange} /></div>
           <div><label>Tel. Particular</label><input type="text" name="telefonoParticular" value={formData.telefonoParticular} onChange={handleChange} /></div>
           <div><label>Tel. Emergencia</label><input type="text" name="telefonoEmergencia" value={formData.telefonoEmergencia} onChange={handleChange} /></div>
-          <div><label>Domicilio Trabajo</label><input type="text" name="domicilioTrabajo" value={formData.domicilioTrabajo} onChange={handleChange} /></div>
           <div><label>Tel. Trabajo</label><input type="text" name="telefonoTrabajo" value={formData.telefonoTrabajo} onChange={handleChange} /></div>
-          <div><label>Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} /></div>
         </div>
-
+        {/* DATOS VEHICULO */}
         <div className="grid-4cols fotos-grid">
           {renderFileInput("Foto Seguro", "fotoSeguro")}
           {renderFileInput("Foto DNI", "fotoDNI")}
