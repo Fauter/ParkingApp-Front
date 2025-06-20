@@ -1,29 +1,106 @@
 import React, { useEffect, useState } from 'react';
+import { FiPlus } from 'react-icons/fi';
 import './VehiculosDentro.css';
+import { useNavigate } from 'react-router-dom';
+
+function ModalAudit({ titulo, onClose, children }) {
+  return (
+    <div className="modal-backdrop-audit">
+      <div className="modal-contenedor-audit">
+        <div className="modal-header-audit">
+          <h2>{titulo}</h2>
+          <button className="modal-cerrar-audit" onClick={onClose}>X</button>
+        </div>
+        <div className="modal-body-audit">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function VehiculosDentro() {
   const [vehiculos, setVehiculos] = useState([]);
+  const [vehiculosTemporales, setVehiculosTemporales] = useState([]);
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState('');
+  const [vehiculosChequeados, setVehiculosChequeados] = useState([]);
+  const [generandoAuditoria, setGenerandoAuditoria] = useState(false);
+  const [modalAbierto, setModalAbierto] = useState(false);
+  const [tiposVehiculo, setTiposVehiculo] = useState([]);
+  const [nuevoVehiculo, setNuevoVehiculo] = useState({
+    patente: '',
+    marca: '',
+    modelo: '',
+    color: '',
+    tipoVehiculo: 'auto'
+  });
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/vehiculos')
-      .then(res => res.json())
-      .then(data => {
-        const filtrados = data.filter(v =>
-          v.estadiaActual &&
-          v.estadiaActual.entrada &&
+    const fetchUser = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setUser(data);
+        } else {
+          if (response.status === 401) {
+            localStorage.removeItem('token');
+            setUser(null);
+            navigate('/login');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+    };
+
+    const cargarDatos = async () => {
+      try {
+        const responseVehiculos = await fetch('https://api.garageia.com/api/vehiculos');
+        const dataVehiculos = await responseVehiculos.json();
+        const filtrados = dataVehiculos.filter(v => 
+          v.estadiaActual && 
+          v.estadiaActual.entrada && 
           !v.estadiaActual.salida
         );
         setVehiculos(filtrados.reverse());
-      })
-      .catch(err => console.error('Error al cargar los vehículos:', err));
-  }, []);
+
+        const responseTipos = await fetch('https://api.garageia.com/api/tipos-vehiculo');
+        const dataTipos = await responseTipos.json();
+        setTiposVehiculo(dataTipos);
+      } catch (err) {
+        console.error('Error al cargar los datos:', err);
+      }
+    };
+
+    fetchUser();
+    cargarDatos();
+  }, [navigate]);
 
   const normalizar = str => str?.toString().toLowerCase().trim();
 
-  const vehiculosFiltrados = vehiculos.filter(v =>
+  const vehiculosCombinados = [...vehiculos, ...vehiculosTemporales];
+  
+  const vehiculosFiltrados = vehiculosCombinados.filter(v =>
     normalizar(v.patente).includes(normalizar(busqueda))
   );
 
@@ -33,20 +110,140 @@ function VehiculosDentro() {
     paginaActual * ITEMS_POR_PAGINA
   );
 
+  const handleCheckVehiculo = (id) => {
+    setVehiculosChequeados(prev => 
+      prev.includes(id) 
+        ? prev.filter(item => item !== id) 
+        : [...prev, id]
+    );
+  };
+
+  const agregarVehiculoTemporal = () => {
+    if (!nuevoVehiculo.patente) {
+      alert('La patente es obligatoria');
+      return;
+    }
+
+    const vehiculoTemporal = {
+      ...nuevoVehiculo,
+      _id: `temp-${Date.now()}`,
+      esTemporal: true,
+      estadiaActual: {
+        entrada: new Date().toISOString()
+      }
+    };
+
+    setVehiculosTemporales(prev => [...prev, vehiculoTemporal]);
+    setVehiculosChequeados(prev => [...prev, vehiculoTemporal._id]);
+    
+    setNuevoVehiculo({
+      patente: '',
+      marca: '',
+      modelo: '',
+      color: '',
+      tipoVehiculo: 'auto'
+    });
+    setModalAbierto(false);
+  };
+
+  const generarAuditoria = async () => {
+    if (vehiculosChequeados.length === 0 && vehiculosTemporales.length === 0) {
+      alert('Por favor seleccione al menos un vehículo para auditar o agregue vehículos temporales');
+      return;
+    }
+
+    setGenerandoAuditoria(true);
+    
+    try {
+      const operador = user?.nombre || 'Operador Desconocido';
+
+      const idsNormales = vehiculosChequeados.filter(id => !id.toString().startsWith('temp-'));
+      const vehiculosTemporalesAuditados = vehiculosTemporales;
+
+      const response = await fetch('https://api.garageia.com/api/auditorias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          vehiculos: idsNormales,
+          vehiculosTemporales: vehiculosTemporalesAuditados,
+          operador 
+        }),
+      });
+
+      if (!response.ok) throw new Error('Error al generar auditoría');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `auditoria-vehiculos-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      // Detección de conflictos
+      const todosLosVehiculosEnSistema = vehiculos.length;
+      const vehiculosNoVerificados = todosLosVehiculosEnSistema - idsNormales.length;
+      const hayVehiculosTemporales = vehiculosTemporales.length > 0;
+      
+      if (vehiculosNoVerificados > 0 || hayVehiculosTemporales) {
+        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados o vehículos temporales.');
+      }
+
+      setVehiculosChequeados([]);
+      setVehiculosTemporales([]);
+    } catch (error) {
+      console.error('Error:', error);
+      alert('Error al generar el reporte de auditoría');
+    } finally {
+      setGenerandoAuditoria(false);
+    }
+  };
+
   return (
     <div className="vehiculos-dentro">
       <h2 className="tituloDentro">Vehículos Dentro</h2>
 
-      <input
-        type="text"
-        placeholder="Buscar por patente..."
-        className="busqueda-clientes"
-        value={busqueda}
-        onChange={(e) => {
-          setBusqueda(e.target.value);
-          setPaginaActual(1); // Reinicia a la primera página al buscar
-        }}
-      />
+      <div className="search-container-vehiculos">
+        <div className="search-content">
+          <input
+            type="text"
+            placeholder="Buscar por patente..."
+            className="busqueda-vehiculos"
+            value={busqueda}
+            onChange={(e) => {
+              setBusqueda(e.target.value);
+              setPaginaActual(1);
+            }}
+          />
+          <div className="botones-auditoria">
+            <button 
+              onClick={generarAuditoria} 
+              disabled={generandoAuditoria}
+              className="boton-auditoria"
+            >
+              {generandoAuditoria ? (
+                <>
+                  <span className="spinner"></span>
+                  Generando...
+                </>
+              ) : (
+                <>
+                  <span className="icon-auditoria">📋</span>
+                  Generar Auditoría
+                </>
+              )}
+            </button> 
+            <button 
+              onClick={() => setModalAbierto(true)}
+              className="boton-auditoria"
+            >
+              <FiPlus className="icon-agregar" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="tabla-container">
         <table>
@@ -55,21 +252,34 @@ function VehiculosDentro() {
               <th>Patente</th>
               <th>Entrada</th>
               <th>Tipo de Vehículo</th>
+              <th>Estado</th>
+              <th>Auditoría</th>
             </tr>
           </thead>
           <tbody>
             {vehiculosPaginados.map(v => {
-              const fechaEntrada = new Date(v.estadiaActual.entrada);
-              const entradaValida = v.estadiaActual.entrada && !isNaN(fechaEntrada);
+              const fechaEntrada = v.estadiaActual?.entrada ? new Date(v.estadiaActual.entrada) : null;
+              const entradaValida = fechaEntrada && !isNaN(fechaEntrada);
+              const estaChequeado = vehiculosChequeados.includes(v._id);
+              const esTemporal = v._id.toString().startsWith('temp-');
+              
               return (
-                <tr key={v._id}>
+                <tr key={v._id} className={`${estaChequeado ? 'checked' : ''} ${esTemporal ? 'vehiculo-temporal' : ''}`}>
                   <td>{v.patente}</td>
                   <td>
-                    {entradaValida
-                      ? fechaEntrada.toLocaleString()
-                      : 'Entrada no disponible'}
+                    {entradaValida ? fechaEntrada.toLocaleString() : 'Entrada no disponible'}
                   </td>
-                  <td>{v.tipoVehiculo.charAt(0).toUpperCase() + v.tipoVehiculo.slice(1)}</td>
+                  <td>{v.tipoVehiculo?.charAt(0)?.toUpperCase() + v.tipoVehiculo?.slice(1) || 'Desconocido'}</td>
+                  <td>{esTemporal ? 'Temporal' : 'Sistema'}</td>
+                  <td>
+                    <input 
+                      type="checkbox" 
+                      checked={esTemporal || estaChequeado}
+                      onChange={() => !esTemporal && handleCheckVehiculo(v._id)}
+                      className="check-auditoria"
+                      disabled={esTemporal}
+                    />
+                  </td>
                 </tr>
               );
             })}
@@ -92,6 +302,74 @@ function VehiculosDentro() {
           </button>
         </div>
       </div>
+
+      {modalAbierto && (
+        <ModalAudit titulo="Agregar Vehículo Temporal" onClose={() => setModalAbierto(false)}>
+          <div className="form-group-audit">
+            <label>Patente*</label>
+            <input
+              type="text"
+              value={nuevoVehiculo.patente}
+              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, patente: e.target.value})}
+              placeholder="Ej: ABC123"
+              required
+              className="modal-input-audit"
+            />
+          </div>
+          <div className="form-group-audit">
+            <label>Marca</label>
+            <input
+              type="text"
+              value={nuevoVehiculo.marca}
+              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, marca: e.target.value})}
+              placeholder="Ej: Ford"
+              className="modal-input-audit"
+            />
+          </div>
+          <div className="form-group-audit">
+            <label>Modelo</label>
+            <input
+              type="text"
+              value={nuevoVehiculo.modelo}
+              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, modelo: e.target.value})}
+              placeholder="Ej: Fiesta"
+              className="modal-input-audit"
+            />
+          </div>
+          <div className="form-group-audit">
+            <label>Color</label>
+            <input
+              type="text"
+              value={nuevoVehiculo.color}
+              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, color: e.target.value})}
+              placeholder="Ej: Rojo"
+              className="modal-input-audit"
+            />
+          </div>
+          <div className="form-group-audit">
+            <label>Tipo de Vehículo</label>
+            <select
+              value={nuevoVehiculo.tipoVehiculo}
+              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, tipoVehiculo: e.target.value})}
+              className="modal-input-audit"
+            >
+              {tiposVehiculo.map(tipo => (
+                <option key={tipo} value={tipo}>
+                  {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="modal-botones-audit">
+            <button onClick={() => setModalAbierto(false)} className="boton-cancelar-audit">
+              Cancelar
+            </button>
+            <button onClick={agregarVehiculoTemporal} className="boton-confirmar-audit">
+              Agregar
+            </button>
+          </div>
+        </ModalAudit>
+      )}
     </div>
   );
 }

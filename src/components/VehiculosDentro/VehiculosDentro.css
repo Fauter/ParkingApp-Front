@@ -6,64 +6,137 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-  }
-  
-  .tituloDentro {
+}
+
+.tituloDentro {
     font-size: 24px;
     margin-bottom: 15px;
     color: #ffffff;
     text-align: center;
-  }
-  
-  .tabla-container {
+}
+
+.search-container-vehiculos {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.search-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.busqueda-vehiculos {
+    width: 400px;
+    padding: 10px 15px;
+    border-radius: 6px;
+    border: 1px solid #444a5a;
+    background-color: #2a2a38;
+    color: #e0e0e0;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.3s;
+    text-align: center;
+}
+
+.busqueda-vehiculos:focus {
+    border-color: #7a5cff;
+}
+
+.boton-auditoria {
+    padding: 10px 15px;
+    background-color: #444a5a;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.boton-auditoria:hover:not(:disabled) {
+    background-color: #5b6175;
+    transform: translateY(-1px);
+}
+
+.boton-auditoria:disabled {
+    background-color: #2f2f3f;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.tabla-container {
     width: 100%;
     max-width: 900px;
     overflow-x: auto;
     background-color: #2a2a38;
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-  }
-  
-  .vehiculos-dentro table {
+}
+
+.vehiculos-dentro table {
     width: 100%;
     border-collapse: collapse;
     border-radius: 8px;
     overflow: hidden;
-  }
-  
-  .vehiculos-dentro th,
-  .vehiculos-dentro td {
+}
+
+.vehiculos-dentro th,
+.vehiculos-dentro td {
     border: 1px solid #444a5a;
     padding: 8px;
     text-align: center;
     font-size: 15px;
-  }
-  
-  .vehiculos-dentro th {
+}
+
+.vehiculos-dentro th {
     background-color: #444a5a;
     color: #ffffff;
     font-weight: bold;
-  }
-  
-  .vehiculos-dentro tr:nth-child(even) {
+}
+
+.vehiculos-dentro tr:nth-child(even) {
     background-color: #242433;
-  }
-  
-  .vehiculos-dentro tr:hover {
-    background-color: #3a3a4a;
-    transition: background-color 0.2s;
-  }
-  
-  .paginado {
+}
+
+.vehiculos-dentro tr.checked {
+    background-color: #1a1a2a !important;
+}
+
+.vehiculos-dentro tr:nth-child(even).checked {
+    background-color: #181825 !important;
+}
+
+.paginado {
     display: flex;
     justify-content: center;
     align-items: center;
     margin: 20px 0;
     gap: 12px;
     font-size: 16px;
-  }
-  
-  .paginado button {
+}
+
+.paginado button {
     background-color: #444a5a;
     color: white;
     border: none;
@@ -72,12 +145,264 @@
     cursor: pointer;
     font-weight: bold;
     transition: background-color 0.3s;
-  }
-  .paginado button:disabled {
+}
+
+.paginado button:disabled {
     background-color: #2f2f3f;
     cursor: not-allowed;
-  }
-  .paginado button:hover:not(:disabled) {
+}
+
+.paginado button:hover:not(:disabled) {
     background-color: #5b6175;
+}
+
+.check-auditoria {
+    transform: scale(1.5);
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #7a5cff;
+    border-radius: 4px;
+    outline: none;
+    transition: all 0.2s;
+    position: relative;
+    background-color: #2a2a38;
+}
+
+.check-auditoria:checked {
+    background-color: #4CAF50;
+    border-color: #4CAF50;
+}
+
+.check-auditoria:checked::before {
+    content: "✓";
+    position: absolute;
+    color: white;
+    font-size: 14px;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.check-auditoria:hover:not(:checked) {
+    background-color: #3a2e66;
+}
+
+/* Agrega esto al final de tu archivo CSS existente */
+
+.botones-auditoria {
+  display: flex;
+  gap: 10px;
+}
+
+.boton-agregar {
+  background-color: #4CAF50;
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.boton-agregar:hover {
+  background-color: #45a049;
+}
+
+.icon-agregar {
+  font-size: 16px;
+}
+
+.vehiculo-temporal {
+}
+
+.modal-agregar-vehiculo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.form-group-audit {
+  margin-bottom: 15px;
+  width: 100%; /* Asegura que ocupe todo el ancho */
+}
+
+.form-group-audit label {
+  display: block;
+  margin-bottom: 8px; /* Aumenta un poco el margen inferior */
+  font-weight: bold;
+  text-align: left; /* Alinea el texto a la izquierda */
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.modal-botones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.boton-cancelar {
+  background-color: #f44336;
+  color: white;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.boton-confirmar {
+  background-color: #4CAF50;
+  color: white;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* Estilos para el modal de auditoría */
+.modal-backdrop-audit {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-contenedor-audit {
+  box-sizing: border-box; /* Añade esto */
+  background: #2a2a38;
+  border: 1px solid #1c1c26;
+  padding: 20px;
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90%;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.2s ease-out;
+  color: white;
+}
+
+.modal-header-audit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.modal-cerrar-audit {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: white;
+  cursor: pointer;
+}
+
+.modal-body-audit {
+  margin-top: 10px;
+}
+
+.form-group-audit {
+  margin-bottom: 15px;
+}
+
+.form-group-audit label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.modal-input-audit {
+  box-sizing: border-box; /* Añade esto */
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: white;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.modal-input-audit:focus {
+  border-color: #7a5cff;
+}
+
+.modal-botones-audit {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.boton-cancelar-audit {
+  background-color: #f44336;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.boton-cancelar-audit:hover {
+  background-color: #d32f2f;
+}
+
+.boton-confirmar-audit {
+  background-color: #4CAF50;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.boton-confirmar-audit:hover {
+  background-color: #388E3C;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
   }
-  
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

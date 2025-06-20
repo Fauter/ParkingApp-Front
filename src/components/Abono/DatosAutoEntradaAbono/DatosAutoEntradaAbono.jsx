@@ -11,7 +11,7 @@ function DatosAutoEntradaAbono({ user }) {
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/precios");
+        const response = await fetch("https://api.garageia.com/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -22,7 +22,7 @@ function DatosAutoEntradaAbono({ user }) {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const response = await fetch("https://api.garageia.com/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -38,7 +38,7 @@ function DatosAutoEntradaAbono({ user }) {
         return;
       }
       try {
-        const response = await fetch("http://localhost:5000/api/auth/profile", {
+        const response = await fetch("https://api.garageia.com/api/auth/profile", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -94,7 +94,7 @@ function DatosAutoEntradaAbono({ user }) {
 
     try {
       let existeVehiculo = false;
-      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
       if (checkResponse.ok) {
         existeVehiculo = true;
       }
@@ -104,7 +104,7 @@ function DatosAutoEntradaAbono({ user }) {
 
       if (!existeVehiculo) {
         // POST crea vehículo y entrada
-        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+        const vehiculoResponse = await fetch("https://api.garageia.com/api/vehiculos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -124,7 +124,7 @@ function DatosAutoEntradaAbono({ user }) {
       } else {
         // PUT registra solo la entrada
         const entradaResponse = await fetch(
-          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+          `https://api.garageia.com/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },

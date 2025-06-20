@@ -15,6 +15,10 @@
   text-align: center;
 }
 
+.search-container-clientes {
+  min-width: 100%;
+}
+
 .tabla-container {
   width: 100%;
   max-width: 900px;
@@ -109,8 +113,9 @@
 
 .busqueda-clientes {
   width: 100%;
+  min-width: 400px;
   max-width: 400px;
-  padding: 10px 14px;
+  padding: 10px 0px;
   margin: 0px auto 20px auto;
   display: block;
   border-radius: 6px;
@@ -120,6 +125,7 @@
   font-size: 15px;
   outline: none;
   transition: 0.2s ease;
+  text-align: center;
 }
 
 .busqueda-clientes::placeholder {
