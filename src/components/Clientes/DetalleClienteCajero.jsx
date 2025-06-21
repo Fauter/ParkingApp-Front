@@ -40,7 +40,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/clientes/id/${clienteId}`, {
+      const response = await fetch(`https://api.garageia.com/api/clientes/id/${clienteId}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -86,8 +86,15 @@ function DetalleClienteCajero({ clienteId, volver }) {
     try {
       if (!cliente) return;
 
+      // Verificar si el cliente tiene vehículos registrados
+      if (!cliente.abonos || cliente.abonos.length === 0) {
+        alert('El cliente no tiene vehículos registrados. Agregue un vehículo primero.');
+        setModalAgregarVisible(true);
+        return;
+      }
+
       // Obtener precios actuales
-      const response = await fetch('http://localhost:5000/api/precios', {
+      const response = await fetch('https://api.garageia.com/api/precios', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -110,14 +117,70 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
+  const registrarMovimientos = async (patente, monto, descripcion) => {
+    try {
+      const token = localStorage.getItem('token');
+      const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
+      
+      // Registrar movimiento general
+      const movimientoData = {
+        patente,
+        operador,
+        tipoVehiculo: cliente.precioAbono,
+        metodoPago,
+        factura,
+        monto,
+        descripcion,
+        tipoTarifa: 'abono'
+      };
+
+      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(movimientoData),
+      });
+
+      if (!movimientoRes.ok) throw new Error('Error al registrar movimiento');
+
+      // Registrar movimiento del cliente
+      const movimientoClienteData = {
+        nombreApellido: cliente.nombreApellido,
+        email: cliente.email || '',
+        descripcion,
+        monto,
+        tipoVehiculo: cliente.precioAbono,
+        operador,
+        patente,
+      };
+      
+      await fetch('https://api.garageia.com/api/movimientosclientes', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(movimientoClienteData),
+      });
+
+    } catch (error) {
+      console.error("Error al registrar movimientos:", error);
+      throw error;
+    }
+  };
+
   const handleRenovarAbono = async () => {
     try {
       setLoading(true);
       
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
       const patente = cliente.abonos?.[0]?.patente || 'N/A';
+      const descripcion = `Renovación abono ${cliente.precioAbono}`;
       
-      const response = await fetch(`http://localhost:5000/api/clientes/${clienteId}/renovar-abono`, {
+      // 1. Renovar el abono en el backend
+      const response = await fetch(`https://api.garageia.com/api/clientes/${clienteId}/renovar-abono`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +202,12 @@ function DetalleClienteCajero({ clienteId, volver }) {
         throw new Error(errorData.message || 'Error al renovar abono');
       }
 
+      // 2. Registrar los movimientos
+      await registrarMovimientos(patente, precioRenovacion, descripcion);
+
+      // 3. Actualizar los datos del cliente
       await cargarCliente();
+      
       setModalRenovarVisible(false);
       alert('Abono renovado exitosamente');
       
@@ -198,9 +266,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
     let rutaFoto;
     if (nombreDecodificado.startsWith('/fotos/')) {
-      rutaFoto = `http://localhost:5000/uploads${nombreDecodificado}`;
+      rutaFoto = `https://api.garageia.com/uploads${nombreDecodificado}`;
     } else {
-      rutaFoto = `http://localhost:5000/uploads/fotos/${nombreDecodificado}`;
+      rutaFoto = `https://api.garageia.com/uploads/fotos/${nombreDecodificado}`;
     }
 
     const urlConTimestamp = `${rutaFoto}?t=${Date.now()}`;

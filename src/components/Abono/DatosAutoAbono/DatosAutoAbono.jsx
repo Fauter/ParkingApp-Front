@@ -26,7 +26,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoDNI: null,
     fotoCedulaVerde: null,
     fotoCedulaAzul: null,
-    precioAbono: ""
   });
 
   const [fileUploaded, setFileUploaded] = useState({
@@ -38,21 +37,30 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
   const [precios, setPrecios] = useState({});
-  const [abonos, setAbonos] = useState([]);
-  const [tarifaSeleccionadaId, setTarifaSeleccionadaId] = useState("");
-  const [tarifaSeleccionada, setTarifaSeleccionada] = useState(null);
   const [clientes, setClientes] = useState([]);
-  const [nombreTemporal, setNombreTemporal] = useState(formData.nombreApellido);
+  const [nombreTemporal, setNombreTemporal] = useState("");
   const [sugerencias, setSugerencias] = useState([]);
-  
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (datosVehiculo) {
+      setFormData(prev => ({
+        ...prev,
+        patente: datosVehiculo.patente || "",
+        tipoVehiculo: datosVehiculo.tipoVehiculo || ""
+      }));
+    }
+  }, [datosVehiculo]);
+
+  // Cargar tipos de vehículo y precios
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const tiposRes = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        const tiposRes = await fetch("https://api.garageia.com/api/tipos-vehiculo");
         const tiposData = await tiposRes.json();
         setTiposVehiculo(tiposData);
 
-        const preciosRes = await fetch("http://localhost:5000/api/precios");
+        const preciosRes = await fetch("https://api.garageia.com/api/precios");
         const preciosData = await preciosRes.json();
         setPrecios(preciosData);
       } catch (err) {
@@ -62,61 +70,23 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fetchData();
   }, []);
 
+  // Cargar clientes
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/clientes");
+        const res = await fetch("https://api.garageia.com/api/clientes");
         if (res.ok) {
           const data = await res.json();
           setClientes(data);
         }
       } catch (err) {
-        console.error("Error al traer todos los clientes:", err);
+        console.error("Error al cargar clientes:", err);
       }
     };
     fetchClientes();
   }, []);
 
-  useEffect(() => {
-    if (datosVehiculo) {
-      setFormData(prev => ({
-        ...prev,
-        patente: datosVehiculo?.patente || prev.patente,
-        tipoVehiculo: datosVehiculo?.tipoVehiculo || prev.tipoVehiculo,
-      }));
-    }
-  }, [datosVehiculo]);
-
-  useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      if (nombreTemporal.trim().length >= 3) {
-        buscarClientePorNombre(nombreTemporal);
-      }
-    }, 800);
-
-    return () => clearTimeout(delayDebounce);
-  }, [nombreTemporal]);
-
-  useEffect(() => {
-    const fetchTarifas = async () => {
-      try {
-        const res = await fetch("http://localhost:5000/api/tarifas");
-        const data = await res.json();
-        const abonosFiltrados = data.filter(t => t.tipo === "abono");
-        setAbonos(abonosFiltrados);
-
-        const abono = abonosFiltrados.find(t => t.nombre.toLowerCase() === "abono");
-        if (abono) {
-          setTarifaSeleccionadaId(abono._id);
-          setTarifaSeleccionada(abono);
-        }
-      } catch (error) {
-        console.error("Error al cargar tarifas:", error);
-      }
-    };
-    fetchTarifas();
-  }, []);
-
+  // Buscar sugerencias de clientes
   useEffect(() => {
     if (nombreTemporal.trim().length >= 3) {
       const coincidencias = clientes.filter((c) =>
@@ -130,7 +100,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const buscarClientePorNombre = async (nombre) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/clientes/nombre/${encodeURIComponent(nombre)}`);
+      const res = await fetch(`https://api.garageia.com/api/clientes/nombre/${encodeURIComponent(nombre)}`);
       if (res.ok) {
         const cliente = await res.json();
         if (cliente) {
@@ -143,15 +113,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             domicilioTrabajo: cliente.domicilioTrabajo || "",
             telefonoTrabajo: cliente.telefonoTrabajo || "",
             email: cliente.email || "",
+            dniCuitCuil: cliente.dniCuitCuil || "",
             marca: cliente.marca || "",
             modelo: cliente.modelo || "",
             color: cliente.color || "",
             anio: cliente.anio || "",
             companiaSeguro: cliente.companiaSeguro || "",
-            metodoPago: cliente.metodoPago || "",
-            factura: cliente.factura || "",
-            dniCuitCuil: cliente.dniCuitCuil || "",
-            precioAbono: cliente.precioAbono || ""
+            metodoPago: cliente.metodoPago || "Efectivo",
+            factura: cliente.factura || "CC"
           }));
         }
       }
@@ -161,8 +130,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   };
 
   const seleccionarCliente = (cliente) => {
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       nombreApellido: cliente.nombreApellido,
       domicilio: cliente.domicilio || "",
       localidad: cliente.localidad || "",
@@ -172,8 +141,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       telefonoTrabajo: cliente.telefonoTrabajo || "",
       email: cliente.email || "",
       dniCuitCuil: cliente.dniCuitCuil || "",
-      precioAbono: cliente.precioAbono || ""
-    });
+      marca: cliente.marca || "",
+      modelo: cliente.modelo || "",
+      color: cliente.color || "",
+      anio: cliente.anio || "",
+      companiaSeguro: cliente.companiaSeguro || "",
+      metodoPago: cliente.metodoPago || "Efectivo",
+      factura: cliente.factura || "CC"
+    }));
     setNombreTemporal(cliente.nombreApellido);
     setSugerencias([]);
   };
@@ -182,78 +157,100 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     const { name, value, files } = e.target;
 
     if (name === "patente") {
-      let newValue = value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-      const regexPartial = /^([A-Z]{0,3})([0-9]{0,3})([A-Z]{0,2})?$/;
-
-      if (newValue.length <= 8 && regexPartial.test(newValue)) {
-        setFormData((prevData) => ({
-          ...prevData,
-          [name]: newValue,
-        }));
-      }
+      const patenteUpper = value.toUpperCase();
+      setFormData(prev => ({ ...prev, [name]: patenteUpper }));
     } else if (files && files.length > 0) {
-      setFormData((prevData) => ({
-        ...prevData,
-        [name]: files[0],
-      }));
-      setFileUploaded((prevUploaded) => ({
-        ...prevUploaded,
-        [name]: true,
-      }));
+      setFormData(prev => ({ ...prev, [name]: files[0] }));
+      setFileUploaded(prev => ({ ...prev, [name]: true }));
     } else {
-      setFormData((prevData) => ({
-        ...prevData,
-        [name]: value,
-      }));
+      setFormData(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const handleAbonoChange = (e) => {
-    const id = e.target.value;
-    setTarifaSeleccionadaId(id);
-    const tarifa = abonos.find((t) => t._id === id);
-    setTarifaSeleccionada(tarifa);
+  const validarPatente = (patente) => {
+    const formatoViejo = /^[A-Z]{3}\d{3}$/;
+    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
+    return formatoViejo.test(patente) || formatoNuevo.test(patente);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const patente = formData.patente?.toUpperCase() || "";
-    const patenteRegex = /^([A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$/;
-    if (!patenteRegex.test(patente)) {
-      alert("Patente Inválida");
-      return;
-    }
+    setLoading(true);
 
     try {
-      // Verificar si el vehículo existe o crearlo
-      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
-      if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
-      const vehiculos = await vehiculosRes.json();
-
-      const vehiculoExistente = vehiculos.find(v => v.patente.toUpperCase() === patente);
-      if (!vehiculoExistente) {
-        const tipoVehiculo = formData.tipoVehiculo;
-        if (!tipoVehiculo) {
-          alert("Debe seleccionar tipo de vehículo");
-          return;
-        }
-
-        const crearVehiculoRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patente, tipoVehiculo }),
-        });
-
-        if (!crearVehiculoRes.ok) {
-          const errorData = await crearVehiculoRes.json().catch(() => ({}));
-          alert(errorData.message || "Error al crear vehículo");
-          return;
-        }
+      // Validación patente
+      const patente = formData.patente.toUpperCase();
+      if (!validarPatente(patente)) {
+        alert('❌ Patente no válida. Debe ser en formato ABC123 (viejo) o AB123CD (nuevo).');
+        setLoading(false);
+        return;
       }
 
-      // Paso 1: Buscar o crear cliente
-      const clientesRes = await fetch('http://localhost:5000/api/clientes');
+      // Verificar tipo de vehículo
+      if (!formData.tipoVehiculo) {
+        alert('Debe seleccionar tipo de vehículo');
+        setLoading(false);
+        return;
+      }
+
+      // Paso 1: Buscar o crear vehículo
+      const vehiculoRes = await fetch(`https://api.garageia.com/api/vehiculos/${encodeURIComponent(patente)}`);
+      let vehiculo = null;
+      let vehiculoData = null;
+
+      if (!vehiculoRes.ok) {
+        vehiculoData = null;
+      } else {
+        vehiculoData = await vehiculoRes.json();
+      }
+
+      if (!vehiculoRes.ok || (vehiculoData && vehiculoData.msg === "Vehículo no encontrado")) {
+        // Crear vehículo si no existe
+        const nuevoVehiculoRes = await fetch('https://api.garageia.com/api/vehiculos/sin-entrada', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patente: patente,
+            tipoVehiculo: formData.tipoVehiculo,
+            abonado: false,
+            turno: false
+          }),
+        });
+
+        let nuevoVehiculoJson = null;
+        try {
+          nuevoVehiculoJson = await nuevoVehiculoRes.json();
+        } catch {
+          alert('❌ No se pudo interpretar la respuesta al crear el vehículo.');
+          setLoading(false);
+          return;
+        }
+
+        if (!nuevoVehiculoJson || !nuevoVehiculoJson._id) {
+          // Retry para ver si ya está creado
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const retryVehiculoRes = await fetch(`https://api.garageia.com/api/vehiculos/${encodeURIComponent(patente)}`);
+          if (!retryVehiculoRes.ok) {
+            alert('❌ El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.');
+            setLoading(false);
+            return;
+          }
+          const retryVehiculoJson = await retryVehiculoRes.json();
+          if (!retryVehiculoJson || !retryVehiculoJson._id) {
+            alert('❌ El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.');
+            setLoading(false);
+            return;
+          }
+          vehiculo = retryVehiculoJson;
+        } else {
+          vehiculo = nuevoVehiculoJson;
+        }
+      } else {
+        vehiculo = vehiculoData;
+      }
+
+      // Paso 2: Buscar o crear cliente
+      const clientesRes = await fetch('https://api.garageia.com/api/clientes');
       if (!clientesRes.ok) throw new Error('Error al obtener clientes');
       const clientes = await clientesRes.json();
       const clienteExistente = clientes.find(
@@ -264,23 +261,27 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (clienteExistente) {
         clienteId = clienteExistente._id;
         
-        // Actualizar precioAbono del cliente si corresponde
-        if (formData.tipoVehiculo) {
-          const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
-          if (clienteExistente.precioAbono === '' || precioMensual > (precios[clienteExistente.precioAbono]?.mensual || 0)) {
-            await fetch(`http://localhost:5000/api/clientes/${clienteExistente._id}/actualizar-precio-abono`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                tipoVehiculo: formData.tipoVehiculo,
-                precioMensual: precioMensual
-              }),
-            });
-          }
-        }
+        // Actualizar cliente existente
+        await fetch(`https://api.garageia.com/api/clientes/${clienteExistente._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            nombreApellido: formData.nombreApellido,
+            dniCuitCuil: formData.dniCuitCuil,
+            domicilio: formData.domicilio,
+            localidad: formData.localidad,
+            telefonoParticular: formData.telefonoParticular,
+            telefonoEmergencia: formData.telefonoEmergencia,
+            domicilioTrabajo: formData.domicilioTrabajo,
+            telefonoTrabajo: formData.telefonoTrabajo,
+            email: formData.email,
+            tipoVehiculo: formData.tipoVehiculo,
+            precioAbono: formData.tipoVehiculo
+          }),
+        });
       } else {
         // Crear nuevo cliente
-        const nuevoClienteRes = await fetch('http://localhost:5000/api/clientes', {
+        const nuevoClienteRes = await fetch('https://api.garageia.com/api/clientes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -302,39 +303,41 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         clienteId = nuevoCliente._id;
       }
 
-      // Registrar el abono
+      // Paso 3: Registrar abono
       const abonoFormData = new FormData();
       for (const key in formData) {
         if (formData[key] !== null && formData[key] !== undefined) {
           abonoFormData.append(key, formData[key]);
         }
       }
+      abonoFormData.set('patente', patente);
+      abonoFormData.append('cliente', clienteId);
 
-      const abonoRes = await fetch("http://localhost:5000/api/abonos/registrar-abono", {
-        method: "POST",
+      if (formData.fotoSeguro) abonoFormData.append('fotoSeguro', formData.fotoSeguro);
+      if (formData.fotoDNI) abonoFormData.append('fotoDNI', formData.fotoDNI);
+      if (formData.fotoCedulaVerde) abonoFormData.append('fotoCedulaVerde', formData.fotoCedulaVerde);
+      if (formData.fotoCedulaAzul) abonoFormData.append('fotoCedulaAzul', formData.fotoCedulaAzul);
+
+      const abonoRes = await fetch('https://api.garageia.com/api/abonos/registrar-abono', {
+        method: 'POST',
         body: abonoFormData,
       });
-
-      if (!abonoRes.ok) {
-        const errorData = await abonoRes.json().catch(() => ({}));
-        alert(errorData.message || "Error al registrar abono");
-        return;
-      }
+      if (!abonoRes.ok) throw new Error('Error al registrar abono');
 
       const abonoJson = await abonoRes.json();
-      const precioAbono = abonoJson.abono.precio;
-      
+      const precioCalculadoBackend = abonoJson.abono.precio;
+
       // Registrar movimiento
-      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
+      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patente: formData.patente,
+          patente: patente,
           operador: user.nombre,
           tipoVehiculo: formData.tipoVehiculo,
           metodoPago: formData.metodoPago,
           factura: formData.factura || 'Sin factura',
-          monto: precioAbono,
+          monto: precioCalculadoBackend,
           descripcion: `Pago Por Abono`,
           tipoTarifa: `abono`
         }),
@@ -346,12 +349,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         nombreApellido: formData.nombreApellido,
         email: formData.email,
         descripcion: `Abono`,
-        monto: precioAbono,
+        monto: precioCalculadoBackend,
         tipoVehiculo: formData.tipoVehiculo,
         operador: user.nombre,
-        patente: formData.patente,
+        patente: patente,
       };
-      const movimientoClienteRes = await fetch('http://localhost:5000/api/movimientosclientes', {
+      const movimientoClienteRes = await fetch('https://api.garageia.com/api/movimientosclientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(movimientoClientePayload),
@@ -361,7 +364,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(`Error al registrar MovimientoCliente: ${err.message}`);
       }
 
-      alert("¡Abono registrado correctamente!");
+      alert('✅ Abono registrado correctamente');
 
       // Resetear formulario
       setFormData({
@@ -374,7 +377,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         domicilioTrabajo: "",
         telefonoTrabajo: "",
         email: "",
-        patente: "",
+        patente: datosVehiculo?.patente || "",
+        tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
         marca: "",
         modelo: "",
         color: "",
@@ -382,12 +386,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         companiaSeguro: "",
         metodoPago: "Efectivo",
         factura: "CC",
-        tipoVehiculo: "",
         fotoSeguro: null,
         fotoDNI: null,
         fotoCedulaVerde: null,
         fotoCedulaAzul: null,
-        precioAbono: ""
       });
       setFileUploaded({
         fotoSeguro: false,
@@ -396,12 +398,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         fotoCedulaAzul: false,
       });
       setNombreTemporal("");
-      setTarifaSeleccionadaId("");
-      setTarifaSeleccionada(null);
 
-    } catch (err) {
-      console.error("Error en handleSubmit:", err.message);
-      alert("Error al registrar el abono. Por favor, intentá nuevamente.");
+    } catch (error) {
+      console.error(error);
+      alert('❌ ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -509,7 +511,13 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
           <div>
             <label>Tipo de Vehículo</label>
-            <select name="tipoVehiculo" value={formData.tipoVehiculo} onChange={handleChange} className="select-style" required>
+            <select 
+              name="tipoVehiculo" 
+              value={formData.tipoVehiculo} 
+              onChange={handleChange} 
+              className="select-style" 
+              required
+            >
               <option value="">Seleccione</option>
               {tiposVehiculo.map((tipo, index) => (
                 <option key={index} value={tipo}>
@@ -521,7 +529,9 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
         </div>
 
-        <button type="submit">Guardar Abono</button>
+        <button type="submit" disabled={loading}>
+          {loading ? 'Guardando...' : 'Guardar Abono'}
+        </button>
       </form>
     </div>
   );

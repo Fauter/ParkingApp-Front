@@ -35,7 +35,7 @@ function DatosAutoSalida({
 
       try {
         const response = await fetch(
-          `http://localhost:5000/api/vehiculos/${patenteBuscada}`
+          `https://api.garageia.com/api/vehiculos/${patenteBuscada}`
         );
 
         if (!response.ok) {
@@ -62,7 +62,7 @@ function DatosAutoSalida({
           if (data.abonado) {
             // Salida automática abonado
             const resSalida = await fetch(
-              `http://localhost:5000/api/vehiculos/${patenteBuscada}/registrarSalida`,
+              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
               {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -88,7 +88,7 @@ function DatosAutoSalida({
           } else if (data.turno) {
             // Salida automática con turno
             const resSalida = await fetch(
-              `http://localhost:5000/api/vehiculos/${patenteBuscada}/registrarSalida`,
+              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
               {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -109,7 +109,7 @@ function DatosAutoSalida({
 
             // Desactivar turno
             const resDesactivarTurno = await fetch(
-              `http://localhost:5000/api/turnos/desactivar-por-patente/${patenteBuscada}`,
+              `https://api.garageia.com/api/turnos/desactivar-por-patente/${patenteBuscada}`,
               {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -201,7 +201,7 @@ function DatosAutoSalida({
               const bodyData = { costoTotal: costo };
 
               const resActualizar = await fetch(
-                `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
+                `https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
                 {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },

@@ -39,7 +39,7 @@ const ModalVehiculoCajero = ({
       }
 
       try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
+        const response = await fetch('https://api.garageia.com/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -73,8 +73,8 @@ const ModalVehiculoCajero = ({
       
       try {
         const [tiposRes, preciosRes] = await Promise.all([
-          fetch("http://localhost:5000/api/tipos-vehiculo"),
-          fetch("http://localhost:5000/api/precios")
+          fetch("https://api.garageia.com/api/tipos-vehiculo"),
+          fetch("https://api.garageia.com/api/precios")
         ]);
 
         if (!tiposRes.ok) throw new Error("Error al obtener tipos de vehículo");
@@ -208,7 +208,7 @@ const ModalVehiculoCajero = ({
         tipoTarifa: 'abono'
       };
 
-      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
+      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -230,7 +230,7 @@ const ModalVehiculoCajero = ({
         patente: patente,
       };
       
-      await fetch('http://localhost:5000/api/movimientosclientes', {
+      await fetch('https://api.garageia.com/api/movimientosclientes', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -267,12 +267,17 @@ const ModalVehiculoCajero = ({
       return;
     }
 
+    if (!cliente || !cliente._id) {
+      setErrorMessage("No se pudo identificar al cliente");
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
 
     try {
       // Verificar si el vehículo ya existe
-      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
+      const vehiculosRes = await fetch("https://api.garageia.com/api/vehiculos");
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
 
@@ -280,9 +285,12 @@ const ModalVehiculoCajero = ({
 
       // Crear vehículo si no existe
       if (!vehiculoExistente) {
-        const crearRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
+        const crearRes = await fetch("https://api.garageia.com/api/vehiculos/sin-entrada", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
           body: JSON.stringify({ 
             patente, 
             tipoVehiculo: formData.tipoVehiculo 
@@ -299,6 +307,7 @@ const ModalVehiculoCajero = ({
       const abonoFormData = new FormData();
       
       // Datos del cliente
+      abonoFormData.append("clienteId", cliente._id);
       abonoFormData.append("nombreApellido", cliente?.nombreApellido || "");
       abonoFormData.append("domicilio", cliente?.domicilio || "");
       abonoFormData.append("localidad", cliente?.localidad || "");
@@ -329,8 +338,11 @@ const ModalVehiculoCajero = ({
       if (formData.fotoCedulaAzul) abonoFormData.append("fotoCedulaAzul", formData.fotoCedulaAzul);
 
       // Registrar el abono
-      const abonoRes = await fetch("http://localhost:5000/api/abonos/registrar-abono", {
+      const abonoRes = await fetch("https://api.garageia.com/api/abonos/agregar-abono", {
         method: "POST",
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: abonoFormData,
       });
 
@@ -343,9 +355,12 @@ const ModalVehiculoCajero = ({
       if (cliente?.abonado && formData.tipoVehiculo) {
         const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
         
-        await fetch(`http://localhost:5000/api/clientes/${cliente._id}/actualizar-precio-abono`, {
+        await fetch(`https://api.garageia.com/api/clientes/${cliente._id}/actualizar-precio-abono`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
           body: JSON.stringify({ 
             tipoVehiculo: formData.tipoVehiculo,
             precioMensual: precioMensual
@@ -407,14 +422,14 @@ const ModalVehiculoCajero = ({
     const archivoCargado = formData[name] != null;
 
     return (
-      <div className="modal-vehiculo-modal-file-input">
-        <label className="modal-file-visible-label">{label}</label>
-        <label className="modal-file-label">
+      <div className="modal-vehiculo-file-input">
+        <label className="file-visible-label">{label}</label>
+        <label className="file-label">
           <div className="icon-wrapper">📷</div>
           {archivoCargado ? (
-            <div className="modal-file-uploaded">✅</div>
+            <div className="file-uploaded">✅</div>
           ) : (
-            <div className="modal-file-text">
+            <div className="file-text">
               <span>Seleccionar</span>
               <span>Imagen</span>
             </div>

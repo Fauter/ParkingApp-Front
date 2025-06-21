@@ -57,3 +57,13 @@
   background-color: #999;
   cursor: not-allowed;
 }
+
+.overlay-submenu {
+  position: absolute;
+  top: 4.2rem; /* debajo del header */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9000;
+}

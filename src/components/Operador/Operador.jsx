@@ -24,7 +24,7 @@ function Operador() {
       }
 
       try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
+        const response = await fetch('https://api.garageia.com/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -62,7 +62,7 @@ function Operador() {
     try {
       const patenteMayuscula = patente.toUpperCase();
 
-      const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}`);
+      const response = await fetch(`https://api.garageia.com/api/vehiculos/${patenteMayuscula}`);
       if (!response.ok) {
         throw new Error("Vehículo no encontrado");
       }

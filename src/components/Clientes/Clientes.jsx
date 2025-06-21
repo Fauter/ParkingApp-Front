@@ -8,7 +8,7 @@ function Clientes({ onClienteSeleccionado }) {
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/clientes')
+    fetch('https://api.garageia.com/api/clientes')
       .then(res => res.json())
       .then(data => {
         setClientes(data.reverse());
@@ -85,6 +85,16 @@ function Clientes({ onClienteSeleccionado }) {
                     <span className="estado-renovar">RENOVAR</span>
                   )}
                 </td>
+              </tr>
+            ))}
+
+            {/* FILAS VACÍAS PARA COMPLETAR 10 */}
+            {Array.from({ length: ITEMS_POR_PAGINA - clientesPaginados.length }).map((_, i) => (
+              <tr key={`empty-${i}`} className="fila-vacia" style={{ color: '#888' }}>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
               </tr>
             ))}
           </tbody>

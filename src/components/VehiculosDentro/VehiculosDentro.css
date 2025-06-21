@@ -20,6 +20,7 @@
     display: flex;
     justify-content: center;
     margin-bottom: 20px;
+    height: 4%;
 }
 
 .search-content {
@@ -30,7 +31,7 @@
 
 .busqueda-vehiculos {
     width: 400px;
-    padding: 10px 15px;
+    padding: 7px 10px;
     border-radius: 6px;
     border: 1px solid #444a5a;
     background-color: #2a2a38;
@@ -46,7 +47,7 @@
 }
 
 .boton-auditoria {
-    padding: 10px 15px;
+    padding: 7px 15px;
     background-color: #444a5a;
     color: white;
     border: none;
@@ -104,7 +105,7 @@
 .vehiculos-dentro th,
 .vehiculos-dentro td {
     border: 1px solid #444a5a;
-    padding: 8px;
+    padding: 6px;
     text-align: center;
     font-size: 15px;
 }
@@ -131,7 +132,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    margin: 20px 0;
+    margin: 10px 0;
     gap: 12px;
     font-size: 16px;
 }
@@ -162,8 +163,8 @@
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     border: 2px solid #7a5cff;
     border-radius: 4px;
     outline: none;

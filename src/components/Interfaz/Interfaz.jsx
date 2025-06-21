@@ -35,6 +35,8 @@ function Interfaz() {
   const [montoParcial, setMontoParcial] = useState('');
   const [incidente, setIncidente] = useState('');
 
+  const [mostrarOverlay, setMostrarOverlay] = useState(false);
+
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
@@ -47,7 +49,7 @@ function Interfaz() {
       }
 
       try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
+        const response = await fetch('https://api.garageia.com/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -119,7 +121,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/cierresdecaja', {
+      const res = await fetch('https://api.garageia.com/api/cierresdecaja', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -164,7 +166,7 @@ function Interfaz() {
     };
 
     try {
-      const resCierreParcial = await fetch('http://localhost:5000/api/cierresdecaja/parcial', {
+      const resCierreParcial = await fetch('https://api.garageia.com/api/cierresdecaja/parcial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,7 +187,7 @@ function Interfaz() {
         operador: user.nombre,
       };
 
-      const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
+      const resAlerta = await fetch('https://api.garageia.com/api/alertas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -219,7 +221,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/incidentes', {
+      const res = await fetch('https://api.garageia.com/api/incidentes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,7 +247,13 @@ function Interfaz() {
   return (
     <div className="interfaz">
       <Background />
-      <Header cambiarVista={setVistaActual} vistaActiva={vistaActual} abrirModal={setModalActivo} />
+      <Header
+        cambiarVista={setVistaActual}
+        vistaActiva={vistaActual}
+        abrirModal={setModalActivo}
+        setMostrarOverlay={setMostrarOverlay}
+        modalActivo={modalActivo} 
+      />
       <div className="content">
         {vistaActual === 'operador' && <Operador />}
         {vistaActual === 'vehiculos' && <VehiculosDentro />}
@@ -260,6 +268,12 @@ function Interfaz() {
         )}
         {vistaActual === 'turnos' && <Turnos />}
         {vistaActual === 'abono' && <Abono />}
+        {mostrarOverlay && (
+          <div
+            className="overlay-submenu"
+            onClick={() => setMostrarOverlay(false)}
+          />
+        )}
         <PanelDerecho />
       </div>
 
