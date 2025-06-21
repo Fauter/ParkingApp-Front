@@ -1,0 +1,371 @@
+/* Estilos principales del modal */
+.modal-vehiculo-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 200px 20px 160px 20px;
+  box-sizing: border-box;
+}
+
+.modal-vehiculo-content {
+  position: relative;
+  background: #2a2a38;
+  padding: 2.5rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-vehiculo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.modal-vehiculo-image-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.modal-vehiculo-modal-file-input {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-file-visible-label {
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.modal-file-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #3a3a4a;
+  border: 2px dashed #4a4a5a;
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  width: 100%;
+  height: 100px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.modal-file-label:hover {
+  background-color: #4a4a5a;
+  border-color: #5a5a6a;
+}
+
+.modal-file-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.modal-file-text span {
+  font-size: 0.8rem;
+  color: #a0a0a0;
+}
+
+.modal-file-uploaded {
+  font-size: 1.5rem;
+  color: #4caf50;
+}
+
+.icon-wrapper {
+  font-size: 1.4rem;
+  margin-bottom: 0.3rem;
+  color: #e0e0e0;
+}
+
+.modal-vehiculo-form-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.modal-vehiculo-input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  background-color: #3a3a4a;
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  transition: all 0.3s;
+  box-sizing: border-box;
+}
+
+.modal-vehiculo-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.modal-vehiculo-input::placeholder {
+  color: #7a7a8a;
+}
+
+.modal-vehiculo-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.modal-vehiculo-buttons button {
+  padding: 0.7rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-vehiculo-buttons button[type="submit"] {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.modal-vehiculo-buttons button[type="submit"]:hover {
+  background-color: #3a80d2;
+  transform: translateY(-1px);
+}
+
+.modal-vehiculo-buttons button[type="button"] {
+  background-color: #3a3a4a;
+  color: #e0e0e0;
+}
+
+.modal-vehiculo-buttons button[type="button"]:hover {
+  background-color: #4a4a5a;
+  transform: translateY(-1px);
+}
+
+.modal-vehiculo-buttons button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.modal-error-message {
+  background-color: #d32f2f;
+  color: white;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+/* Estilos para el modal de diferencia */
+.modal-diferencia-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.modal-diferencia-content {
+  background-color: #2a2a38;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: fadeIn 0.3s ease-out;
+  color: #e0e0e0;
+}
+
+.modal-diferencia-content h3 {
+  margin: 0 0 1rem 0;
+  color: #e0e0e0;
+  font-size: 1.4rem;
+  text-align: center;
+  font-weight: 600;
+}
+
+.modal-diferencia-content p {
+  margin: 0.8rem 0;
+  color: #a0a0a0;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.diferencia-monto {
+  font-size: 1.3rem;
+  margin: 1.5rem 0;
+  color: #ff6b6b;
+  font-weight: bold;
+}
+
+.diferencia-info {
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.modal-diferencia-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  margin: 1.5rem 0;
+}
+
+.modal-diferencia-input {
+  padding: 0.8rem 1rem;
+  border: 1px solid #3a3a4a;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  width: 100%;
+  background-color: #3a3a4a;
+  color: #e0e0e0;
+  transition: all 0.3s;
+}
+
+.modal-diferencia-input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.modal-diferencia-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-diferencia-buttons button {
+  flex: 1;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-diferencia-buttons .confirmar-btn {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.modal-diferencia-buttons .confirmar-btn:hover {
+  background-color: #3a80d2;
+  transform: translateY(-1px);
+}
+
+.modal-diferencia-buttons .cancelar-btn {
+  background-color: #3a3a4a;
+  color: #e0e0e0;
+}
+
+.modal-diferencia-buttons .cancelar-btn:hover {
+  background-color: #4a4a5a;
+  transform: translateY(-1px);
+}
+
+.modal-diferencia-error {
+  background-color: #d32f2f;
+  color: white;
+  padding: 0.8rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-vehiculo-content {
+    padding: 1.5rem;
+  }
+  
+  .modal-vehiculo-form-group {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-vehiculo-image-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .modal-vehiculo-buttons {
+    flex-direction: column;
+  }
+  
+  .modal-vehiculo-buttons button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-vehiculo-image-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .modal-diferencia-content {
+    padding: 1.5rem;
+  }
+  
+  .modal-diferencia-buttons {
+    flex-direction: column;
+  }
+  
+  .modal-diferencia-buttons button {
+    width: 100%;
+  }
+}
+
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Para Firefox */
+input[type=number] {
+  -moz-appearance: textfield;
+}

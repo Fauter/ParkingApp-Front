@@ -11,7 +11,7 @@ const DatosAutoTurnos = ({ user }) => {
 
   // Cargar las tarifas tipo "turno" al montar el componente
   useEffect(() => {
-    fetch('https://api.garageia.com/api/tarifas/')
+    fetch('http://localhost:5000/api/tarifas/')
       .then(res => res.json())
       .then(data => {
         const turnosFiltrados = data.filter(t => t.tipo === 'turno');
@@ -37,7 +37,7 @@ const DatosAutoTurnos = ({ user }) => {
     // Obtener tipoVehiculo desde API vehículos
     let tipoVehiculo;
     try {
-      const resVehiculo = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
+      const resVehiculo = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
       if (!resVehiculo.ok) {
         alert('Vehículo no encontrado');
         return;
@@ -61,7 +61,7 @@ const DatosAutoTurnos = ({ user }) => {
 
     try {
       // Obtener precios para mostrar/verificar (opcional)
-      const resPrecio = await fetch('https://api.garageia.com/api/precios/');
+      const resPrecio = await fetch('http://localhost:5000/api/precios/');
       const precios = await resPrecio.json();
 
       const nombreTarifa = turnoData.nombre.toLowerCase().trim();
@@ -83,7 +83,7 @@ const DatosAutoTurnos = ({ user }) => {
       };
 
       // Crear el turno
-      const res = await fetch('https://api.garageia.com/api/turnos', {
+      const res = await fetch('http://localhost:5000/api/turnos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -104,7 +104,7 @@ const DatosAutoTurnos = ({ user }) => {
           tipoTarifa: 'turno'
         };
 
-        const resMovimiento = await fetch("https://api.garageia.com/api/movimientos/registrar", {
+        const resMovimiento = await fetch("http://localhost:5000/api/movimientos/registrar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(datosMovimiento),

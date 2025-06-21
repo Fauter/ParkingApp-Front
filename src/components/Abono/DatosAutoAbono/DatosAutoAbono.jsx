@@ -48,11 +48,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const tiposRes = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const tiposRes = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const tiposData = await tiposRes.json();
         setTiposVehiculo(tiposData);
 
-        const preciosRes = await fetch("https://api.garageia.com/api/precios");
+        const preciosRes = await fetch("http://localhost:5000/api/precios");
         const preciosData = await preciosRes.json();
         setPrecios(preciosData);
       } catch (err) {
@@ -65,7 +65,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const res = await fetch("https://api.garageia.com/api/clientes");
+        const res = await fetch("http://localhost:5000/api/clientes");
         if (res.ok) {
           const data = await res.json();
           setClientes(data);
@@ -100,7 +100,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchTarifas = async () => {
       try {
-        const res = await fetch("https://api.garageia.com/api/tarifas");
+        const res = await fetch("http://localhost:5000/api/tarifas");
         const data = await res.json();
         const abonosFiltrados = data.filter(t => t.tipo === "abono");
         setAbonos(abonosFiltrados);
@@ -130,7 +130,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const buscarClientePorNombre = async (nombre) => {
     try {
-      const res = await fetch(`https://api.garageia.com/api/clientes/nombre/${encodeURIComponent(nombre)}`);
+      const res = await fetch(`http://localhost:5000/api/clientes/nombre/${encodeURIComponent(nombre)}`);
       if (res.ok) {
         const cliente = await res.json();
         if (cliente) {
@@ -227,7 +227,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
     try {
       // Verificar si el vehículo existe o crearlo
-      const vehiculosRes = await fetch("https://api.garageia.com/api/vehiculos");
+      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
 
@@ -239,7 +239,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           return;
         }
 
-        const crearVehiculoRes = await fetch("https://api.garageia.com/api/vehiculos/sin-entrada", {
+        const crearVehiculoRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ patente, tipoVehiculo }),
@@ -253,7 +253,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
 
       // Paso 1: Buscar o crear cliente
-      const clientesRes = await fetch('https://api.garageia.com/api/clientes');
+      const clientesRes = await fetch('http://localhost:5000/api/clientes');
       if (!clientesRes.ok) throw new Error('Error al obtener clientes');
       const clientes = await clientesRes.json();
       const clienteExistente = clientes.find(
@@ -268,7 +268,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         if (formData.tipoVehiculo) {
           const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
           if (clienteExistente.precioAbono === '' || precioMensual > (precios[clienteExistente.precioAbono]?.mensual || 0)) {
-            await fetch(`https://api.garageia.com/api/clientes/${clienteExistente._id}/actualizar-precio-abono`, {
+            await fetch(`http://localhost:5000/api/clientes/${clienteExistente._id}/actualizar-precio-abono`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ 
@@ -280,7 +280,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         }
       } else {
         // Crear nuevo cliente
-        const nuevoClienteRes = await fetch('https://api.garageia.com/api/clientes', {
+        const nuevoClienteRes = await fetch('http://localhost:5000/api/clientes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -310,7 +310,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         }
       }
 
-      const abonoRes = await fetch("https://api.garageia.com/api/abonos/registrar-abono", {
+      const abonoRes = await fetch("http://localhost:5000/api/abonos/registrar-abono", {
         method: "POST",
         body: abonoFormData,
       });
@@ -325,7 +325,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const precioAbono = abonoJson.abono.precio;
       
       // Registrar movimiento
-      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
+      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -351,7 +351,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         operador: user.nombre,
         patente: formData.patente,
       };
-      const movimientoClienteRes = await fetch('https://api.garageia.com/api/movimientosclientes', {
+      const movimientoClienteRes = await fetch('http://localhost:5000/api/movimientosclientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(movimientoClientePayload),

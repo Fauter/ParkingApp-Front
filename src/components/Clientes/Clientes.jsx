@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import './Clientes.css';
 
-function Clientes() {
+function Clientes({ onClienteSeleccionado }) {
   const [clientes, setClientes] = useState([]);
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState('');
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('https://api.garageia.com/api/clientes')
+    fetch('http://localhost:5000/api/clientes')
       .then(res => res.json())
       .then(data => {
         setClientes(data.reverse());
@@ -38,6 +38,11 @@ function Clientes() {
     paginaActual * ITEMS_POR_PAGINA
   );
 
+  const handleRowClick = (clienteId) => {
+    console.log('ID del cliente a buscar:', clienteId); // Para depuración
+    onClienteSeleccionado(clienteId);
+  };
+
   return (
     <div className="clientes-dentro">
       <h2 className="tituloClientesDentro">Clientes Abonados</h2>
@@ -49,7 +54,7 @@ function Clientes() {
         value={busqueda}
         onChange={(e) => {
           setBusqueda(e.target.value);
-          setPaginaActual(1); // Reiniciar a la primera página al buscar
+          setPaginaActual(1);
         }}
       />
 
@@ -65,15 +70,19 @@ function Clientes() {
           </thead>
           <tbody>
             {clientesPaginados.map(cliente => (
-              <tr key={cliente._id}>
+              <tr 
+                key={cliente._id} 
+                onClick={() => handleRowClick(cliente._id)} 
+                style={{ cursor: 'pointer' }}
+              >
                 <td>{cliente.nombreApellido}</td>
                 <td>{formatearDNI(cliente.dniCuitCuil)}</td>
-                <td>{cliente.vehiculos.map(v => v.patente).join(', ') || '—'}</td>
+                <td>{cliente.vehiculos?.map(v => v.patente).join(', ') || '—'}</td>
                 <td>
                   {cliente.abonado ? (
                     <span className="estado-abonado">ABONADO</span>
                   ) : (
-                    <button className="estado-renovar">RENOVAR</button>
+                    <span className="estado-renovar">RENOVAR</span>
                   )}
                 </td>
               </tr>

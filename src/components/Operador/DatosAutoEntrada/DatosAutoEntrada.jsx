@@ -11,7 +11,7 @@ function DatosAutoEntrada({ user }) {
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/precios");
+        const response = await fetch("http://localhost:5000/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -22,7 +22,7 @@ function DatosAutoEntrada({ user }) {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -38,7 +38,7 @@ function DatosAutoEntrada({ user }) {
         return;
       }
       try {
-        const response = await fetch("https://api.garageia.com/api/auth/profile", {
+        const response = await fetch("http://localhost:5000/api/auth/profile", {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -103,13 +103,13 @@ function DatosAutoEntrada({ user }) {
     try {
       let existeVehiculo = false;
 
-      const checkResponse = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
       if (checkResponse.ok) {
         existeVehiculo = true;
       }
 
       if (!existeVehiculo) {
-        const vehiculoResponse = await fetch("https://api.garageia.com/api/vehiculos", {
+        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ patente, tipoVehiculo, abonado: false, operador: user.nombre }),
@@ -124,7 +124,7 @@ function DatosAutoEntrada({ user }) {
       } else {
         // Acá mandás el nombre del operador desde user.nombre
         const entradaResponse = await fetch(
-          `https://api.garageia.com/api/vehiculos/${patente}/registrarEntrada`,
+          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },

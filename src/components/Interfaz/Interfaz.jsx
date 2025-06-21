@@ -6,6 +6,7 @@ import PanelDerecho from './PanelDerecho/PanelDerecho';
 import Operador from '../Operador/Operador';
 import VehiculosDentro from '../VehiculosDentro/VehiculosDentro';
 import Clientes from '../Clientes/Clientes';
+import DetalleClienteCajero from '../Clientes/DetalleClienteCajero';
 import Background from '../Background/Background';
 import Abono from '../Abono/Abono';
 import Turnos from '../Turnos/Turnos';
@@ -25,6 +26,7 @@ const limpiarNumero = (valor) => {
 function Interfaz() {
   const [vistaActual, setVistaActual] = useState('operador');
   const [modalActivo, setModalActivo] = useState(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
   const [recaudado, setRecaudado] = useState('');
   const [enCaja, setEnCaja] = useState('');
@@ -45,7 +47,7 @@ function Interfaz() {
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -67,6 +69,16 @@ function Interfaz() {
 
     fetchUser();
   }, [navigate]);
+
+  const manejarSeleccionCliente = (idCliente) => {
+    setClienteSeleccionado(idCliente);
+    setVistaActual('detalleCliente');
+  };
+
+  const volverAClientes = () => {
+    setClienteSeleccionado(null);
+    setVistaActual('clientes');
+  };
 
   const cerrarModal = () => {
     setModalActivo(null);
@@ -107,7 +119,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('https://api.garageia.com/api/cierresdecaja', {
+      const res = await fetch('http://localhost:5000/api/cierresdecaja', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -152,7 +164,7 @@ function Interfaz() {
     };
 
     try {
-      const resCierreParcial = await fetch('https://api.garageia.com/api/cierresdecaja/parcial', {
+      const resCierreParcial = await fetch('http://localhost:5000/api/cierresdecaja/parcial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,7 +185,7 @@ function Interfaz() {
         operador: user.nombre,
       };
 
-      const resAlerta = await fetch('https://api.garageia.com/api/alertas/', {
+      const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -207,7 +219,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('https://api.garageia.com/api/incidentes', {
+      const res = await fetch('http://localhost:5000/api/incidentes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -237,7 +249,15 @@ function Interfaz() {
       <div className="content">
         {vistaActual === 'operador' && <Operador />}
         {vistaActual === 'vehiculos' && <VehiculosDentro />}
-        {vistaActual === 'clientes' && <Clientes />}
+        {vistaActual === 'clientes' && (
+          <Clientes onClienteSeleccionado={manejarSeleccionCliente} />
+        )}
+        {vistaActual === 'detalleCliente' && (
+          <DetalleClienteCajero 
+            clienteId={clienteSeleccionado} 
+            volver={volverAClientes} 
+          />
+        )}
         {vistaActual === 'turnos' && <Turnos />}
         {vistaActual === 'abono' && <Abono />}
         <PanelDerecho />

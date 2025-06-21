@@ -49,7 +49,7 @@ function VehiculosDentro() {
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -75,7 +75,7 @@ function VehiculosDentro() {
 
     const cargarDatos = async () => {
       try {
-        const responseVehiculos = await fetch('https://api.garageia.com/api/vehiculos');
+        const responseVehiculos = await fetch('http://localhost:5000/api/vehiculos');
         const dataVehiculos = await responseVehiculos.json();
         const filtrados = dataVehiculos.filter(v => 
           v.estadiaActual && 
@@ -84,7 +84,7 @@ function VehiculosDentro() {
         );
         setVehiculos(filtrados.reverse());
 
-        const responseTipos = await fetch('https://api.garageia.com/api/tipos-vehiculo');
+        const responseTipos = await fetch('http://localhost:5000/api/tipos-vehiculo');
         const dataTipos = await responseTipos.json();
         setTiposVehiculo(dataTipos);
       } catch (err) {
@@ -146,6 +146,35 @@ function VehiculosDentro() {
     setModalAbierto(false);
   };
 
+  const crearAlertaConflicto = async (tipoConflicto) => {
+    const fecha = new Date().toISOString().split('T')[0];
+    const hora = new Date().toLocaleTimeString();
+    
+    const dataAlerta = {
+      fecha,
+      hora,
+      tipoDeAlerta: `Conflicto Auditoría: ${tipoConflicto}`,
+      operador: user.nombre,
+    };
+
+    try {
+      const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(dataAlerta),
+      });
+
+      if (!resAlerta.ok) {
+        console.error('Error al crear la alerta de conflicto');
+      }
+    } catch (err) {
+      console.error('Error al enviar la alerta:', err);
+    }
+  };
+
   const generarAuditoria = async () => {
     if (vehiculosChequeados.length === 0 && vehiculosTemporales.length === 0) {
       alert('Por favor seleccione al menos un vehículo para auditar o agregue vehículos temporales');
@@ -160,7 +189,7 @@ function VehiculosDentro() {
       const idsNormales = vehiculosChequeados.filter(id => !id.toString().startsWith('temp-'));
       const vehiculosTemporalesAuditados = vehiculosTemporales;
 
-      const response = await fetch('https://api.garageia.com/api/auditorias', {
+      const response = await fetch('http://localhost:5000/api/auditorias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -187,8 +216,15 @@ function VehiculosDentro() {
       const vehiculosNoVerificados = todosLosVehiculosEnSistema - idsNormales.length;
       const hayVehiculosTemporales = vehiculosTemporales.length > 0;
       
-      if (vehiculosNoVerificados > 0 || hayVehiculosTemporales) {
-        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados o vehículos temporales.');
+      if (vehiculosNoVerificados > 0 && hayVehiculosTemporales) {
+        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados y vehículos temporales.');
+        await crearAlertaConflicto('Vehículos no verificados y vehículos temporales agregados');
+      } else if (vehiculosNoVerificados > 0) {
+        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados.');
+        await crearAlertaConflicto('Vehículos no verificados');
+      } else if (hayVehiculosTemporales) {
+        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos temporales agregados.');
+        await crearAlertaConflicto('Vehículos temporales agregados');
       }
 
       setVehiculosChequeados([]);

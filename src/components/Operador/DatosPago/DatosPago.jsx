@@ -13,7 +13,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
   const [horaSalida, setHoraSalida] = useState(null);
 
   useEffect(() => {
-    fetch("https://api.garageia.com/api/promos")
+    fetch("http://localhost:5000/api/promos")
       .then((res) => res.json())
       .then((data) => setPromos(data))
       .catch((err) => console.error("Error cargando promociones", err));
@@ -120,7 +120,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
     fetch(
-      `https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
+      `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -153,7 +153,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
           tipoTarifa: "hora",
         };
         console.log("📦 Datos que se mandan al registrar movimiento:", datosMovimiento);
-        return fetch("https://api.garageia.com/api/movimientos/registrar", {
+        return fetch("http://localhost:5000/api/movimientos/registrar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(datosMovimiento),

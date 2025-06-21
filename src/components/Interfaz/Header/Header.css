@@ -60,3 +60,33 @@
   background-color: #00adb5; /* mismo color que hover */
   transform: scale(1.05);
 }
+
+
+.submenu-wrapper {
+  position: relative;
+}
+
+.submenu {
+  position: absolute;
+  top: 90%;
+  left: calc(34.768rem + 8.5rem);
+  display: flex;
+  z-index: 99999;
+}
+.menu .submenu button, .menu a {
+  margin-left: 0.5rem !important; 
+}
+.submenu button {
+  background-color: #444a5a;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.submenu button:hover {
+  background-color: #00adb5;
+  transform: scale(1.05);
+}
