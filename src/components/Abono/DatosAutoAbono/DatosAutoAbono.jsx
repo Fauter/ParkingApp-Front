@@ -56,11 +56,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const tiposRes = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const tiposRes = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const tiposData = await tiposRes.json();
         setTiposVehiculo(tiposData);
 
-        const preciosRes = await fetch("https://api.garageia.com/api/precios");
+        const preciosRes = await fetch("http://localhost:5000/api/precios");
         const preciosData = await preciosRes.json();
         setPrecios(preciosData);
       } catch (err) {
@@ -74,7 +74,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => {
     const fetchClientes = async () => {
       try {
-        const res = await fetch("https://api.garageia.com/api/clientes");
+        const res = await fetch("http://localhost:5000/api/clientes");
         if (res.ok) {
           const data = await res.json();
           setClientes(data);
@@ -100,7 +100,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const buscarClientePorNombre = async (nombre) => {
     try {
-      const res = await fetch(`https://api.garageia.com/api/clientes/nombre/${encodeURIComponent(nombre)}`);
+      const res = await fetch(`http://localhost:5000/api/clientes/nombre/${encodeURIComponent(nombre)}`);
       if (res.ok) {
         const cliente = await res.json();
         if (cliente) {
@@ -194,7 +194,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
 
       // Paso 1: Buscar o crear vehículo
-      const vehiculoRes = await fetch(`https://api.garageia.com/api/vehiculos/${encodeURIComponent(patente)}`);
+      const vehiculoRes = await fetch(`http://localhost:5000/api/vehiculos/${encodeURIComponent(patente)}`);
       let vehiculo = null;
       let vehiculoData = null;
 
@@ -206,7 +206,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
       if (!vehiculoRes.ok || (vehiculoData && vehiculoData.msg === "Vehículo no encontrado")) {
         // Crear vehículo si no existe
-        const nuevoVehiculoRes = await fetch('https://api.garageia.com/api/vehiculos/sin-entrada', {
+        const nuevoVehiculoRes = await fetch('http://localhost:5000/api/vehiculos/sin-entrada', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -229,7 +229,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         if (!nuevoVehiculoJson || !nuevoVehiculoJson._id) {
           // Retry para ver si ya está creado
           await new Promise(resolve => setTimeout(resolve, 500));
-          const retryVehiculoRes = await fetch(`https://api.garageia.com/api/vehiculos/${encodeURIComponent(patente)}`);
+          const retryVehiculoRes = await fetch(`http://localhost:5000/api/vehiculos/${encodeURIComponent(patente)}`);
           if (!retryVehiculoRes.ok) {
             alert('❌ El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.');
             setLoading(false);
@@ -250,7 +250,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
 
       // Paso 2: Buscar o crear cliente
-      const clientesRes = await fetch('https://api.garageia.com/api/clientes');
+      const clientesRes = await fetch('http://localhost:5000/api/clientes');
       if (!clientesRes.ok) throw new Error('Error al obtener clientes');
       const clientes = await clientesRes.json();
       const clienteExistente = clientes.find(
@@ -262,7 +262,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         clienteId = clienteExistente._id;
         
         // Actualizar cliente existente
-        await fetch(`https://api.garageia.com/api/clientes/${clienteExistente._id}`, {
+        await fetch(`http://localhost:5000/api/clientes/${clienteExistente._id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -281,7 +281,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         });
       } else {
         // Crear nuevo cliente
-        const nuevoClienteRes = await fetch('https://api.garageia.com/api/clientes', {
+        const nuevoClienteRes = await fetch('http://localhost:5000/api/clientes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -318,7 +318,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (formData.fotoCedulaVerde) abonoFormData.append('fotoCedulaVerde', formData.fotoCedulaVerde);
       if (formData.fotoCedulaAzul) abonoFormData.append('fotoCedulaAzul', formData.fotoCedulaAzul);
 
-      const abonoRes = await fetch('https://api.garageia.com/api/abonos/registrar-abono', {
+      const abonoRes = await fetch('http://localhost:5000/api/abonos/registrar-abono', {
         method: 'POST',
         body: abonoFormData,
       });
@@ -328,7 +328,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const precioCalculadoBackend = abonoJson.abono.precio;
 
       // Registrar movimiento
-      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
+      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -354,7 +354,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         operador: user.nombre,
         patente: patente,
       };
-      const movimientoClienteRes = await fetch('https://api.garageia.com/api/movimientosclientes', {
+      const movimientoClienteRes = await fetch('http://localhost:5000/api/movimientosclientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(movimientoClientePayload),

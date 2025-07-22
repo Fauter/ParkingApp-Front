@@ -1,4 +1,3 @@
-/* DATOS DE AUTO ENTRADA */ 
 .datosAutoEntrada {
   display: flex;
   flex: 1;
@@ -11,10 +10,22 @@
 .fotoAutoEntrada {
   display: flex;
   justify-content: center;
-  width: 100%;
+  width: 463px; 
+  height: 309px; 
   margin-bottom: 20px;
+  overflow: hidden; 
+  background-color: #2a2a38;
 }
 
+.foto-vehiculo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; 
+  object-position: center; 
+  transition: transform 0.3s ease; 
+}
+
+/* Resto del CSS permanece igual */
 .formularioAuto {
   display: flex;
   flex-direction: column;

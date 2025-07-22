@@ -8,7 +8,7 @@ function Clientes({ onClienteSeleccionado }) {
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
-    fetch('https://api.garageia.com/api/clientes')
+    fetch('http://localhost:5000/api/clientes')
       .then(res => res.json())
       .then(data => {
         setClientes(data.reverse());

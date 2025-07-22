@@ -14,143 +14,233 @@ function DatosAutoSalida({
   const [inputPatente, setInputPatente] = useState("");
   const [tarifaCalculada, setTarifaCalculada] = useState(null);
   const { tarifas, precios, tiposVehiculo, parametros } = useTarifasData();
-  const yaActualizado = useRef(false); // flag para evitar bucle
+  const yaActualizado = useRef(false);
+  const inputRef = useRef(null);
+  const lastInputTime = useRef(0);
+  const inputTimer = useRef(null);
+  const isScanning = useRef(false);
 
+  // Limpiar input cuando se recibe el trigger
   useEffect(() => {
     if (limpiarInputTrigger) {
       setInputPatente("");
     }
   }, [limpiarInputTrigger]);
 
+  // Limpiar input cuando no hay vehículo
   useEffect(() => {
     if (!vehiculoLocal) {
       setInputPatente("");
     }
   }, [vehiculoLocal]);
 
+  // Efecto para detectar lectura rápida (lector de tickets)
+  useEffect(() => {
+    const handleInput = (e) => {
+      const currentTime = Date.now();
+      const value = e.target.value;
+      
+      // Si el tiempo entre inputs es muy corto (<100ms) y el valor tiene 10 dígitos
+      if (currentTime - lastInputTime.current < 100 && value.length === 10 && /^\d+$/.test(value)) {
+        clearTimeout(inputTimer.current);
+        isScanning.current = true;
+        handleTicketScan(value);
+      }
+      
+      lastInputTime.current = currentTime;
+      
+      // También detectar si se pega un valor de 10 dígitos
+      if (value.length === 10 && /^\d+$/.test(value)) {
+        clearTimeout(inputTimer.current);
+        isScanning.current = true;
+        inputTimer.current = setTimeout(() => {
+          handleTicketScan(value);
+        }, 200);
+      }
+    };
+
+    const inputElement = inputRef.current;
+    inputElement.addEventListener('input', handleInput);
+
+    return () => {
+      inputElement.removeEventListener('input', handleInput);
+      clearTimeout(inputTimer.current);
+    };
+  }, []);
+
+  // Función para procesar ticket escaneado
+  const handleTicketScan = async (ticketNumber) => {
+    try {
+      // Convertir a número (elimina ceros a la izquierda)
+      const ticketNum = parseInt(ticketNumber, 10);
+      
+      if (isNaN(ticketNum)) {
+        alert("Ticket inválido");
+        isScanning.current = false;
+        return;
+      }
+
+      const response = await fetch(`http://localhost:5000/api/vehiculos/ticket/${ticketNum}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error:", errorData.msg);
+        alert(`No se encontró vehículo con ticket ${ticketNum}`);
+        isScanning.current = false;
+        return;
+      }
+
+      const data = await response.json();
+      await procesarVehiculoEncontrado(data);
+      
+      // Actualizar el input con la patente encontrada
+      if (data.patente) {
+        setInputPatente(data.patente);
+        
+        // Esperar un breve momento para que se actualice el estado
+        setTimeout(() => {
+          // Simular Enter para activar el cálculo de tarifa
+          const enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter',
+            code: 'Enter',
+            keyCode: 13,
+            which: 13,
+            bubbles: true
+          });
+          inputRef.current.dispatchEvent(enterEvent);
+          isScanning.current = false;
+        }, 100);
+      }
+    } catch (err) {
+      console.error("Error al buscar por ticket:", err);
+      alert("Error al procesar el ticket escaneado");
+      isScanning.current = false;
+    }
+  };
+
+  // Función común para procesar vehículos encontrados (por patente o ticket)
+  const procesarVehiculoEncontrado = async (data) => {
+    if (!data.estadiaActual || !data.estadiaActual.entrada) {
+      alert("El vehículo no tiene estadía en curso.");
+      return;
+    }
+
+    const tieneEntrada = !!data.estadiaActual.entrada;
+    const yaTieneSalida = !!data.estadiaActual.salida;
+    const salidaTemporal = new Date().toISOString();
+
+    // Procesar vehículos abonados o con turno
+    if (tieneEntrada && !yaTieneSalida) {
+      if (data.abonado) {
+        await procesarSalidaAbonado(data, salidaTemporal);
+        return;
+      } else if (data.turno) {
+        await procesarSalidaTurno(data, salidaTemporal);
+        return;
+      }
+    }
+
+    // Flujo normal para vehículos no abonados
+    const actualizado = {
+      ...data,
+      estadiaActual: {
+        ...data.estadiaActual,
+        salida: salidaTemporal,
+      },
+    };
+
+    if (onSalidaCalculada && !yaTieneSalida) {
+      onSalidaCalculada(salidaTemporal);
+    }
+
+    onActualizarVehiculoLocal(actualizado);
+  };
+
+  // Función para procesar salida de vehículo abonado
+  const procesarSalidaAbonado = async (vehiculo, salida) => {
+    const resSalida = await fetch(
+      `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          salida,
+          costo: 0,
+          tarifa: null,
+        }),
+      }
+    );
+
+    if (!resSalida.ok) {
+      const errorData = await resSalida.json();
+      throw new Error(errorData.msg || "Error al registrar salida automática");
+    }
+
+    alert(`✅ Vehículo ${vehiculo.patente} (abonado) salió automáticamente.`);
+    setInputPatente("");
+  };
+
+  // Función para procesar salida de vehículo con turno
+  const procesarSalidaTurno = async (vehiculo, salida) => {
+    const resSalida = await fetch(
+      `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          salida,
+          costo: 0,
+          tarifa: null,
+        }),
+      }
+    );
+
+    if (!resSalida.ok) {
+      throw new Error("Error al registrar salida automática");
+    }
+
+    const resDesactivarTurno = await fetch(
+      `http://localhost:5000/api/turnos/desactivar-por-patente/${vehiculo.patente}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    if (!resDesactivarTurno.ok) {
+      throw new Error("Error al desactivar turno");
+    }
+
+    alert(`✅ Vehículo ${vehiculo.patente} con turno salió automáticamente.`);
+    setInputPatente("");
+  };
+
+  // Manejar entrada manual de patente
   const handleKeyDown = async (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !isScanning.current) {
       const patenteBuscada = inputPatente.trim().toUpperCase();
       if (!patenteBuscada) return;
 
       try {
         const response = await fetch(
-          `https://api.garageia.com/api/vehiculos/${patenteBuscada}`
+          `http://localhost:5000/api/vehiculos/${patenteBuscada}`
         );
 
         if (!response.ok) {
           const errorData = await response.json();
-          console.error("Error:", errorData.msg);
-          alert("Error al buscar vehículo.");
-          return;
+          throw new Error(errorData.msg || "Vehículo no encontrado");
         }
 
         const data = await response.json();
-
-        // Validación: si no tiene estadía en curso (entrada null o inexistente)
-        if (!data.estadiaActual || !data.estadiaActual.entrada) {
-          alert("El vehículo no tiene estadía en curso.");
-          // No actualizar ni cargar nada
-          return;
-        }
-
-        const tieneEntrada = !!data.estadiaActual.entrada;
-        const yaTieneSalida = !!data.estadiaActual.salida;
-        const salidaTemporal = new Date().toISOString();
-
-        if (tieneEntrada && !yaTieneSalida) {
-          if (data.abonado) {
-            // Salida automática abonado
-            const resSalida = await fetch(
-              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
-              {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  salida: salidaTemporal,
-                  costo: 0,
-                  tarifa: null,
-                }),
-              }
-            );
-
-            const dataSalida = await resSalida.json();
-
-            if (!resSalida.ok || dataSalida.error) {
-              console.error("❌ Error al registrar salida automática (abonado):", dataSalida?.msg || "Error desconocido");
-              alert("Error al registrar salida automática, intente nuevamente.");
-              return;
-            }
-
-            alert(`✅ Vehículo ${patenteBuscada} (abonado) salió automáticamente.`);
-            setInputPatente("");
-            return;
-          } else if (data.turno) {
-            // Salida automática con turno
-            const resSalida = await fetch(
-              `https://api.garageia.com/api/vehiculos/${patenteBuscada}/registrarSalida`,
-              {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  salida: salidaTemporal,
-                  costo: 0,
-                  tarifa: null,
-                }),
-              }
-            );
-
-            if (!resSalida.ok) {
-              const dataError = await resSalida.json();
-              console.error("❌ Error al registrar salida automática (turno):", dataError?.msg || "Error desconocido");
-              alert("Error al registrar salida automática, intente nuevamente.");
-              return;
-            }
-
-            // Desactivar turno
-            const resDesactivarTurno = await fetch(
-              `https://api.garageia.com/api/turnos/desactivar-por-patente/${patenteBuscada}`,
-              {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-              }
-            );
-
-            if (!resDesactivarTurno.ok) {
-              const errorTurno = await resDesactivarTurno.json();
-              console.error("❌ Error al desactivar turno:", errorTurno?.msg || "Error desconocido");
-              alert("Error al desactivar turno, intente nuevamente.");
-              return;
-            }
-
-            alert(`✅ Vehículo ${patenteBuscada} con turno salió automáticamente y se desactivó el turno.`);
-            setInputPatente("");
-            return;
-          }
-        }
-
-        // Flujo normal si no abonado ni turno o ya salida
-        const actualizado = {
-          ...data,
-          estadiaActual: {
-            ...data.estadiaActual,
-            salida: salidaTemporal,
-          },
-        };
-
-        if (onSalidaCalculada && !yaTieneSalida) {
-          onSalidaCalculada(salidaTemporal);
-        }
-
-        onActualizarVehiculoLocal(actualizado);
-        setInputPatente(patenteBuscada);
+        await procesarVehiculoEncontrado(data);
       } catch (err) {
         console.error("Error en la operación:", err);
-        alert("Error al procesar la salida.");
+        alert(err.message || "Error al procesar la salida.");
       }
     }
   };
 
+  // Cálculo de tarifa cuando hay salida
   useEffect(() => {
     const entrada = vehiculoLocal?.estadiaActual?.entrada;
     const salida = vehiculoLocal?.estadiaActual?.salida;
@@ -201,7 +291,7 @@ function DatosAutoSalida({
               const bodyData = { costoTotal: costo };
 
               const resActualizar = await fetch(
-                `https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
+                `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
                 {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
@@ -213,7 +303,6 @@ function DatosAutoSalida({
                 const actualizado = await resActualizar.json();
                 yaActualizado.current = true;
 
-                // Actualizamos el estado para reflejar el costo actualizado
                 onActualizarVehiculoLocal({
                   ...actualizado.vehiculo,
                   costoTotal: costo,
@@ -238,12 +327,13 @@ function DatosAutoSalida({
 
     calcularTarifa();
   }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal]);
+
+  // Cálculo de tarifa temporal (previsualización)
   useEffect(() => {
     const calcularTarifaTemporal = async () => {
-      // Solo calcular si hay entrada y NO hay salida
       if (vehiculoLocal?.estadiaActual?.entrada && !vehiculoLocal?.estadiaActual?.salida) {
         const entrada = new Date(vehiculoLocal.estadiaActual.entrada);
-        const salida = new Date(); // salida temporal: ahora
+        const salida = new Date();
         const diferenciaMs = salida - entrada;
         const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
         const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -271,7 +361,6 @@ function DatosAutoSalida({
               salida: salida.toISOString(),
             });
 
-            // Actualizo vehiculoLocal solo si no tenía salida
             onActualizarVehiculoLocal({
               ...vehiculoLocal,
               estadiaActual: {
@@ -302,8 +391,17 @@ function DatosAutoSalida({
     <div className="datosAutoSalida">
       <div className="fotoAutoSalida">
         <img
-          src="https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
+          src={
+            vehiculoLocal?.estadiaActual?.fotoUrl 
+              ? `http://localhost:5000${vehiculoLocal.estadiaActual.fotoUrl}`
+              : "https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
+          }
           alt="Auto"
+          className="foto-vehiculo"
+          onError={(e) => {
+            e.target.onerror = null; 
+            e.target.src = "https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500";
+          }}
         />
       </div>
 
@@ -311,12 +409,14 @@ function DatosAutoSalida({
         <div className="patenteYTipo">
           <div className="patente">
             <input
+              ref={inputRef}
               type="text"
               className="input-patente"
-              placeholder="Ingresá la patente"
+              placeholder="Ingresá la patente o escaneá el ticket"
               value={inputPatente}
               onChange={(e) => setInputPatente(e.target.value.toUpperCase())}
               onKeyDown={handleKeyDown}
+              autoFocus
             />
           </div>
           <div className="tipoVehiculo">

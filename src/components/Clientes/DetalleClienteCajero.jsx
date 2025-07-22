@@ -40,7 +40,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         return;
       }
 
-      const response = await fetch(`https://api.garageia.com/api/clientes/id/${clienteId}`, {
+      const response = await fetch(`http://localhost:5000/api/clientes/id/${clienteId}`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -94,7 +94,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       }
 
       // Obtener precios actuales
-      const response = await fetch('https://api.garageia.com/api/precios', {
+      const response = await fetch('http://localhost:5000/api/precios', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -134,7 +134,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         tipoTarifa: 'abono'
       };
 
-      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
+      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -156,7 +156,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         patente,
       };
       
-      await fetch('https://api.garageia.com/api/movimientosclientes', {
+      await fetch('http://localhost:5000/api/movimientosclientes', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -180,7 +180,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       const descripcion = `Renovación abono ${cliente.precioAbono}`;
       
       // 1. Renovar el abono en el backend
-      const response = await fetch(`https://api.garageia.com/api/clientes/${clienteId}/renovar-abono`, {
+      const response = await fetch(`http://localhost:5000/api/clientes/${clienteId}/renovar-abono`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,9 +266,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
     let rutaFoto;
     if (nombreDecodificado.startsWith('/fotos/')) {
-      rutaFoto = `https://api.garageia.com/uploads${nombreDecodificado}`;
+      rutaFoto = `http://localhost:5000/uploads${nombreDecodificado}`;
     } else {
-      rutaFoto = `https://api.garageia.com/uploads/fotos/${nombreDecodificado}`;
+      rutaFoto = `http://localhost:5000/uploads/fotos/${nombreDecodificado}`;
     }
 
     const urlConTimestamp = `${rutaFoto}?t=${Date.now()}`;

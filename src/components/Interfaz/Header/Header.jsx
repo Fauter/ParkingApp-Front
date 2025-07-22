@@ -1,8 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './Header.css';
+import ModalHeader from './ModalHeader/ModalHeader';
+import DatosAutoEntrada from '../../Operador/DatosAutoEntrada/DatosAutoEntrada';
 
-function Header({ cambiarVista, vistaActiva, abrirModal, setMostrarOverlay, modalActivo }) {
+function Header({ 
+  cambiarVista, 
+  vistaActiva, 
+  abrirModal, 
+  setMostrarOverlay, 
+  modalActivo, 
+  onEjecutarBot,
+  user,
+  ticketPendiente
+}) {
   const [mostrarSubmenu, setMostrarSubmenu] = useState(false);
+  const [mostrarModalEntrada, setMostrarModalEntrada] = useState(false);
+  const [timestamp, setTimestamp] = useState(Date.now()); // 👈 NUEVO
   const menuRef = useRef();
 
   useEffect(() => {
@@ -22,15 +35,13 @@ function Header({ cambiarVista, vistaActiva, abrirModal, setMostrarOverlay, moda
     setMostrarOverlay(false);
   };
 
-  // Evita abrir submenu Abono si hay modal activo
   const handleAbonoClick = () => {
-    if (modalActivo !== null) return; // bloquea abrir submenu si hay modal abierto
+    if (modalActivo !== null) return;
     const nuevoEstado = !mostrarSubmenu;
     setMostrarSubmenu(nuevoEstado);
     setMostrarOverlay(nuevoEstado);
   };
 
-  // Al abrir modal, cierra submenu y overlay si estaban abiertos y abre modal
   const handleAbrirModal = (modal) => {
     if (mostrarSubmenu) {
       setMostrarSubmenu(false);
@@ -39,7 +50,6 @@ function Header({ cambiarVista, vistaActiva, abrirModal, setMostrarOverlay, moda
     abrirModal(modal);
   };
 
-  // Cierra submenu y overlay para clicks que no cambian vista ni abren modal
   const cerrarSubmenuYOverlay = () => {
     if (mostrarSubmenu) {
       setMostrarSubmenu(false);
@@ -75,6 +85,12 @@ function Header({ cambiarVista, vistaActiva, abrirModal, setMostrarOverlay, moda
       default:
         return '';
     }
+  };
+
+  const handleEjecutarBot = async () => {
+    await onEjecutarBot(); // Ejecutar lógica del bot
+    setMostrarModalEntrada(true); // Mostrar modal
+    setTimestamp(Date.now()); // 👈 Forzar recarga del componente hijo
   };
 
   return (
@@ -135,15 +151,32 @@ function Header({ cambiarVista, vistaActiva, abrirModal, setMostrarOverlay, moda
         >
           Incidente
         </button>
-        {/* Agrego onClick para cerrar submenu y overlay si estaban abiertos */}
-        <a
+        {/* <a
           href="https://admin.garageia.com/"
           className="menu-button"
           onClick={cerrarSubmenuYOverlay}
         >
           Admin
-        </a>
+        </a> */}
+        <button
+          className="boton-bot"
+          onClick={handleEjecutarBot}
+          disabled={modalActivo !== null}
+        >
+          BOT
+        </button>
       </div>
+
+      {mostrarModalEntrada && (
+        <ModalHeader titulo="Registrar Entrada" onClose={() => setMostrarModalEntrada(false)}>
+          <DatosAutoEntrada 
+            user={user} 
+            ticketPendiente={ticketPendiente} 
+            onClose={() => setMostrarModalEntrada(false)}
+            timestamp={timestamp} // 👈 PASÁS EL TIMESTAMP AL COMPONENTE
+          />
+        </ModalHeader>
+      )}
     </header>
   );
 }

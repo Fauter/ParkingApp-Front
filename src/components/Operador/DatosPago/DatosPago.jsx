@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
+function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAbrirBarreraSalida }) {
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [factura, setFactura] = useState("CC");
   const [promos, setPromos] = useState([]);
@@ -13,7 +13,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
   const [horaSalida, setHoraSalida] = useState(null);
 
   useEffect(() => {
-    fetch("https://api.garageia.com/api/promos")
+    fetch("http://localhost:5000/api/promos")
       .then((res) => res.json())
       .then((data) => setPromos(data))
       .catch((err) => console.error("Error cargando promociones", err));
@@ -120,7 +120,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
     fetch(
-      `https://api.garageia.com/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
+      `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -152,8 +152,9 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
           monto: totalConDescuento,
           tipoTarifa: "hora",
         };
+        
         console.log("📦 Datos que se mandan al registrar movimiento:", datosMovimiento);
-        return fetch("https://api.garageia.com/api/movimientos/registrar", {
+        return fetch("http://localhost:5000/api/movimientos/registrar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(datosMovimiento),
@@ -170,6 +171,11 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user }) {
           alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
           limpiarVehiculo();
           resetCamposPago();
+          
+          // Llamar a la función para abrir la barrera de salida
+          if (onAbrirBarreraSalida) {
+            onAbrirBarreraSalida();
+          }
         } else {
           console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
           alert("Error al registrar movimiento, intente nuevamente.");

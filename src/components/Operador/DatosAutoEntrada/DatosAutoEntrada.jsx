@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from "react";
 import "./DatosAutoEntrada.css";
 
-function DatosAutoEntrada({ user }) {
+function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
   const [patente, setPatente] = useState("");
   const [tipoVehiculo, setTipoVehiculo] = useState("");
   const [precios, setPrecios] = useState({});
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
-  // Al montar el componente, traemos precios, tipos y perfil usuario
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/precios");
+        const response = await fetch("http://localhost:5000/api/precios");
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
@@ -22,7 +21,7 @@ function DatosAutoEntrada({ user }) {
 
     const fetchTiposVehiculo = async () => {
       try {
-        const response = await fetch("https://api.garageia.com/api/tipos-vehiculo");
+        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
@@ -31,58 +30,25 @@ function DatosAutoEntrada({ user }) {
       }
     };
 
-    const fetchUserProfile = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        alert("No estás logueado");
-        return;
-      }
-      try {
-        const response = await fetch("https://api.garageia.com/api/auth/profile", {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setUser(data);
-        } else {
-          if (response.status === 401) {
-            localStorage.removeItem("token");
-            setUser(null);
-            // Aquí podés navegar a login si usás react-router
-            // navigate("/login");
-            alert("Sesión expirada, por favor logueate de nuevo.");
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    };
-
     fetchPrecios();
     fetchTiposVehiculo();
-    fetchUserProfile();
   }, []);
 
   const normalizar = (texto) => texto.toLowerCase();
 
   const handleEntrada = async () => {
-    console.log("Usuario recibido en DatosAutoEntrada:", user); // <-- log del user
-
     if (!user) {
       alert("No estás logueado");
       return;
     }
 
-    console.log("Nombre del operador para enviar:", user.nombre);
-    
-    const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
+    if (!ticketPendiente) {
+      alert("Primero debes generar un ticket presionando el botón BOT");
+      return;
+    }
 
+    // Validación de patente (3 letras + 3 números o 2 letras + 3 números + 2 letras)
+    const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
     if (!regexCompleto.test(patente)) {
       alert("La patente ingresada no es válida.");
       return;
@@ -94,37 +60,47 @@ function DatosAutoEntrada({ user }) {
     }
 
     const tipoNormalizado = normalizar(tipoVehiculo);
-
     if (!precios[tipoNormalizado]) {
       alert("No se encontraron precios para el tipo de vehículo seleccionado.");
       return;
     }
 
     try {
-      let existeVehiculo = false;
+      // Obtenemos la URL de la foto: si el ticket tiene fotoUrl, la usamos, sino la foto por defecto de la cámara
+      const fotoUrl = ticketPendiente.fotoUrl
+        ? ticketPendiente.fotoUrl
+        : "http://localhost:5000/camara/sacarfoto/captura.jpg";
 
-      const checkResponse = await fetch(`https://api.garageia.com/api/vehiculos/${patente}`);
-      if (checkResponse.ok) {
-        existeVehiculo = true;
+      // Asociar el ticket al vehículo
+      const resAsociar = await fetch(
+        `http://localhost:5000/api/tickets/${ticketPendiente._id}/asociar`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patente,
+            tipoVehiculo,
+            operadorNombre: user.nombre,
+            fotoUrl, // enviamos fotoUrl al asociar
+          }),
+        }
+      );
+
+      const dataAsociar = await resAsociar.json();
+
+      if (!resAsociar.ok) {
+        throw new Error(dataAsociar.msg || "Error al asociar ticket");
       }
 
-      if (!existeVehiculo) {
-        const vehiculoResponse = await fetch("https://api.garageia.com/api/vehiculos", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patente, tipoVehiculo, abonado: false, operador: user.nombre }),
-        });
+      let existeVehiculo = false;
+      const checkResponse = await fetch(
+        `http://localhost:5000/api/vehiculos/${patente}`
+      );
 
-        const vehiculoData = await vehiculoResponse.json();
-        if (!vehiculoResponse.ok) {
-          throw new Error(vehiculoData.msg || "Error al registrar vehículo");
-        }
-
-        alert("Vehículo creado y entrada registrada.");
-      } else {
-        // Acá mandás el nombre del operador desde user.nombre
+      if (checkResponse.ok) {
+        existeVehiculo = true;
         const entradaResponse = await fetch(
-          `https://api.garageia.com/api/vehiculos/${patente}/registrarEntrada`,
+          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -132,30 +108,52 @@ function DatosAutoEntrada({ user }) {
               operador: user.nombre,
               metodoPago: "Efectivo",
               monto: precios[tipoNormalizado].hora,
+              ticket: ticketPendiente.ticket,
+              entrada: ticketPendiente.creadoEn,
+              fotoUrl, // enviamos fotoUrl también aquí
             }),
           }
         );
 
-        const entradaData = await entradaResponse.json();
         if (!entradaResponse.ok) {
-          throw new Error(entradaData.msg || "Error al registrar entrada");
+          throw new Error("Error al registrar entrada");
         }
+      } else {
+        const vehiculoResponse = await fetch(
+          "http://localhost:5000/api/vehiculos",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patente,
+              tipoVehiculo,
+              abonado: false,
+              operador: user.nombre,
+              ticket: ticketPendiente.ticket,
+              entrada: ticketPendiente.creadoEn,
+              fotoUrl, // y aquí
+            }),
+          }
+        );
 
-        alert("Entrada registrada correctamente.");
+        if (!vehiculoResponse.ok) {
+          throw new Error("Error al registrar vehículo");
+        }
       }
 
+      alert("Entrada registrada correctamente.");
       setPatente("");
       setTipoVehiculo("");
+      onClose();
     } catch (error) {
       console.error("Error:", error.message);
       alert(error.message);
     }
   };
 
+  // Controla que la patente solo acepte formato letras-mayúsculas y números según regex parcial
   const handlePatenteChange = (e) => {
     const valor = e.target.value.toUpperCase();
-
-    // Regex para validar la patente *parcialmente* mientras se escribe:
     const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
 
     if (valor === "" || regexParcial.test(valor)) {
@@ -163,12 +161,25 @@ function DatosAutoEntrada({ user }) {
     }
   };
 
+  // Para mostrar la foto, agregamos timestamp para evitar caché
+  const getFotoUrl = () => {
+    const baseUrl = ticketPendiente?.fotoUrl
+      ? ticketPendiente.fotoUrl
+      : "http://localhost:5000/camara/sacarfoto/captura.jpg";
+    return `${baseUrl}?t=${timestamp}`;
+  };
+
   return (
     <div className="datosAutoEntrada">
       <div className="fotoAutoEntrada">
         <img
-          src="https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
-          alt="Auto"
+          src={getFotoUrl()}
+          alt="Foto auto"
+          className="foto-vehiculo"
+          onError={(e) => {
+            e.target.onerror = null; 
+            e.target.src = "/img/default.jpg";
+          }}
         />
       </div>
 

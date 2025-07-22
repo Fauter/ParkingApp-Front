@@ -28,6 +28,8 @@ function Interfaz() {
   const [modalActivo, setModalActivo] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
+  const [ticketPendiente, setTicketPendiente] = useState(null);
+
   const [recaudado, setRecaudado] = useState('');
   const [enCaja, setEnCaja] = useState('');
   const [confirmandoCaja, setConfirmandoCaja] = useState(false);
@@ -36,6 +38,8 @@ function Interfaz() {
   const [incidente, setIncidente] = useState('');
 
   const [mostrarOverlay, setMostrarOverlay] = useState(false);
+  const [barreraIzqAbierta, setBarreraIzqAbierta] = useState(false);
+  const [barreraDerAbierta, setBarreraDerAbierta] = useState(false);
 
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
@@ -49,7 +53,7 @@ function Interfaz() {
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -103,6 +107,18 @@ function Interfaz() {
     const hora = ahora.toTimeString().slice(0, 5);
     return { fecha, hora };
   };
+  
+
+  const abrirBarreraSalida = () => {
+    console.log('Abriendo barrera de salida');
+    setBarreraDerAbierta(true);
+
+    // Cerrar la barrera después de 10 segundos
+    setTimeout(() => {
+      console.log('Cerrando barrera de salida');
+      setBarreraDerAbierta(false);
+    }, 10000);
+  };
 
   const enviarCierreDeCaja = async () => {
     if (!user) return;
@@ -121,7 +137,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('https://api.garageia.com/api/cierresdecaja', {
+      const res = await fetch('http://localhost:5000/api/cierresdecaja', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,7 +182,7 @@ function Interfaz() {
     };
 
     try {
-      const resCierreParcial = await fetch('https://api.garageia.com/api/cierresdecaja/parcial', {
+      const resCierreParcial = await fetch('http://localhost:5000/api/cierresdecaja/parcial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -187,7 +203,7 @@ function Interfaz() {
         operador: user.nombre,
       };
 
-      const resAlerta = await fetch('https://api.garageia.com/api/alertas/', {
+      const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -221,7 +237,7 @@ function Interfaz() {
     };
 
     try {
-      const res = await fetch('https://api.garageia.com/api/incidentes', {
+      const res = await fetch('http://localhost:5000/api/incidentes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -243,6 +259,72 @@ function Interfaz() {
       alert('Error en la conexión.');
     }
   };
+  
+  const ejecutarBot = async () => {
+    /* 1️⃣ SACAR FOTO */
+    let fotoUrl = null;
+    try {
+      const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto');
+      await resFoto.text(); // Eliminado el alert de confirmación
+      fotoUrl = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
+    } catch (err) {
+      console.error('Error al sacar foto:', err);
+      return;
+    }
+
+    /* 2️⃣ CREAR TICKET */
+    let ticketCreado = null;
+    try {
+      const resTicket = await fetch('http://localhost:5000/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      ticketCreado = await resTicket.json();
+
+      if (fotoUrl) {
+        await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fotoUrl })
+        });
+      }
+
+      setTicketPendiente(ticketCreado.ticket);
+    } catch (err) {
+      console.error('Error al crear ticket:', err);
+      return;
+    }
+
+    /* 3️⃣ IMPRIMIR TICKET */
+    try {
+      const ahora = new Date();
+      const horaMin = ahora.toTimeString().slice(0, 5);
+      const fecha = ahora.toISOString().split('T')[0];
+
+      const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
+      const textoTicket = `${ticketNumFormateado}\nEntrada\nFecha: ${fecha}\nHora: ${horaMin}`;
+
+      await fetch('http://localhost:5000/api/ticket/imprimir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: textoTicket, ticketNumero: ticketNumFormateado }),
+      });
+    } catch (err) {
+      console.error('Error al imprimir ticket:', err);
+    }
+
+    /* 4️⃣ ABRIR BARRERA después de 1.5 segundos */
+    setTimeout(() => {
+      console.log('Abriendo barrera de entrada');
+      setBarreraIzqAbierta(true);
+
+      // Cerrar la barrera después de 10 segundos
+      setTimeout(() => {
+        console.log('Cerrando barrera de entrada');
+        setBarreraIzqAbierta(false);
+      }, 10000);
+    }, 1500);
+  };
 
   return (
     <div className="interfaz">
@@ -253,28 +335,32 @@ function Interfaz() {
         abrirModal={setModalActivo}
         setMostrarOverlay={setMostrarOverlay}
         modalActivo={modalActivo} 
+        onEjecutarBot={ejecutarBot}
+        user={user}
+        ticketPendiente={ticketPendiente}
       />
       <div className="content">
-        {vistaActual === 'operador' && <Operador />}
-        {vistaActual === 'vehiculos' && <VehiculosDentro />}
-        {vistaActual === 'clientes' && (
-          <Clientes onClienteSeleccionado={manejarSeleccionCliente} />
-        )}
-        {vistaActual === 'detalleCliente' && (
-          <DetalleClienteCajero 
-            clienteId={clienteSeleccionado} 
-            volver={volverAClientes} 
+        {vistaActual === 'operador' && (
+          <Operador 
+            ticketPendiente={ticketPendiente} 
+            onAbrirBarreraSalida={abrirBarreraSalida}
           />
         )}
+        {/* Agrega estas líneas para los otros componentes */}
+        {vistaActual === 'vehiculos' && <VehiculosDentro />}
         {vistaActual === 'turnos' && <Turnos />}
         {vistaActual === 'abono' && <Abono />}
-        {mostrarOverlay && (
-          <div
-            className="overlay-submenu"
-            onClick={() => setMostrarOverlay(false)}
+        {vistaActual === 'clientes' && <Clientes onSeleccionarCliente={manejarSeleccionCliente} />}
+        {vistaActual === 'detalleCliente' && clienteSeleccionado && (
+          <DetalleClienteCajero 
+            idCliente={clienteSeleccionado} 
+            onVolver={volverAClientes} 
           />
         )}
-        <PanelDerecho />
+        <PanelDerecho 
+          barreraIzquierdaAbierta={barreraIzqAbierta} 
+          barreraDerechaAbierta={barreraDerAbierta} 
+        />
       </div>
 
       {/* Modal: Cierre de Caja */}

@@ -5,15 +5,16 @@ import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
 import DatosPago from './DatosPago/DatosPago';
 import DatosAutoEntrada from './DatosAutoEntrada/DatosAutoEntrada';
 
-function Operador() {
+function Operador({ ticketPendiente, onAbrirBarreraSalida }) {
   const [vehiculoLocal, setVehiculoLocal] = useState(null);
   const [resetInput, setResetInput] = useState(false);
   const [error, setError] = useState(null);
   const [tarifaCalculada, setTarifaCalculada] = useState(null);
   const [user, setUser] = useState(null);
+  const [timestamp, setTimestamp] = useState(Date.now()); // <- Timestamp para refrescar imagen
   const navigate = useNavigate();
 
-  // ✅ Traer datos del usuario logueado
+  // Traer datos del usuario logueado
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
@@ -24,7 +25,7 @@ function Operador() {
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -51,6 +52,14 @@ function Operador() {
     fetchUser();
   }, [navigate]);
 
+  // Intervalo para actualizar timestamp cada 5 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimestamp(Date.now());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const limpiarVehiculo = () => {
     setVehiculoLocal(null);
     setError(null);
@@ -62,7 +71,7 @@ function Operador() {
     try {
       const patenteMayuscula = patente.toUpperCase();
 
-      const response = await fetch(`https://api.garageia.com/api/vehiculos/${patenteMayuscula}`);
+      const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}`);
       if (!response.ok) {
         throw new Error("Vehículo no encontrado");
       }
@@ -79,7 +88,11 @@ function Operador() {
   return (
     <div className="contenidoCentral">
       <div className="izquierda">
-        <DatosAutoEntrada user={user} />
+        <DatosAutoEntrada 
+          user={user} 
+          ticketPendiente={ticketPendiente} 
+          timestamp={timestamp}
+        />
       </div>
       <div className="derecha">
         <DatosAutoSalida
@@ -96,6 +109,7 @@ function Operador() {
           tarifaCalculada={tarifaCalculada}
           limpiarVehiculo={limpiarVehiculo}
           user={user}
+          onAbrirBarreraSalida={onAbrirBarreraSalida}
         />
       </div>
     </div>

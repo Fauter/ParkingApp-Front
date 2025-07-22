@@ -39,7 +39,7 @@ const ModalVehiculoCajero = ({
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -73,8 +73,8 @@ const ModalVehiculoCajero = ({
       
       try {
         const [tiposRes, preciosRes] = await Promise.all([
-          fetch("https://api.garageia.com/api/tipos-vehiculo"),
-          fetch("https://api.garageia.com/api/precios")
+          fetch("http://localhost:5000/api/tipos-vehiculo"),
+          fetch("http://localhost:5000/api/precios")
         ]);
 
         if (!tiposRes.ok) throw new Error("Error al obtener tipos de vehículo");
@@ -208,7 +208,7 @@ const ModalVehiculoCajero = ({
         tipoTarifa: 'abono'
       };
 
-      const movimientoRes = await fetch('https://api.garageia.com/api/movimientos/registrar', {
+      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -230,7 +230,7 @@ const ModalVehiculoCajero = ({
         patente: patente,
       };
       
-      await fetch('https://api.garageia.com/api/movimientosclientes', {
+      await fetch('http://localhost:5000/api/movimientosclientes', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -277,7 +277,7 @@ const ModalVehiculoCajero = ({
 
     try {
       // Verificar si el vehículo ya existe
-      const vehiculosRes = await fetch("https://api.garageia.com/api/vehiculos");
+      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
 
@@ -285,7 +285,7 @@ const ModalVehiculoCajero = ({
 
       // Crear vehículo si no existe
       if (!vehiculoExistente) {
-        const crearRes = await fetch("https://api.garageia.com/api/vehiculos/sin-entrada", {
+        const crearRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
@@ -338,7 +338,7 @@ const ModalVehiculoCajero = ({
       if (formData.fotoCedulaAzul) abonoFormData.append("fotoCedulaAzul", formData.fotoCedulaAzul);
 
       // Registrar el abono
-      const abonoRes = await fetch("https://api.garageia.com/api/abonos/agregar-abono", {
+      const abonoRes = await fetch("http://localhost:5000/api/abonos/agregar-abono", {
         method: "POST",
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -355,7 +355,7 @@ const ModalVehiculoCajero = ({
       if (cliente?.abonado && formData.tipoVehiculo) {
         const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
         
-        await fetch(`https://api.garageia.com/api/clientes/${cliente._id}/actualizar-precio-abono`, {
+        await fetch(`http://localhost:5000/api/clientes/${cliente._id}/actualizar-precio-abono`, {
           method: "PUT",
           headers: { 
             "Content-Type": "application/json",

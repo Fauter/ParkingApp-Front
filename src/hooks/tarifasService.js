@@ -11,21 +11,21 @@ export function useTarifasData() {
   });
 
   useEffect(() => {
-    fetch("https://api.garageia.com/api/precios", {
+    fetch("http://localhost:5000/api/precios", {
       credentials: 'include',
     })
       .then(res => res.json())
       .then(data => setPrecios(data))
       .catch(() => setPrecios({}));
 
-    fetch("https://api.garageia.com/api/tipos-vehiculo", {
+    fetch("http://localhost:5000/api/tipos-vehiculo", {
       credentials: 'include',
     })
       .then(res => res.json())
       .then(data => setTiposVehiculo(data))
       .catch(() => setTiposVehiculo([]));
 
-    fetch("https://api.garageia.com/api/parametros", {
+    fetch("http://localhost:5000/api/parametros", {
       credentials: 'include',
     })
       .then(res => res.json())
@@ -34,7 +34,7 @@ export function useTarifasData() {
   }, []);
 
   useEffect(() => {
-    fetch("https://api.garageia.com/api/tarifas", {
+    fetch("http://localhost:5000/api/tarifas", {
       credentials: 'include',
     })
       .then(res => res.json())
@@ -57,7 +57,7 @@ export async function calcularTarifaAPI({
   parametros,
 }) {
   try {
-    const response = await fetch("https://api.garageia.com/api/calcular-tarifa", {
+    const response = await fetch("http://localhost:5000/api/calcular-tarifa", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: 'include',

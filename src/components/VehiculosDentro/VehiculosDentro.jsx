@@ -49,7 +49,7 @@ function VehiculosDentro() {
       }
 
       try {
-        const response = await fetch('https://api.garageia.com/api/auth/profile', {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -75,7 +75,7 @@ function VehiculosDentro() {
 
     const cargarDatos = async () => {
       try {
-        const responseVehiculos = await fetch('https://api.garageia.com/api/vehiculos');
+        const responseVehiculos = await fetch('http://localhost:5000/api/vehiculos');
         const dataVehiculos = await responseVehiculos.json();
         const filtrados = dataVehiculos.filter(v => 
           v.estadiaActual && 
@@ -84,7 +84,7 @@ function VehiculosDentro() {
         );
         setVehiculos(filtrados.reverse());
 
-        const responseTipos = await fetch('https://api.garageia.com/api/tipos-vehiculo');
+        const responseTipos = await fetch('http://localhost:5000/api/tipos-vehiculo');
         const dataTipos = await responseTipos.json();
         setTiposVehiculo(dataTipos);
       } catch (err) {
@@ -158,7 +158,7 @@ function VehiculosDentro() {
     };
 
     try {
-      const resAlerta = await fetch('https://api.garageia.com/api/alertas/', {
+      const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,7 +189,7 @@ function VehiculosDentro() {
       const idsNormales = vehiculosChequeados.filter(id => !id.toString().startsWith('temp-'));
       const vehiculosTemporalesAuditados = vehiculosTemporales;
 
-      const response = await fetch('https://api.garageia.com/api/auditorias', {
+      const response = await fetch('http://localhost:5000/api/auditorias', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

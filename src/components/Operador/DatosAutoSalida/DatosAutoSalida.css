@@ -7,13 +7,18 @@
 
 .fotoAutoSalida {
   display: flex;
-  width: 66.5%;
+  width: 463px; 
+  height: 309px; 
   margin-bottom: 15px;
+  overflow: hidden; 
+  background-color: #2a2a38; 
 }
+
 .fotoAutoSalida img {
   width: 100%;
-  height: 100.4%;
+  height: 100%;
   object-fit: cover; 
+  object-position: center; 
 }
 
 .detalleAutoSalida {
