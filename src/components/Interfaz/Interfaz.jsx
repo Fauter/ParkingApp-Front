@@ -125,7 +125,7 @@ function Interfaz() {
     const { fecha, hora } = getFechaHora();
     const totalRecaudado = parseFloat(limpiarNumero(recaudado));
     const dejoEnCaja = parseFloat(limpiarNumero(enCaja));
-    const totalRendido = totalRecaudado - dejoEnCaja;
+    const totalRendido = totalRecaudado + dejoEnCaja;
 
     const data = {
       fecha,
