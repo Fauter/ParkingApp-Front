@@ -390,7 +390,7 @@ function Interfaz() {
             <>
               <p>Total Recaudado: ${formatearVisualmente(recaudado)}</p>
               <p>Dejo en Caja: ${formatearVisualmente(enCaja)}</p>
-              <p>Total Rendido: ${formatearVisualmente(String(parseFloat(limpiarNumero(recaudado)) - parseFloat(limpiarNumero(enCaja))))}</p>
+              <p>Total Rendido: ${formatearVisualmente(String(parseFloat(limpiarNumero(recaudado)) + parseFloat(limpiarNumero(enCaja))))}</p>
               <button className="modal-btn" onClick={() => setConfirmandoCaja(false)}>Modificar</button>
               <button className="modal-btn" onClick={enviarCierreDeCaja}>Confirmar</button>
             </>
