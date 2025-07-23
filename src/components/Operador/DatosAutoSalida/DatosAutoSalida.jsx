@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./DatosAutoSalida.css";
 import { useTarifasData, calcularTarifaAPI } from "../../../hooks/tarifasService";
+import ModalMensaje from "../../ModalMensaje/ModalMensaje";  // ajustá ruta si hace falta
+
+import AutoPlaceHolder from "../../../../public/images/placeholder.png";
 
 function DatosAutoSalida({
   buscarVehiculo,
@@ -19,6 +22,10 @@ function DatosAutoSalida({
   const lastInputTime = useRef(0);
   const inputTimer = useRef(null);
   const isScanning = useRef(false);
+
+  // Estado para modal de mensajes
+  const [modalMensaje, setModalMensaje] = useState("");
+  const [modalTitulo, setModalTitulo] = useState("Atención");
 
   // Limpiar input cuando se recibe el trigger
   useEffect(() => {
@@ -39,17 +46,15 @@ function DatosAutoSalida({
     const handleInput = (e) => {
       const currentTime = Date.now();
       const value = e.target.value;
-      
-      // Si el tiempo entre inputs es muy corto (<100ms) y el valor tiene 10 dígitos
+
       if (currentTime - lastInputTime.current < 100 && value.length === 10 && /^\d+$/.test(value)) {
         clearTimeout(inputTimer.current);
         isScanning.current = true;
         handleTicketScan(value);
       }
-      
+
       lastInputTime.current = currentTime;
-      
-      // También detectar si se pega un valor de 10 dígitos
+
       if (value.length === 10 && /^\d+$/.test(value)) {
         clearTimeout(inputTimer.current);
         isScanning.current = true;
@@ -60,10 +65,10 @@ function DatosAutoSalida({
     };
 
     const inputElement = inputRef.current;
-    inputElement.addEventListener('input', handleInput);
+    inputElement.addEventListener("input", handleInput);
 
     return () => {
-      inputElement.removeEventListener('input', handleInput);
+      inputElement.removeEventListener("input", handleInput);
       clearTimeout(inputTimer.current);
     };
   }, []);
@@ -71,41 +76,39 @@ function DatosAutoSalida({
   // Función para procesar ticket escaneado
   const handleTicketScan = async (ticketNumber) => {
     try {
-      // Convertir a número (elimina ceros a la izquierda)
       const ticketNum = parseInt(ticketNumber, 10);
-      
+
       if (isNaN(ticketNum)) {
-        alert("Ticket inválido");
+        setModalTitulo("Error");
+        setModalMensaje("Ticket inválido");
         isScanning.current = false;
         return;
       }
 
       const response = await fetch(`http://localhost:5000/api/vehiculos/ticket/${ticketNum}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Error:", errorData.msg);
-        alert(`No se encontró vehículo con ticket ${ticketNum}`);
+        setModalTitulo("Error");
+        setModalMensaje(`No se encontró vehículo con ticket ${ticketNum}`);
         isScanning.current = false;
         return;
       }
 
       const data = await response.json();
       await procesarVehiculoEncontrado(data);
-      
-      // Actualizar el input con la patente encontrada
+
       if (data.patente) {
         setInputPatente(data.patente);
-        
-        // Esperar un breve momento para que se actualice el estado
+
         setTimeout(() => {
-          // Simular Enter para activar el cálculo de tarifa
-          const enterEvent = new KeyboardEvent('keydown', {
-            key: 'Enter',
-            code: 'Enter',
+          const enterEvent = new KeyboardEvent("keydown", {
+            key: "Enter",
+            code: "Enter",
             keyCode: 13,
             which: 13,
-            bubbles: true
+            bubbles: true,
           });
           inputRef.current.dispatchEvent(enterEvent);
           isScanning.current = false;
@@ -113,7 +116,8 @@ function DatosAutoSalida({
       }
     } catch (err) {
       console.error("Error al buscar por ticket:", err);
-      alert("Error al procesar el ticket escaneado");
+      setModalTitulo("Error");
+      setModalMensaje("Error al procesar el ticket escaneado");
       isScanning.current = false;
     }
   };
@@ -121,7 +125,8 @@ function DatosAutoSalida({
   // Función común para procesar vehículos encontrados (por patente o ticket)
   const procesarVehiculoEncontrado = async (data) => {
     if (!data.estadiaActual || !data.estadiaActual.entrada) {
-      alert("El vehículo no tiene estadía en curso.");
+      setModalTitulo("Error");
+      setModalMensaje("El vehículo no tiene estadía en curso.");
       return;
     }
 
@@ -129,7 +134,6 @@ function DatosAutoSalida({
     const yaTieneSalida = !!data.estadiaActual.salida;
     const salidaTemporal = new Date().toISOString();
 
-    // Procesar vehículos abonados o con turno
     if (tieneEntrada && !yaTieneSalida) {
       if (data.abonado) {
         await procesarSalidaAbonado(data, salidaTemporal);
@@ -140,7 +144,6 @@ function DatosAutoSalida({
       }
     }
 
-    // Flujo normal para vehículos no abonados
     const actualizado = {
       ...data,
       estadiaActual: {
@@ -173,10 +176,13 @@ function DatosAutoSalida({
 
     if (!resSalida.ok) {
       const errorData = await resSalida.json();
-      throw new Error(errorData.msg || "Error al registrar salida automática");
+      setModalTitulo("Error");
+      setModalMensaje(errorData.msg || "Error al registrar salida automática");
+      return;
     }
 
-    alert(`✅ Vehículo ${vehiculo.patente} (abonado) salió automáticamente.`);
+    setModalTitulo("Éxito");
+    setModalMensaje(`✅ Vehículo ${vehiculo.patente} (abonado) salió automáticamente.`);
     setInputPatente("");
   };
 
@@ -196,7 +202,9 @@ function DatosAutoSalida({
     );
 
     if (!resSalida.ok) {
-      throw new Error("Error al registrar salida automática");
+      setModalTitulo("Error");
+      setModalMensaje("Error al registrar salida automática");
+      return;
     }
 
     const resDesactivarTurno = await fetch(
@@ -208,10 +216,13 @@ function DatosAutoSalida({
     );
 
     if (!resDesactivarTurno.ok) {
-      throw new Error("Error al desactivar turno");
+      setModalTitulo("Error");
+      setModalMensaje("Error al desactivar turno");
+      return;
     }
 
-    alert(`✅ Vehículo ${vehiculo.patente} con turno salió automáticamente.`);
+    setModalTitulo("Éxito");
+    setModalMensaje(`✅ Vehículo ${vehiculo.patente} con turno salió automáticamente.`);
     setInputPatente("");
   };
 
@@ -222,9 +233,7 @@ function DatosAutoSalida({
       if (!patenteBuscada) return;
 
       try {
-        const response = await fetch(
-          `http://localhost:5000/api/vehiculos/${patenteBuscada}`
-        );
+        const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteBuscada}`);
 
         if (!response.ok) {
           const errorData = await response.json();
@@ -235,7 +244,8 @@ function DatosAutoSalida({
         await procesarVehiculoEncontrado(data);
       } catch (err) {
         console.error("Error en la operación:", err);
-        alert(err.message || "Error al procesar la salida.");
+        setModalTitulo("Error");
+        setModalMensaje(err.message || "Error al procesar la salida.");
       }
     }
   };
@@ -388,59 +398,68 @@ function DatosAutoSalida({
     : null;
 
   return (
-    <div className="datosAutoSalida">
-      <div className="fotoAutoSalida">
-        <img
-          src={
-            vehiculoLocal?.estadiaActual?.fotoUrl 
-              ? `http://localhost:5000${vehiculoLocal.estadiaActual.fotoUrl}`
-              : "https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500"
-          }
-          alt="Auto"
-          className="foto-vehiculo"
-          onError={(e) => {
-            e.target.onerror = null; 
-            e.target.src = "https://images.pexels.com/photos/452099/pexels-photo-452099.jpeg?auto=compress&cs=tinysrgb&dpr=1&w=500";
-          }}
-        />
-      </div>
-
-      <div className="detalleAutoSalida">
-        <div className="patenteYTipo">
-          <div className="patente">
-            <input
-              ref={inputRef}
-              type="text"
-              className="input-patente"
-              placeholder="Ingresá la patente o escaneá el ticket"
-              value={inputPatente}
-              onChange={(e) => setInputPatente(e.target.value.toUpperCase())}
-              onKeyDown={handleKeyDown}
-              autoFocus
-            />
-          </div>
-          <div className="tipoVehiculo">
-            {vehiculoLocal?.tipoVehiculo
-              ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() +
-                vehiculoLocal.tipoVehiculo.slice(1)
-              : "Sin datos"}
-          </div>
+    <>
+      <div className="datosAutoSalida">
+        <div className="fotoAutoSalida">
+          <img
+            src={
+              vehiculoLocal?.estadiaActual?.fotoUrl
+                ? `http://localhost:5000${vehiculoLocal.estadiaActual.fotoUrl}`
+                : AutoPlaceHolder
+            }
+            alt="Auto"
+            className="foto-vehiculo"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = AutoPlaceHolder;
+            }}
+          />
         </div>
 
-        <div className="horarios">
-          <div className="container">
-            <div>⬆</div>
-            <div>{entradaDate ? entradaDate.toLocaleString() : "Sin Datos"}</div>
+        <div className="detalleAutoSalida">
+          <div className="patenteYTipo">
+            <div className="patente">
+              <input
+                ref={inputRef}
+                type="text"
+                className="input-patente"
+                placeholder="Ingresá la patente o escaneá el ticket"
+                value={inputPatente}
+                onChange={(e) => setInputPatente(e.target.value.toUpperCase())}
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
+            </div>
+            <div className="tipoVehiculo">
+              {vehiculoLocal?.tipoVehiculo
+                ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() +
+                  vehiculoLocal.tipoVehiculo.slice(1)
+                : "Sin datos"}
+            </div>
           </div>
-          <div className="container">
-            <div>⬇</div>
-            <div>{salidaDate ? salidaDate.toLocaleString() : "Sin Datos"}</div>
-          </div>
-        </div>
 
-        {error && <div className="error">{error}</div>}
+          <div className="horarios">
+            <div className="container">
+              <div>⬆</div>
+              <div>{entradaDate ? entradaDate.toLocaleString() : "Sin Datos"}</div>
+            </div>
+            <div className="container">
+              <div>⬇</div>
+              <div>{salidaDate ? salidaDate.toLocaleString() : "Sin Datos"}</div>
+            </div>
+          </div>
+
+          {error && <div className="error">{error}</div>}
+        </div>
       </div>
-    </div>
+
+      {/* Modal para mostrar mensajes */}
+      <ModalMensaje
+        titulo={modalTitulo}
+        mensaje={modalMensaje}
+        onClose={() => setModalMensaje("")}
+      />
+    </>
   );
 }
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './Clientes.css';
 
-function Clientes({ onClienteSeleccionado }) {
+function Clientes({ onSeleccionarCliente }) {
   const [clientes, setClientes] = useState([]);
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState('');
@@ -39,8 +39,8 @@ function Clientes({ onClienteSeleccionado }) {
   );
 
   const handleRowClick = (clienteId) => {
-    console.log('ID del cliente a buscar:', clienteId); // Para depuración
-    onClienteSeleccionado(clienteId);
+    console.log('ID del cliente a buscar:', clienteId);
+    onSeleccionarCliente(clienteId);
   };
 
   return (

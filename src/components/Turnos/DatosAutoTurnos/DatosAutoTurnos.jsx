@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import './DatosAutoTurnos.css';
+import ModalMensaje from '../../ModalMensaje/ModalMensaje'; // ✅ Importar modal
 
 const DatosAutoTurnos = ({ user }) => {
   const [turnos, setTurnos] = useState([]);
@@ -8,8 +9,8 @@ const DatosAutoTurnos = ({ user }) => {
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [factura, setFactura] = useState('CC');
   const [precio, setPrecio] = useState(0);
+  const [mensajeModal, setMensajeModal] = useState(""); // ✅ Estado para mensaje
 
-  // Cargar las tarifas tipo "turno" al montar el componente
   useEffect(() => {
     fetch('http://localhost:5000/api/tarifas/')
       .then(res => res.json())
@@ -17,62 +18,61 @@ const DatosAutoTurnos = ({ user }) => {
         const turnosFiltrados = data.filter(t => t.tipo === 'turno');
         setTurnos(turnosFiltrados);
       })
-      .catch(err => console.error('Error al cargar los turnos:', err));
+      .catch(err => {
+        console.error('Error al cargar los turnos:', err);
+        setMensajeModal('Error al cargar los turnos.');
+      });
   }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!patente || !turnoSeleccionado) {
-      alert('Completá la patente y seleccioná un turno.');
+      setMensajeModal('Completá la patente y seleccioná un turno.');
       return;
     }
 
     const turnoData = turnos.find(t => t._id === turnoSeleccionado);
     if (!turnoData) {
-      alert('Error interno: turno no encontrado.');
+      setMensajeModal('Error interno: turno no encontrado.');
       return;
     }
 
-    // Obtener tipoVehiculo desde API vehículos
     let tipoVehiculo;
     try {
       const resVehiculo = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
       if (!resVehiculo.ok) {
-        alert('Vehículo no encontrado');
+        setMensajeModal('Vehículo no encontrado');
         return;
       }
       const dataVehiculo = await resVehiculo.json();
       tipoVehiculo = dataVehiculo.tipoVehiculo;
       if (!tipoVehiculo) {
-        alert('Tipo de vehículo no definido');
+        setMensajeModal('Tipo de vehículo no definido');
         return;
       }
     } catch (err) {
-      alert('Error al obtener datos del vehículo.');
+      setMensajeModal('Error al obtener datos del vehículo.');
       return;
     }
 
-    // Calcular duración total en horas y fecha fin
     const duracionHoras = (turnoData.dias || 0) * 24 + (turnoData.horas || 0) + ((turnoData.minutos || 0) / 60);
     const ahora = new Date();
     const fin = new Date(ahora);
     fin.setMinutes(fin.getMinutes() + ((turnoData.dias || 0) * 1440) + ((turnoData.horas || 0) * 60) + (turnoData.minutos || 0));
 
     try {
-      // Obtener precios para mostrar/verificar (opcional)
       const resPrecio = await fetch('http://localhost:5000/api/precios/');
       const precios = await resPrecio.json();
 
       const nombreTarifa = turnoData.nombre.toLowerCase().trim();
       const precioVehiculo = precios[tipoVehiculo]?.[nombreTarifa];
       if (precioVehiculo === undefined) {
-        alert(`No se encontró un precio para "${turnoData.nombre}" y vehículo tipo "${tipoVehiculo}"`);
+        setMensajeModal(`No se encontró un precio para "${turnoData.nombre}" y vehículo tipo "${tipoVehiculo}"`);
         return;
       }
       setPrecio(precioVehiculo);
 
-      // Preparar el payload para backend (Turno)
       const payload = {
         patente,
         metodoPago,
@@ -82,7 +82,6 @@ const DatosAutoTurnos = ({ user }) => {
         nombreTarifa
       };
 
-      // Crear el turno
       const res = await fetch('http://localhost:5000/api/turnos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +91,6 @@ const DatosAutoTurnos = ({ user }) => {
       const data = await res.json();
 
       if (res.ok) {
-        // Una vez creado el turno, crear movimiento
         const datosMovimiento = {
           patente,
           descripcion: `Pago por Turno (${turnoData.nombre})`,
@@ -112,19 +110,19 @@ const DatosAutoTurnos = ({ user }) => {
 
         if (!resMovimiento.ok) {
           const errorMov = await resMovimiento.json();
-          alert('Turno registrado, pero error al crear movimiento: ' + (errorMov.error || JSON.stringify(errorMov)));
+          setMensajeModal('Turno registrado, pero error al crear movimiento: ' + (errorMov.error || JSON.stringify(errorMov)));
           return;
         }
 
-        alert('Turno y movimiento registrados correctamente');
+        setMensajeModal('Turno y movimiento registrados correctamente');
         setPatente('');
         setTurnoSeleccionado('');
       } else {
-        alert('Error del servidor: ' + (data.error || JSON.stringify(data)));
+        setMensajeModal('Error del servidor: ' + (data.error || JSON.stringify(data)));
       }
 
     } catch (err) {
-      alert('Error al consultar precios o registrar turno.');
+      setMensajeModal('Error al consultar precios o registrar turno.');
       console.error(err);
     }
   };
@@ -194,6 +192,13 @@ const DatosAutoTurnos = ({ user }) => {
 
         <button className="registrarTurno" type="submit">Registrar Turno</button>
       </form>
+
+      {/* ✅ Modal de mensaje */}
+      <ModalMensaje 
+        titulo="Aviso"
+        mensaje={mensajeModal}
+        onClose={() => setMensajeModal("")}
+      />
     </div>
   );
 };

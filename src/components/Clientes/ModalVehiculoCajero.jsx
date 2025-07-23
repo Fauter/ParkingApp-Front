@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ModalVehiculoCajero.css";
+import ModalMensaje from "../ModalMensaje/ModalMensaje";
 
 const ModalVehiculoCajero = ({
   visible,
@@ -24,6 +25,7 @@ const ModalVehiculoCajero = ({
     factura: "",
   });
   const [errorMessage, setErrorMessage] = useState("");
+  const [mensajeModal, setMensajeModal] = useState(null);
   const navigate = useNavigate();
 
   const metodosPago = ["Efectivo", "Débito", "Crédito", "QR"];
@@ -149,7 +151,6 @@ const ModalVehiculoCajero = ({
         [name]: value,
       }));
       
-      // Verificar diferencia solo cuando cambia el tipo de vehículo
       if (name === "tipoVehiculo") {
         verificarDiferencia(value);
       }
@@ -196,7 +197,6 @@ const ModalVehiculoCajero = ({
 
   const registrarMovimientosDiferencia = async (patente, diferencia) => {
     try {
-      // Registrar movimiento general
       const movimientoData = {
         patente,
         operador: user.nombre,
@@ -219,7 +219,6 @@ const ModalVehiculoCajero = ({
 
       if (!movimientoRes.ok) throw new Error('Error al registrar movimiento');
 
-      // Registrar movimiento del cliente
       const movimientoClienteData = {
         nombreApellido: cliente.nombreApellido,
         email: cliente.email || '',
@@ -249,7 +248,6 @@ const ModalVehiculoCajero = ({
     e.preventDefault();
     if (isSubmitting) return;
 
-    // Validaciones iniciales
     if (!user || !user.nombre) {
       setErrorMessage("No se pudo verificar el usuario. Por favor, inicie sesión nuevamente.");
       return;
@@ -276,14 +274,12 @@ const ModalVehiculoCajero = ({
     setErrorMessage("");
 
     try {
-      // Verificar si el vehículo ya existe
       const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
 
       const vehiculoExistente = vehiculos.find(v => v.patente.toUpperCase() === patente);
 
-      // Crear vehículo si no existe
       if (!vehiculoExistente) {
         const crearRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
           method: "POST",
@@ -303,10 +299,8 @@ const ModalVehiculoCajero = ({
         }
       }
 
-      // Preparar datos para el abono
       const abonoFormData = new FormData();
       
-      // Datos del cliente
       abonoFormData.append("clienteId", cliente._id);
       abonoFormData.append("nombreApellido", cliente?.nombreApellido || "");
       abonoFormData.append("domicilio", cliente?.domicilio || "");
@@ -318,7 +312,6 @@ const ModalVehiculoCajero = ({
       abonoFormData.append("email", cliente?.email || "");
       abonoFormData.append("dniCuitCuil", cliente?.dniCuitCuil || "");
       
-      // Datos del vehículo
       abonoFormData.append("patente", patente);
       abonoFormData.append("marca", formData.marca || "");
       abonoFormData.append("modelo", formData.modelo || "");
@@ -327,17 +320,14 @@ const ModalVehiculoCajero = ({
       abonoFormData.append("companiaSeguro", formData.companiaSeguro || "");
       abonoFormData.append("tipoVehiculo", formData.tipoVehiculo || "");
       
-      // Datos de pago
       abonoFormData.append("metodoPago", formData.metodoPago || "");
       abonoFormData.append("factura", formData.factura || "Sin factura");
       
-      // Archivos
       if (formData.fotoSeguro) abonoFormData.append("fotoSeguro", formData.fotoSeguro);
       if (formData.fotoDNI) abonoFormData.append("fotoDNI", formData.fotoDNI);
       if (formData.fotoCedulaVerde) abonoFormData.append("fotoCedulaVerde", formData.fotoCedulaVerde);
       if (formData.fotoCedulaAzul) abonoFormData.append("fotoCedulaAzul", formData.fotoCedulaAzul);
 
-      // Registrar el abono
       const abonoRes = await fetch("http://localhost:5000/api/abonos/agregar-abono", {
         method: "POST",
         headers: {
@@ -351,7 +341,6 @@ const ModalVehiculoCajero = ({
         throw new Error(errorData.message || "Error al registrar abono");
       }
 
-      // Actualizar precioAbono del cliente si es necesario
       if (cliente?.abonado && formData.tipoVehiculo) {
         const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
         
@@ -368,7 +357,6 @@ const ModalVehiculoCajero = ({
         });
       }
 
-      // Verificar y registrar diferencia si corresponde
       const tipoActual = cliente?.precioAbono;
       const nuevoTipo = formData.tipoVehiculo;
       
@@ -385,7 +373,6 @@ const ModalVehiculoCajero = ({
         }
       }
 
-      // Éxito - resetear formulario
       setFormData({
         patente: "",
         marca: "",
@@ -407,9 +394,15 @@ const ModalVehiculoCajero = ({
         factura: "",
       });
 
-      alert("¡Abono registrado correctamente!");
-      if (onGuardarExitoso) onGuardarExitoso();
-      onClose();
+      setMensajeModal({
+        titulo: "Éxito",
+        mensaje: "¡Abono registrado correctamente!",
+        onClose: () => {
+          setMensajeModal(null);
+          if (onGuardarExitoso) onGuardarExitoso();
+          onClose();
+        }
+      });
     } catch (err) {
       console.error("Error en handleSubmit:", err);
       setErrorMessage(err.message || "Error al registrar el abono. Por favor, intente nuevamente.");
@@ -621,6 +614,15 @@ const ModalVehiculoCajero = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Mensaje */}
+      {mensajeModal && (
+        <ModalMensaje
+          titulo={mensajeModal.titulo}
+          mensaje={mensajeModal.mensaje}
+          onClose={mensajeModal.onClose}
+        />
       )}
     </>
   );

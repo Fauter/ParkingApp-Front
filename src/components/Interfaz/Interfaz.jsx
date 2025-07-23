@@ -11,6 +11,7 @@ import Background from '../Background/Background';
 import Abono from '../Abono/Abono';
 import Turnos from '../Turnos/Turnos';
 import ModalHeader from './Header/ModalHeader/ModalHeader';
+import ModalMensaje from '../ModalMensaje/ModalMensaje';
 
 // Formatea el número con puntos cada 3 cifras
 const formatearVisualmente = (valor) => {
@@ -27,62 +28,65 @@ function Interfaz() {
   const [vistaActual, setVistaActual] = useState('operador');
   const [modalActivo, setModalActivo] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
-
   const [ticketPendiente, setTicketPendiente] = useState(null);
-
   const [recaudado, setRecaudado] = useState('');
   const [enCaja, setEnCaja] = useState('');
   const [confirmandoCaja, setConfirmandoCaja] = useState(false);
-
   const [montoParcial, setMontoParcial] = useState('');
   const [incidente, setIncidente] = useState('');
-
   const [mostrarOverlay, setMostrarOverlay] = useState(false);
   const [barreraIzqAbierta, setBarreraIzqAbierta] = useState(false);
   const [barreraDerAbierta, setBarreraDerAbierta] = useState(false);
-
   const [user, setUser] = useState(null);
+  const [mensajeModal, setMensajeModal] = useState(null);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchUser = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include' // Añade esto para manejar cookies
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch user');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
       }
 
-      const data = await response.json();
-      setUser(data);
-      return data; // Devuelve el usuario para usarlo en otros componentes
-    } catch (error) {
-      console.error('Error al obtener usuario:', error);
-      localStorage.removeItem('token');
-      navigate('/login');
-      return null;
-    }
-  };
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/profile', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch user');
+        }
+
+        const data = await response.json();
+        setUser(data);
+        return data;
+      } catch (error) {
+        console.error('Error al obtener usuario:', error);
+        localStorage.removeItem('token');
+        navigate('/login');
+        return null;
+      }
+    };
 
     fetchUser();
   }, [navigate]);
 
   const manejarSeleccionCliente = (idCliente) => {
+    console.log('ID recibido en Interfaz:', idCliente);
     setClienteSeleccionado(idCliente);
     setVistaActual('detalleCliente');
+  };
+
+  const forzarLimpiarTicket = () => {
+    setTicketPendiente(null);
+    setTimestamp(Date.now());
   };
 
   const volverAClientes = () => {
@@ -111,13 +115,11 @@ function Interfaz() {
     const hora = ahora.toTimeString().slice(0, 5);
     return { fecha, hora };
   };
-  
 
   const abrirBarreraSalida = () => {
     console.log('Abriendo barrera de salida');
     setBarreraDerAbierta(true);
 
-    // Cerrar la barrera después de 10 segundos
     setTimeout(() => {
       console.log('Cerrando barrera de salida');
       setBarreraDerAbierta(false);
@@ -155,20 +157,38 @@ function Interfaz() {
       if (res.ok) {
         localStorage.removeItem('token');
         if (localStorage.getItem('token')) {
-          alert('No se pudo desloguear, no se realizó el cierre de caja.');
+          setMensajeModal({
+            titulo: 'Error',
+            mensaje: 'No se pudo desloguear, no se realizó el cierre de caja.',
+            onClose: () => setMensajeModal(null)
+          });
           return;
         }
 
-        alert('¡Caja rendida correctamente! Has sido deslogueado.');
-        cerrarModal();
-        navigate('/login');
+        setMensajeModal({
+          titulo: 'Éxito',
+          mensaje: '¡Caja rendida correctamente! Has sido deslogueado.',
+          onClose: () => {
+            setMensajeModal(null);
+            cerrarModal();
+            navigate('/login');
+          }
+        });
       } else {
         console.error('Error al rendir caja:', content);
-        alert('Error al rendir caja: ' + (content.message || JSON.stringify(content)));
+        setMensajeModal({
+          titulo: 'Error',
+          mensaje: 'Error al rendir caja: ' + (content.message || JSON.stringify(content)),
+          onClose: () => setMensajeModal(null)
+        });
       }
     } catch (err) {
       console.error(err);
-      alert('Error en la conexión.');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: 'Error en la conexión.',
+        onClose: () => setMensajeModal(null)
+      });
     }
   };
 
@@ -196,7 +216,11 @@ function Interfaz() {
       });
 
       if (!resCierreParcial.ok) {
-        alert('Error al registrar cierre parcial.');
+        setMensajeModal({
+          titulo: 'Error',
+          mensaje: 'Error al registrar cierre parcial.',
+          onClose: () => setMensajeModal(null)
+        });
         return;
       }
 
@@ -217,15 +241,29 @@ function Interfaz() {
       });
 
       if (!resAlerta.ok) {
-        alert('Error al crear la alerta del cierre parcial.');
+        setMensajeModal({
+          titulo: 'Error',
+          mensaje: 'Error al crear la alerta del cierre parcial.',
+          onClose: () => setMensajeModal(null)
+        });
         return;
       }
 
-      alert('Cierre parcial registrado y alerta creada.');
-      cerrarModal();
+      setMensajeModal({
+        titulo: 'Éxito',
+        mensaje: 'Cierre parcial registrado y alerta creada.',
+        onClose: () => {
+          setMensajeModal(null);
+          cerrarModal();
+        }
+      });
     } catch (err) {
       console.error(err);
-      alert('Error en la conexión.');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: 'Error en la conexión.',
+        onClose: () => setMensajeModal(null)
+      });
     }
   };
 
@@ -252,15 +290,29 @@ function Interfaz() {
 
       const content = await res.json();
       if (res.ok) {
-        alert('Incidente registrado.');
-        cerrarModal();
+        setMensajeModal({
+          titulo: 'Éxito',
+          mensaje: 'Incidente registrado.',
+          onClose: () => {
+            setMensajeModal(null);
+            cerrarModal();
+          }
+        });
       } else {
         console.error('Error al registrar incidente:', content);
-        alert('Error al registrar incidente: ' + (content.message || JSON.stringify(content)));
+        setMensajeModal({
+          titulo: 'Error',
+          mensaje: 'Error al registrar incidente: ' + (content.message || JSON.stringify(content)),
+          onClose: () => setMensajeModal(null)
+        });
       }
     } catch (err) {
       console.error(err);
-      alert('Error en la conexión.');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: 'Error en la conexión.',
+        onClose: () => setMensajeModal(null)
+      });
     }
   };
   
@@ -269,7 +321,7 @@ function Interfaz() {
     let fotoUrl = null;
     try {
       const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto');
-      await resFoto.text(); // Eliminado el alert de confirmación
+      await resFoto.text();
       fotoUrl = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
     } catch (err) {
       console.error('Error al sacar foto:', err);
@@ -322,7 +374,6 @@ function Interfaz() {
       console.log('Abriendo barrera de entrada');
       setBarreraIzqAbierta(true);
 
-      // Cerrar la barrera después de 10 segundos
       setTimeout(() => {
         console.log('Cerrando barrera de entrada');
         setBarreraIzqAbierta(false);
@@ -342,22 +393,23 @@ function Interfaz() {
         onEjecutarBot={ejecutarBot}
         user={user}
         ticketPendiente={ticketPendiente}
+        setTicketPendiente={setTicketPendiente}
       />
       <div className="content">
         {vistaActual === 'operador' && (
           <Operador 
             ticketPendiente={ticketPendiente} 
             onAbrirBarreraSalida={abrirBarreraSalida}
+            setTicketPendiente={forzarLimpiarTicket}
           />
         )}
-        {/* Agrega estas líneas para los otros componentes */}
         {vistaActual === 'vehiculos' && <VehiculosDentro />}
         {vistaActual === 'turnos' && <Turnos />}
         {vistaActual === 'abono' && <Abono />}
         {vistaActual === 'clientes' && <Clientes onSeleccionarCliente={manejarSeleccionCliente} />}
         {vistaActual === 'detalleCliente' && clienteSeleccionado && (
           <DetalleClienteCajero 
-            idCliente={clienteSeleccionado} 
+            clienteId={clienteSeleccionado} 
             onVolver={volverAClientes} 
           />
         )}
@@ -431,6 +483,15 @@ function Interfaz() {
           />
           <button className="modal-btn" onClick={enviarIncidente}>Enviar</button>
         </ModalHeader>
+      )}
+
+      {/* Modal de Mensajes */}
+      {mensajeModal && (
+        <ModalMensaje
+          titulo={mensajeModal.titulo}
+          mensaje={mensajeModal.mensaje}
+          onClose={mensajeModal.onClose}
+        />
       )}
     </div>
   );

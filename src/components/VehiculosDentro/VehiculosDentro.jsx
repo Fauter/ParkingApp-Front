@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FiPlus } from 'react-icons/fi';
 import './VehiculosDentro.css';
 import { useNavigate } from 'react-router-dom';
+import ModalMensaje from '../ModalMensaje/ModalMensaje'; 
 
 function ModalAudit({ titulo, onClose, children }) {
   return (
@@ -36,8 +37,9 @@ function VehiculosDentro() {
     tipoVehiculo: 'auto'
   });
   const [user, setUser] = useState(null);
-  const navigate = useNavigate();
+  const [modalMensaje, setModalMensaje] = useState(''); // ✅ Estado para mensajes
 
+  const navigate = useNavigate();
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
@@ -61,12 +63,10 @@ function VehiculosDentro() {
 
         if (response.ok) {
           setUser(data);
-        } else {
-          if (response.status === 401) {
-            localStorage.removeItem('token');
-            setUser(null);
-            navigate('/login');
-          }
+        } else if (response.status === 401) {
+          localStorage.removeItem('token');
+          setUser(null);
+          navigate('/login');
         }
       } catch (error) {
         console.error('Error fetching user:', error);
@@ -78,9 +78,7 @@ function VehiculosDentro() {
         const responseVehiculos = await fetch('http://localhost:5000/api/vehiculos');
         const dataVehiculos = await responseVehiculos.json();
         const filtrados = dataVehiculos.filter(v => 
-          v.estadiaActual && 
-          v.estadiaActual.entrada && 
-          !v.estadiaActual.salida
+          v.estadiaActual && v.estadiaActual.entrada && !v.estadiaActual.salida
         );
         setVehiculos(filtrados.reverse());
 
@@ -97,9 +95,8 @@ function VehiculosDentro() {
   }, [navigate]);
 
   const normalizar = str => str?.toString().toLowerCase().trim();
-
   const vehiculosCombinados = [...vehiculos, ...vehiculosTemporales];
-  
+
   const vehiculosFiltrados = vehiculosCombinados.filter(v =>
     normalizar(v.patente).includes(normalizar(busqueda))
   );
@@ -120,7 +117,7 @@ function VehiculosDentro() {
 
   const agregarVehiculoTemporal = () => {
     if (!nuevoVehiculo.patente) {
-      alert('La patente es obligatoria');
+      setModalMensaje('La patente es obligatoria');
       return;
     }
 
@@ -135,7 +132,7 @@ function VehiculosDentro() {
 
     setVehiculosTemporales(prev => [...prev, vehiculoTemporal]);
     setVehiculosChequeados(prev => [...prev, vehiculoTemporal._id]);
-    
+
     setNuevoVehiculo({
       patente: '',
       marca: '',
@@ -149,7 +146,7 @@ function VehiculosDentro() {
   const crearAlertaConflicto = async (tipoConflicto) => {
     const fecha = new Date().toISOString().split('T')[0];
     const hora = new Date().toLocaleTimeString();
-    
+
     const dataAlerta = {
       fecha,
       hora,
@@ -177,12 +174,12 @@ function VehiculosDentro() {
 
   const generarAuditoria = async () => {
     if (vehiculosChequeados.length === 0 && vehiculosTemporales.length === 0) {
-      alert('Por favor seleccione al menos un vehículo para auditar o agregue vehículos temporales');
+      setModalMensaje('Por favor seleccione al menos un vehículo para auditar o agregue vehículos temporales');
       return;
     }
 
     setGenerandoAuditoria(true);
-    
+
     try {
       const operador = user?.nombre || 'Operador Desconocido';
 
@@ -211,19 +208,19 @@ function VehiculosDentro() {
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      // Detección de conflictos
+      // Detectar conflictos
       const todosLosVehiculosEnSistema = vehiculos.length;
       const vehiculosNoVerificados = todosLosVehiculosEnSistema - idsNormales.length;
       const hayVehiculosTemporales = vehiculosTemporales.length > 0;
-      
+
       if (vehiculosNoVerificados > 0 && hayVehiculosTemporales) {
-        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados y vehículos temporales.');
+        setModalMensaje('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados y vehículos temporales.');
         await crearAlertaConflicto('Vehículos no verificados y vehículos temporales agregados');
       } else if (vehiculosNoVerificados > 0) {
-        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados.');
+        setModalMensaje('Atención: Auditoría generada con CONFLICTO. Hay vehículos no verificados.');
         await crearAlertaConflicto('Vehículos no verificados');
       } else if (hayVehiculosTemporales) {
-        alert('Atención: Auditoría generada con CONFLICTO. Hay vehículos temporales agregados.');
+        setModalMensaje('Atención: Auditoría generada con CONFLICTO. Hay vehículos temporales agregados.');
         await crearAlertaConflicto('Vehículos temporales agregados');
       }
 
@@ -231,7 +228,7 @@ function VehiculosDentro() {
       setVehiculosTemporales([]);
     } catch (error) {
       console.error('Error:', error);
-      alert('Error al generar el reporte de auditoría');
+      setModalMensaje('Error al generar el reporte de auditoría');
     } finally {
       setGenerandoAuditoria(false);
     }
@@ -318,7 +315,6 @@ function VehiculosDentro() {
               );
             })}
 
-            {/* Filas vacías para completar 10 filas */}
             {Array.from({ length: ITEMS_POR_PAGINA - vehiculosPaginados.length }).map((_, i) => (
               <tr key={`empty-${i}`} className="fila-vacia">
                 <td>-</td>
@@ -416,6 +412,11 @@ function VehiculosDentro() {
             </button>
           </div>
         </ModalAudit>
+      )}
+
+      {/* ✅ ModalMensaje visible si hay mensaje */}
+      {modalMensaje && (
+        <ModalMensaje mensaje={modalMensaje} onClose={() => setModalMensaje('')} />
       )}
     </div>
   );

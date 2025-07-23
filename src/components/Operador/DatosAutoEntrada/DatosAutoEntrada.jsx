@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from "react";
 import "./DatosAutoEntrada.css";
+import ModalMensaje from "../../ModalMensaje/ModalMensaje";
+import AutoPlaceHolder from "../../../../public/images/placeholder.png";
 
-function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
+function DatosAutoEntrada({
+  user,
+  ticketPendiente,
+  onClose,
+  timestamp,
+  setTicketPendiente = () => {},
+}) {
+  // Estados principales
   const [patente, setPatente] = useState("");
   const [tipoVehiculo, setTipoVehiculo] = useState("");
   const [precios, setPrecios] = useState({});
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
+  // Estados para el modal
+  const [modalMensaje, setModalMensaje] = useState("");
+  const [modalTitulo, setModalTitulo] = useState("Atención");
+  const [mostrarModal, setMostrarModal] = useState(false);
+
+  // Foto para mostrar (preview)
+  const [fotoUrl, setFotoUrl] = useState(AutoPlaceHolder);
+
+  // Carga de precios y tipos al montar componente
   useEffect(() => {
     const fetchPrecios = async () => {
       try {
@@ -14,8 +32,8 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
         const data = await response.json();
         setPrecios(data);
       } catch (error) {
+        mostrarMensaje("Error", "No se pudieron cargar los precios.");
         console.error("Error al obtener los precios:", error);
-        alert("No se pudieron cargar los precios.");
       }
     };
 
@@ -25,8 +43,8 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
         const data = await response.json();
         setTiposVehiculoDisponibles(data);
       } catch (error) {
+        mostrarMensaje("Error", "No se pudieron cargar los tipos de vehículo.");
         console.error("Error al obtener los tipos de vehículo:", error);
-        alert("No se pudieron cargar los tipos de vehículo.");
       }
     };
 
@@ -34,44 +52,99 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
     fetchTiposVehiculo();
   }, []);
 
+  // Actualiza la foto cuando cambia ticketPendiente o timestamp
+  useEffect(() => {
+    if (ticketPendiente) {
+      const url = ticketPendiente.fotoUrl
+        ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
+        : `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${timestamp}`;
+      setFotoUrl(url);
+    } else {
+      setFotoUrl(AutoPlaceHolder);
+    }
+  }, [ticketPendiente, timestamp]);
+
+  // Normalizar texto a minuscula para precios
   const normalizar = (texto) => texto.toLowerCase();
 
+  // Eliminar foto temporal en backend
+  const eliminarFotoTemporal = async () => {
+    try {
+      await fetch("http://localhost:5000/api/vehiculos/eliminar-foto-temporal", {
+        method: "DELETE",
+      });
+    } catch (error) {
+      console.error("Error al eliminar foto temporal:", error);
+    }
+  };
+
+  // Mostrar modal con título y mensaje
+  const mostrarMensaje = (titulo, mensaje) => {
+    setModalTitulo(titulo);
+    setModalMensaje(mensaje);
+    setMostrarModal(true);
+  };
+
+  // Función para resetear todo el estado local y también el ticket pendiente vía prop
+  const resetearEstadoCompleto = () => {
+    setPatente("");
+    setTipoVehiculo("");
+    setFotoUrl(AutoPlaceHolder);
+    setTicketPendiente(null); // Reset ticket también, para que el padre se entere
+  };
+
+  // Función que maneja el cierre del modal y resetea estados si fue éxito
+  const handleCerrarModal = () => {
+    setMostrarModal(false);
+    setModalMensaje("");
+
+    if (modalTitulo === "Éxito") {
+      resetearEstadoCompleto();
+      
+      if (typeof onClose === "function") {
+        onClose(); // Esto cerrará el modal y reseteará el ticket
+      }
+      if (typeof setTicketPendiente === "function") {
+        setTicketPendiente(null); // Reset adicional por si acaso
+      }
+    }
+  };
+
+  // Validación y proceso de registrar entrada
   const handleEntrada = async () => {
     if (!user) {
-      alert("No estás logueado");
+      mostrarMensaje("Atención", "No estás logueado.");
       return;
     }
 
     if (!ticketPendiente) {
-      alert("Primero debes generar un ticket presionando el botón BOT");
+      mostrarMensaje("Atención", "Primero debes generar un ticket presionando el botón BOT.");
       return;
     }
 
-    // Validación de patente (3 letras + 3 números o 2 letras + 3 números + 2 letras)
     const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
     if (!regexCompleto.test(patente)) {
-      alert("La patente ingresada no es válida.");
+      mostrarMensaje("Patente inválida", "La patente ingresada no es válida.");
       return;
     }
 
     if (!patente || !tipoVehiculo) {
-      alert("Debe ingresar una patente y seleccionar un tipo de vehículo.");
+      mostrarMensaje("Faltan datos", "Debe ingresar una patente y seleccionar un tipo de vehículo.");
       return;
     }
 
     const tipoNormalizado = normalizar(tipoVehiculo);
     if (!precios[tipoNormalizado]) {
-      alert("No se encontraron precios para el tipo de vehículo seleccionado.");
+      mostrarMensaje("Sin precios", "No se encontraron precios para el tipo de vehículo seleccionado.");
       return;
     }
 
     try {
-      // Obtenemos la URL de la foto: si el ticket tiene fotoUrl, la usamos, sino la foto por defecto de la cámara
-      const fotoUrl = ticketPendiente.fotoUrl
+      const fotoUrlActual = ticketPendiente.fotoUrl
         ? ticketPendiente.fotoUrl
         : "http://localhost:5000/camara/sacarfoto/captura.jpg";
 
-      // Asociar el ticket al vehículo
+      // Asociar ticket con vehículo
       const resAsociar = await fetch(
         `http://localhost:5000/api/tickets/${ticketPendiente._id}/asociar`,
         {
@@ -81,24 +154,19 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
             patente,
             tipoVehiculo,
             operadorNombre: user.nombre,
-            fotoUrl, // enviamos fotoUrl al asociar
+            fotoUrl: fotoUrlActual,
           }),
         }
       );
 
       const dataAsociar = await resAsociar.json();
+      if (!resAsociar.ok) throw new Error(dataAsociar.msg || "Error al asociar ticket");
 
-      if (!resAsociar.ok) {
-        throw new Error(dataAsociar.msg || "Error al asociar ticket");
-      }
-
-      let existeVehiculo = false;
-      const checkResponse = await fetch(
-        `http://localhost:5000/api/vehiculos/${patente}`
-      );
+      // Verificar si el vehículo ya existe
+      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
 
       if (checkResponse.ok) {
-        existeVehiculo = true;
+        // Vehículo existe, registrar entrada
         const entradaResponse = await fetch(
           `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
           {
@@ -110,75 +178,64 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
               monto: precios[tipoNormalizado].hora,
               ticket: ticketPendiente.ticket,
               entrada: ticketPendiente.creadoEn,
-              fotoUrl, // enviamos fotoUrl también aquí
+              fotoUrl: fotoUrlActual,
             }),
           }
         );
-
-        if (!entradaResponse.ok) {
-          throw new Error("Error al registrar entrada");
-        }
+        if (!entradaResponse.ok) throw new Error("Error al registrar entrada");
       } else {
-        const vehiculoResponse = await fetch(
-          "http://localhost:5000/api/vehiculos",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              patente,
-              tipoVehiculo,
-              abonado: false,
-              operador: user.nombre,
-              ticket: ticketPendiente.ticket,
-              entrada: ticketPendiente.creadoEn,
-              fotoUrl, // y aquí
-            }),
-          }
-        );
-
-        if (!vehiculoResponse.ok) {
-          throw new Error("Error al registrar vehículo");
-        }
+        // Vehículo no existe, crear nuevo
+        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patente,
+            tipoVehiculo,
+            abonado: false,
+            operador: user.nombre,
+            ticket: ticketPendiente.ticket,
+            entrada: ticketPendiente.creadoEn,
+            fotoUrl: fotoUrlActual,
+          }),
+        });
+        if (!vehiculoResponse.ok) throw new Error("Error al registrar vehículo");
       }
 
-      alert("Entrada registrada correctamente.");
+      // Eliminar foto temporal
+      await eliminarFotoTemporal();
+
+      // Reseteo local básico acá también, pero el reseteo completo se hará cuando se cierre el modal
       setPatente("");
       setTipoVehiculo("");
-      onClose();
+      setFotoUrl(AutoPlaceHolder);
+
+      // Mostrar éxito (esto abre el modal)
+      mostrarMensaje("Éxito", `Entrada registrada para ${patente}.`);
     } catch (error) {
       console.error("Error:", error.message);
-      alert(error.message);
+      mostrarMensaje("Error", error.message || "Ocurrió un error");
     }
   };
 
-  // Controla que la patente solo acepte formato letras-mayúsculas y números según regex parcial
+  // Control para que la patente sea mayúscula y válido parcialmente
   const handlePatenteChange = (e) => {
     const valor = e.target.value.toUpperCase();
     const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
-
     if (valor === "" || regexParcial.test(valor)) {
       setPatente(valor);
     }
-  };
-
-  // Para mostrar la foto, agregamos timestamp para evitar caché
-  const getFotoUrl = () => {
-    const baseUrl = ticketPendiente?.fotoUrl
-      ? ticketPendiente.fotoUrl
-      : "http://localhost:5000/camara/sacarfoto/captura.jpg";
-    return `${baseUrl}?t=${timestamp}`;
   };
 
   return (
     <div className="datosAutoEntrada">
       <div className="fotoAutoEntrada">
         <img
-          src={getFotoUrl()}
+          src={fotoUrl}
           alt="Foto auto"
           className="foto-vehiculo"
           onError={(e) => {
-            e.target.onerror = null; 
-            e.target.src = "/img/default.jpg";
+            e.target.onerror = null;
+            e.target.src = AutoPlaceHolder;
           }}
         />
       </div>
@@ -214,6 +271,13 @@ function DatosAutoEntrada({ user, ticketPendiente, onClose, timestamp }) {
           Registrar Entrada
         </button>
       </div>
+
+      <ModalMensaje
+        titulo={modalTitulo}
+        mensaje={modalMensaje}
+        onClose={handleCerrarModal}
+        mostrar={mostrarModal}
+      />
     </div>
   );
 }

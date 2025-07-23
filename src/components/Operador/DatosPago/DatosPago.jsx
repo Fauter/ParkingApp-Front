@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
+import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 
 function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAbrirBarreraSalida }) {
   const [metodoPago, setMetodoPago] = useState("Efectivo");
@@ -11,6 +12,9 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
   const [totalConDescuento, setTotalConDescuento] = useState(0);
   const [tarifaAplicada, setTarifaAplicada] = useState(null);
   const [horaSalida, setHoraSalida] = useState(null);
+
+  // 🔔 Modal de mensaje
+  const [mensajeModal, setMensajeModal] = useState(null);
 
   useEffect(() => {
     fetch("http://localhost:5000/api/promos")
@@ -35,7 +39,6 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
     setPromoSeleccionada(promo);
   };
 
-  // Actualizamos costoTotal, horaSalida, tarifaAplicada cuando cambia tarifaCalculada
   useEffect(() => {
     if (tarifaCalculada?.costo != null) {
       setCostoTotal(tarifaCalculada.costo);
@@ -48,7 +51,6 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
     }
   }, [tarifaCalculada]);
 
-  // Cálculo tiempo estadía real entre entrada y salida
   useEffect(() => {
     if (!vehiculoLocal) return;
 
@@ -58,36 +60,25 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
       return;
     }
 
-    // Fecha entrada
     const entrada = new Date(estadia.entrada);
-
-    // Fecha salida: preferimos tarifaCalculada.salida, si no la usamos actual
     const salida = horaSalida ? new Date(horaSalida) : new Date();
-
-    // Calcular diferencia en milisegundos
     const diffMs = salida - entrada;
+
     if (diffMs <= 0) {
       setTiempoEstadiaHoras(0);
       return;
     }
 
-    // Calcular horas, redondeando hacia arriba y mínimo 1
     const horas = Math.max(Math.ceil(diffMs / (1000 * 60 * 60)), 1);
     setTiempoEstadiaHoras(horas);
 
-    // Si hay costo en estadiaActual, actualizar costoTotal para que coincida
     if (estadia.costoTotal != null) {
       setCostoTotal(estadia.costoTotal);
     } else {
       setCostoTotal(0);
     }
 
-    // Tarifa si existe
-    if (estadia.tarifa) {
-      setTarifaAplicada(estadia.tarifa);
-    } else {
-      setTarifaAplicada(null);
-    }
+    setTarifaAplicada(estadia.tarifa || null);
   }, [vehiculoLocal, horaSalida]);
 
   useEffect(() => {
@@ -112,35 +103,30 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
     if (!vehiculoLocal?.patente) return;
 
     const operador = user?.nombre || "Operador Desconocido";
-
-    console.log("💡 TARIFA APLICADA en registrarMovimiento:", tarifaAplicada);
-
-    // Usamos las horas calculadas arriba
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
-    fetch(
-      `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          salida: horaSalida || new Date().toISOString(),
-          costo: totalConDescuento,
-          tarifa: tarifaAplicada || null,
-          tiempoHoras: horas,
-        }),
-      }
-    )
+    fetch(`http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        salida: horaSalida || new Date().toISOString(),
+        costo: totalConDescuento,
+        tarifa: tarifaAplicada || null,
+        tiempoHoras: horas,
+      }),
+    })
       .then((res) => res.json())
       .then((dataSalida) => {
         if (!dataSalida || dataSalida.error) {
           console.error("❌ Error al registrar salida:", dataSalida?.msg || "Error desconocido");
-          alert("Error al registrar salida, intente nuevamente.");
+          setMensajeModal({
+            tipo: "error",
+            titulo: "Error al registrar salida",
+            mensaje: "Intente nuevamente.",
+          });
           return;
         }
-
-        console.log("✅ Salida registrada correctamente:", dataSalida);
 
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
@@ -152,8 +138,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           monto: totalConDescuento,
           tipoTarifa: "hora",
         };
-        
-        console.log("📦 Datos que se mandan al registrar movimiento:", datosMovimiento);
+
         return fetch("http://localhost:5000/api/movimientos/registrar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -168,22 +153,32 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
         if (!dataMovimiento) return;
 
         if (dataMovimiento.movimiento) {
-          alert(`✅ Movimiento registrado para ${vehiculoLocal.patente}`);
+          setMensajeModal({
+            tipo: "exito",
+            titulo: "Movimiento registrado",
+            mensaje: `✅ Movimiento registrado para ${vehiculoLocal.patente}`,
+          });
           limpiarVehiculo();
           resetCamposPago();
-          
-          // Llamar a la función para abrir la barrera de salida
           if (onAbrirBarreraSalida) {
             onAbrirBarreraSalida();
           }
         } else {
           console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
-          alert("Error al registrar movimiento, intente nuevamente.");
+          setMensajeModal({
+            tipo: "error",
+            titulo: "Error al registrar movimiento",
+            mensaje: "Intente nuevamente.",
+          });
         }
       })
       .catch((err) => {
         console.error("❌ Error conectando al backend:", err);
-        alert("Error en la conexión, intente nuevamente.");
+        setMensajeModal({
+          tipo: "error",
+          titulo: "Error de conexión",
+          mensaje: "No se pudo conectar al servidor.",
+        });
       });
   };
 
@@ -198,15 +193,13 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
             onChange={handleSeleccionPromo}
           >
             <option value="none">Seleccioná una Promo</option>
-            {promos &&
-              Array.isArray(promos) &&
-              promos.map((promo) => (
-                <option key={promo._id} value={promo._id}>
-                  {promo.nombre} ({promo.descuento}%)
-                </option>
-              ))}
+            {promos?.map((promo) => (
+              <option key={promo._id} value={promo._id}>
+                {promo.nombre} ({promo.descuento}%)
+              </option>
+            ))}
           </select>
-          <a href="" className="iconContainer">
+          <a href="#" className="iconContainer">
             <img
               src="https://www.svgrepo.com/show/904/photo-camera.svg"
               alt=""
@@ -215,6 +208,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           </a>
         </div>
       </div>
+
       <div className="precioEspecificaciones">
         <div>
           <div className="title">Método de Pago</div>
@@ -230,6 +224,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
             ))}
           </div>
         </div>
+
         <div>
           <div className="title">Factura</div>
           <div className="factura">
@@ -245,9 +240,20 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           </div>
         </div>
       </div>
+
       <button className="btn-salida" onClick={registrarMovimiento}>
         ⬆ SALIDA
       </button>
+
+      {/* Modal */}
+      {mensajeModal && (
+        <ModalMensaje
+          tipo={mensajeModal.tipo}
+          titulo={mensajeModal.titulo}
+          mensaje={mensajeModal.mensaje}
+          onClose={() => setMensajeModal(null)}
+        />
+      )}
     </div>
   );
 }

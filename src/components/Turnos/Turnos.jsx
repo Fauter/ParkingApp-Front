@@ -1,7 +1,7 @@
 import "./Turnos.css";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DatosAutoEntradaAbono from "../Abono/DatosAutoEntradaAbono/DatosAutoEntradaAbono";
+import DatosAutoEntrada from "../Operador/DatosAutoEntrada/DatosAutoEntrada";
 import DatosAutoTurnos from "./DatosAutoTurnos/DatosAutoTurnos"
 
 function Turnos() {
@@ -9,14 +9,21 @@ function Turnos() {
     patente: "",
     tipoVehiculo: "",
   });
+  const [ticketPendiente, setTicketPendiente] = useState(null);
+  const [timestamp, setTimestamp] = useState(Date.now());
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
-  // Traer datos del usuario logueado igual que en Operador.jsx
+  // Intervalo para actualizar timestamp cada 5 segundos
   useEffect(() => {
-    if (user) {
-      console.log(user)
-    }
+    const interval = setInterval(() => {
+      setTimestamp(Date.now());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Traer datos del usuario logueado
+  useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
 
@@ -38,7 +45,6 @@ function Turnos() {
 
         if (response.ok) {
           setUser(data);
-          console.log("User logueado en Turnos:", data); // <-- Aquí está el console log que pediste
         } else {
           if (response.status === 401) {
             localStorage.removeItem('token');
@@ -54,10 +60,25 @@ function Turnos() {
     fetchUser();
   }, [navigate]);
 
+  // Manejar cuando se registra una entrada exitosa
+  const handleEntradaExitosa = (patente, tipoVehiculo) => {
+    setDatosVehiculo({
+      patente,
+      tipoVehiculo
+    });
+    setTicketPendiente(null);
+  };
+
   return (
     <div className="contenidoCentral">
       <div className="izquierdaTurnos">
-        <DatosAutoEntradaAbono setDatosVehiculo={setDatosVehiculo} user={user} />
+        <DatosAutoEntrada 
+          user={user} 
+          ticketPendiente={ticketPendiente} 
+          onClose={handleEntradaExitosa}
+          setTicketPendiente={setTicketPendiente}
+          timestamp={timestamp}
+        />
       </div>
       <div className="derechaTurnos">
         <DatosAutoTurnos datosVehiculo={datosVehiculo} user={user} />

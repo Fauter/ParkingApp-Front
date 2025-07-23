@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FaCamera, FaCheckCircle } from "react-icons/fa";
+import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import './DatosAutoAbono.css';
 
 function DatosAutoAbono({ datosVehiculo, user }) {
@@ -41,6 +42,13 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const [nombreTemporal, setNombreTemporal] = useState("");
   const [sugerencias, setSugerencias] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    icon: null,
+    onClose: null
+  });
 
   useEffect(() => {
     if (datosVehiculo) {
@@ -65,6 +73,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         setPrecios(preciosData);
       } catch (err) {
         console.error("Error al cargar datos:", err);
+        showModal("Error", "Error al cargar datos de vehículos y precios", "error");
       }
     };
     fetchData();
@@ -81,6 +90,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         }
       } catch (err) {
         console.error("Error al cargar clientes:", err);
+        showModal("Error", "Error al cargar lista de clientes", "error");
       }
     };
     fetchClientes();
@@ -97,6 +107,16 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       setSugerencias([]);
     }
   }, [nombreTemporal, clientes]);
+
+  const showModal = (title, message, icon = "info", onClose = null) => {
+    setModal({
+      show: true,
+      title,
+      message,
+      icon,
+      onClose: onClose || (() => setModal(prev => ({...prev, show: false})))
+    });
+  };
 
   const buscarClientePorNombre = async (nombre) => {
     try {
@@ -126,6 +146,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
     } catch (error) {
       console.error("Error buscando cliente:", error);
+      showModal("Error", "Error al buscar cliente", "error");
     }
   };
 
@@ -181,14 +202,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       // Validación patente
       const patente = formData.patente.toUpperCase();
       if (!validarPatente(patente)) {
-        alert('❌ Patente no válida. Debe ser en formato ABC123 (viejo) o AB123CD (nuevo).');
+        showModal("Patente inválida", "Debe ser en formato ABC123 (viejo) o AB123CD (nuevo)", "error");
         setLoading(false);
         return;
       }
 
       // Verificar tipo de vehículo
       if (!formData.tipoVehiculo) {
-        alert('Debe seleccionar tipo de vehículo');
+        showModal("Datos incompletos", "Debe seleccionar tipo de vehículo", "error");
         setLoading(false);
         return;
       }
@@ -221,7 +242,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         try {
           nuevoVehiculoJson = await nuevoVehiculoRes.json();
         } catch {
-          alert('❌ No se pudo interpretar la respuesta al crear el vehículo.');
+          showModal("Error", "No se pudo interpretar la respuesta al crear el vehículo", "error");
           setLoading(false);
           return;
         }
@@ -231,13 +252,13 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           await new Promise(resolve => setTimeout(resolve, 500));
           const retryVehiculoRes = await fetch(`http://localhost:5000/api/vehiculos/${encodeURIComponent(patente)}`);
           if (!retryVehiculoRes.ok) {
-            alert('❌ El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.');
+            showModal("Error", "El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.", "error");
             setLoading(false);
             return;
           }
           const retryVehiculoJson = await retryVehiculoRes.json();
           if (!retryVehiculoJson || !retryVehiculoJson._id) {
-            alert('❌ El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.');
+            showModal("Error", "El vehículo no se creó correctamente y no se encontró en el retry. No se continuará con el proceso.", "error");
             setLoading(false);
             return;
           }
@@ -364,44 +385,44 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(`Error al registrar MovimientoCliente: ${err.message}`);
       }
 
-      alert('✅ Abono registrado correctamente');
-
-      // Resetear formulario
-      setFormData({
-        nombreApellido: "",
-        dniCuitCuil: "",
-        domicilio: "",
-        localidad: "",
-        telefonoParticular: "",
-        telefonoEmergencia: "",
-        domicilioTrabajo: "",
-        telefonoTrabajo: "",
-        email: "",
-        patente: datosVehiculo?.patente || "",
-        tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
-        marca: "",
-        modelo: "",
-        color: "",
-        anio: "",
-        companiaSeguro: "",
-        metodoPago: "Efectivo",
-        factura: "CC",
-        fotoSeguro: null,
-        fotoDNI: null,
-        fotoCedulaVerde: null,
-        fotoCedulaAzul: null,
+      showModal("Éxito", "Abono registrado correctamente", "success", () => {
+        // Resetear formulario
+        setFormData({
+          nombreApellido: "",
+          dniCuitCuil: "",
+          domicilio: "",
+          localidad: "",
+          telefonoParticular: "",
+          telefonoEmergencia: "",
+          domicilioTrabajo: "",
+          telefonoTrabajo: "",
+          email: "",
+          patente: datosVehiculo?.patente || "",
+          tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
+          marca: "",
+          modelo: "",
+          color: "",
+          anio: "",
+          companiaSeguro: "",
+          metodoPago: "Efectivo",
+          factura: "CC",
+          fotoSeguro: null,
+          fotoDNI: null,
+          fotoCedulaVerde: null,
+          fotoCedulaAzul: null,
+        });
+        setFileUploaded({
+          fotoSeguro: false,
+          fotoDNI: false,
+          fotoCedulaVerde: false,
+          fotoCedulaAzul: false,
+        });
+        setNombreTemporal("");
       });
-      setFileUploaded({
-        fotoSeguro: false,
-        fotoDNI: false,
-        fotoCedulaVerde: false,
-        fotoCedulaAzul: false,
-      });
-      setNombreTemporal("");
 
     } catch (error) {
       console.error(error);
-      alert('❌ ' + error.message);
+      showModal("Error", error.message, "error");
     } finally {
       setLoading(false);
     }
@@ -533,6 +554,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           {loading ? 'Guardando...' : 'Guardar Abono'}
         </button>
       </form>
+
+      <ModalMensaje
+        show={modal.show}
+        title={modal.title}
+        message={modal.message}
+        icon={modal.icon}
+        onClose={modal.onClose}
+      />
     </div>
   );
 }

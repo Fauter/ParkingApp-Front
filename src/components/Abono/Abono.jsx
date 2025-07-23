@@ -1,7 +1,7 @@
 import "./Abono.css";
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import DatosAutoEntradaAbono from "./DatosAutoEntradaAbono/DatosAutoEntradaAbono";
+import DatosAutoEntrada from "../Operador/DatosAutoEntrada/DatosAutoEntrada";
 import DatosAutoAbono from "./DatosAutoAbono/DatosAutoAbono";
 
 function Abono() {
@@ -9,9 +9,20 @@ function Abono() {
     patente: "",
     tipoVehiculo: "",
   });
+  const [ticketPendiente, setTicketPendiente] = useState(null);
+  const [timestamp, setTimestamp] = useState(Date.now());
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
+  // Intervalo para actualizar timestamp cada 5 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimestamp(Date.now());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Traer datos del usuario logueado
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem('token');
@@ -49,12 +60,25 @@ function Abono() {
     fetchUser();
   }, [navigate]);
 
-  console.log("👤 User en Abono:", user);
+  // Manejar cuando se registra una entrada exitosa
+  const handleEntradaExitosa = (patente, tipoVehiculo) => {
+    setDatosVehiculo({
+      patente,
+      tipoVehiculo
+    });
+    setTicketPendiente(null);
+  };
 
   return (
     <div className="contenidoCentral">
       <div className="izquierdaAbono">
-        <DatosAutoEntradaAbono setDatosVehiculo={setDatosVehiculo} user={user} />
+        <DatosAutoEntrada
+          user={user} 
+          ticketPendiente={ticketPendiente} 
+          onClose={handleEntradaExitosa}
+          setTicketPendiente={setTicketPendiente}
+          timestamp={timestamp}
+        />
       </div>
       <div className="derechaAbono">
         <DatosAutoAbono datosVehiculo={datosVehiculo} user={user} />

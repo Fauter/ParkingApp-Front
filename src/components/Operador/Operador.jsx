@@ -5,7 +5,7 @@ import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
 import DatosPago from './DatosPago/DatosPago';
 import DatosAutoEntrada from './DatosAutoEntrada/DatosAutoEntrada';
 
-function Operador({ ticketPendiente, onAbrirBarreraSalida }) {
+function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente }) {
   const [vehiculoLocal, setVehiculoLocal] = useState(null);
   const [resetInput, setResetInput] = useState(false);
   const [error, setError] = useState(null);
@@ -130,6 +130,8 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida }) {
         <DatosAutoEntrada 
           user={user} 
           ticketPendiente={ticketPendiente} 
+          onClose={() => setTicketPendiente(null)} 
+          setTicketPendiente={setTicketPendiente} 
           timestamp={timestamp}
         />
       </div>

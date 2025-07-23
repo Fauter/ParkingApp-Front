@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { FaArrowLeft, FaPlus } from 'react-icons/fa';
 import './DetalleClienteCajero.css';
 import ModalVehiculoCajero from './ModalVehiculoCajero';
+import ModalMensaje from '../ModalMensaje/ModalMensaje';
 
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
@@ -16,6 +17,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [factura, setFactura] = useState('CC');
   const [diasRestantes, setDiasRestantes] = useState(0);
+  const [mensajeModal, setMensajeModal] = useState(null);
 
   const [formData, setFormData] = useState({
     patente: '',
@@ -73,12 +75,10 @@ function DetalleClienteCajero({ clienteId, volver }) {
     
     setDiasRestantes(diasRestantesCalculados);
     
-    // Si es el primer día del mes, cobrar el precio completo
     if (diaActual === 1) {
       return precioMensual;
     }
     
-    // Calcular precio proporcional
     return Math.round((precioMensual / totalDiasMes) * diasRestantesCalculados);
   };
 
@@ -86,14 +86,18 @@ function DetalleClienteCajero({ clienteId, volver }) {
     try {
       if (!cliente) return;
 
-      // Verificar si el cliente tiene vehículos registrados
       if (!cliente.abonos || cliente.abonos.length === 0) {
-        alert('El cliente no tiene vehículos registrados. Agregue un vehículo primero.');
-        setModalAgregarVisible(true);
+        setMensajeModal({
+          titulo: 'Atención',
+          mensaje: 'El cliente no tiene vehículos registrados. Agregue un vehículo primero.',
+          onClose: () => {
+            setMensajeModal(null);
+            setModalAgregarVisible(true);
+          }
+        });
         return;
       }
 
-      // Obtener precios actuales
       const response = await fetch('http://localhost:5000/api/precios', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -113,7 +117,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
       
     } catch (error) {
       console.error('Error al calcular precio:', error);
-      alert('Error al calcular precio de renovación');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: 'Error al calcular precio de renovación',
+        onClose: () => setMensajeModal(null)
+      });
     }
   };
 
@@ -122,7 +130,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
       const token = localStorage.getItem('token');
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
       
-      // Registrar movimiento general
       const movimientoData = {
         patente,
         operador,
@@ -145,7 +152,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       if (!movimientoRes.ok) throw new Error('Error al registrar movimiento');
 
-      // Registrar movimiento del cliente
       const movimientoClienteData = {
         nombreApellido: cliente.nombreApellido,
         email: cliente.email || '',
@@ -179,7 +185,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
       const patente = cliente.abonos?.[0]?.patente || 'N/A';
       const descripcion = `Renovación abono ${cliente.precioAbono}`;
       
-      // 1. Renovar el abono en el backend
       const response = await fetch(`http://localhost:5000/api/clientes/${clienteId}/renovar-abono`, {
         method: 'POST',
         headers: {
@@ -202,18 +207,23 @@ function DetalleClienteCajero({ clienteId, volver }) {
         throw new Error(errorData.message || 'Error al renovar abono');
       }
 
-      // 2. Registrar los movimientos
       await registrarMovimientos(patente, precioRenovacion, descripcion);
-
-      // 3. Actualizar los datos del cliente
       await cargarCliente();
       
       setModalRenovarVisible(false);
-      alert('Abono renovado exitosamente');
+      setMensajeModal({
+        titulo: 'Éxito',
+        mensaje: 'Abono renovado exitosamente',
+        onClose: () => setMensajeModal(null)
+      });
       
     } catch (error) {
       console.error('Error al renovar abono:', error);
-      alert(error.message || 'Error al renovar abono');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: error.message || 'Error al renovar abono',
+        onClose: () => setMensajeModal(null)
+      });
     } finally {
       setLoading(false);
     }
@@ -252,14 +262,23 @@ function DetalleClienteCajero({ clienteId, volver }) {
     const campo = camposValidos[tipoFoto];
 
     if (!campo) {
-      alert('Tipo de foto desconocido.');
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: 'Tipo de foto desconocido',
+        onClose: () => setMensajeModal(null)
+      });
       return;
     }
 
     const nombre = abono[campo];
 
     if (!nombre || nombre === '') {
-      return alert('No hay foto disponible');
+      setMensajeModal({
+        titulo: 'Aviso',
+        mensaje: 'No hay foto disponible',
+        onClose: () => setMensajeModal(null)
+      });
+      return;
     }
 
     const nombreDecodificado = decodeURIComponent(nombre);
@@ -506,12 +525,26 @@ function DetalleClienteCajero({ clienteId, volver }) {
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = '';
-                alert('No se pudo cargar la imagen. Por favor intente nuevamente.');
-                cerrarModal();
+                setMensajeModal({
+                  titulo: 'Error',
+                  mensaje: 'No se pudo cargar la imagen. Por favor intente nuevamente.',
+                  onClose: () => {
+                    setMensajeModal(null);
+                    cerrarModal();
+                  }
+                });
               }}
             />
           </div>
         </div>
+      )}
+
+      {mensajeModal && (
+        <ModalMensaje
+          titulo={mensajeModal.titulo}
+          mensaje={mensajeModal.mensaje}
+          onClose={mensajeModal.onClose}
+        />
       )}
     </div>
   );

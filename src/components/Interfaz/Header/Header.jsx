@@ -11,7 +11,8 @@ function Header({
   modalActivo, 
   onEjecutarBot,
   user,
-  ticketPendiente
+  ticketPendiente,
+  setTicketPendiente
 }) {
   const [mostrarSubmenu, setMostrarSubmenu] = useState(false);
   const [mostrarModalEntrada, setMostrarModalEntrada] = useState(false);
@@ -90,7 +91,7 @@ function Header({
   const handleEjecutarBot = async () => {
     await onEjecutarBot(); // Ejecutar lógica del bot
     setMostrarModalEntrada(true); // Mostrar modal
-    setTimestamp(Date.now()); // 👈 Forzar recarga del componente hijo
+    setTimestamp(Date.now()); // Forzar recarga del componente hijo
   };
 
   return (
@@ -172,8 +173,12 @@ function Header({
           <DatosAutoEntrada 
             user={user} 
             ticketPendiente={ticketPendiente} 
-            onClose={() => setMostrarModalEntrada(false)}
-            timestamp={timestamp} // 👈 PASÁS EL TIMESTAMP AL COMPONENTE
+            onClose={() => {
+              setMostrarModalEntrada(false);
+              setTicketPendiente(null); // 👈 Esto reseteará el estado en el padre
+            }}
+            timestamp={timestamp}
+            setTicketPendiente={setTicketPendiente} // 👈 Pasa la función para resetear
           />
         </ModalHeader>
       )}
