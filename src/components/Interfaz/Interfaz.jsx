@@ -102,7 +102,7 @@ function Interfaz() {
   const isCajaValida = () => {
     const rec = parseFloat(limpiarNumero(recaudado));
     const caja = parseFloat(limpiarNumero(enCaja));
-    return !isNaN(rec) && !isNaN(caja) && rec >= 0 && caja >= 0 && rec >= caja;
+    return !isNaN(rec) && !isNaN(caja) && rec >= 0 && caja >= 0;
   };
 
   const getFechaHora = () => {
