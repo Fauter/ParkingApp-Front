@@ -3,14 +3,14 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: './', // Esto es importante para producción
   server: {
     port: 3001,
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true, // Ayuda a debuggear
+    sourcemap: true,
     rollupOptions: {
       output: {
         entryFileNames: `[name].js`,

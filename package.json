@@ -53,6 +53,14 @@
   "build": {
     "appId": "com.yourcompany.parkingapp",
     "productName": "Parking App",
+    "directories": {
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraResources": [],
     "win": {
       "target": "nsis",
       "icon": "public/icon.ico"
