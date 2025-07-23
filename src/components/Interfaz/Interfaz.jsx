@@ -46,32 +46,36 @@ function Interfaz() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        navigate('/login');
-        return;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include' // Añade esto para manejar cookies
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user');
       }
 
-      try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          setUser(data);
-        } else if (response.status === 401) {
-          localStorage.removeItem('token');
-          navigate('/login');
-        }
-      } catch (error) {
-        console.error('Error al obtener usuario:', error);
-      }
-    };
+      const data = await response.json();
+      setUser(data);
+      return data; // Devuelve el usuario para usarlo en otros componentes
+    } catch (error) {
+      console.error('Error al obtener usuario:', error);
+      localStorage.removeItem('token');
+      navigate('/login');
+      return null;
+    }
+  };
 
     fetchUser();
   }, [navigate]);

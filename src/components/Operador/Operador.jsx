@@ -14,6 +14,45 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida }) {
   const [timestamp, setTimestamp] = useState(Date.now()); // <- Timestamp para refrescar imagen
   const navigate = useNavigate();
 
+  const fetchUser = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      navigate('/login');
+      return null;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/profile', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        return data; // Devuelve el usuario directamente
+      }
+      throw new Error(data.message || 'Failed to fetch user');
+    } catch (error) {
+      console.error('Error:', error);
+      localStorage.removeItem('token');
+      navigate('/login');
+      return null;
+    }
+  };
+  useEffect(() => {
+  const loadUser = async () => {
+    const userData = await fetchUser();
+    if (userData) {
+      setUser(userData);
+    }
+  };
+  loadUser();
+}, [navigate]);
+
   // Traer datos del usuario logueado
   useEffect(() => {
     const fetchUser = async () => {

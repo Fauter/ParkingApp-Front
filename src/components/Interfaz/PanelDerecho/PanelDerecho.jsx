@@ -1,6 +1,8 @@
 import React from 'react';
 import './PanelDerecho.css';
 
+import barrierIcon from '../../../../public/images/parking-barrier.svg';
+
 function PanelDerecho({ barreraIzquierdaAbierta, barreraDerechaAbierta }) {
   const getColorFilter = (abierta) =>
     abierta
@@ -12,7 +14,7 @@ function PanelDerecho({ barreraIzquierdaAbierta, barreraDerechaAbierta }) {
       <div className="barreras-superior">
         <div className="barrera-container">
           <img
-            src="/parking-barrier.svg"
+            src={barrierIcon}
             alt="Barrera Entrada"
             className="barrera-img"
             style={{
@@ -25,7 +27,7 @@ function PanelDerecho({ barreraIzquierdaAbierta, barreraDerechaAbierta }) {
 
         <div className="barrera-container">
           <img
-            src="/parking-barrier.svg"
+            src={barrierIcon}
             alt="Barrera Salida"
             className="barrera-img"
             style={{
