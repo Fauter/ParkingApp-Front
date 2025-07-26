@@ -14,7 +14,6 @@ function Config() {
   const [impresoras, setImpresoras] = useState([]);
   const [impresoraDefault, setImpresoraDefault] = useState('');
 
-  // --- Cargar IP cámara desde backend o localStorage
   useEffect(() => {
     async function fetchIp() {
       try {
@@ -36,7 +35,15 @@ function Config() {
         const res = await fetch(`${BASE_URL}/api/impresoras`);
         const data = await res.json();
         setImpresoras(data.impresoras || []);
-        setImpresoraDefault(data.default || '');
+
+        // Importante: asegurar que default esté dentro de las impresoras recibidas
+        if (data.default && data.impresoras.includes(data.default)) {
+          setImpresoraDefault(data.default);
+        } else if (data.impresoras.length > 0) {
+          setImpresoraDefault(data.impresoras[0]);
+        } else {
+          setImpresoraDefault('');
+        }
       } catch (e) {
         console.error('No se pudo obtener lista de impresoras:', e);
       }
@@ -76,7 +83,15 @@ function Config() {
       setFotoUrl(null);
       setModalAbierto(true);
 
-      const response = await fetch(`${BASE_URL}/api/camara/sacarfoto-test`);
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout al sacar foto')), 5000)
+      );
+
+      const response = await Promise.race([
+        fetch(`${BASE_URL}/api/camara/sacarfoto-test`),
+        timeout
+      ]);
+
       if (!response.ok) throw new Error('Error al sacar foto de prueba');
 
       await new Promise(r => setTimeout(r, 2000));
@@ -140,6 +155,7 @@ function Config() {
         <label htmlFor="impresora">Impresora predeterminada:</label>
         <select
           id="impresora"
+          className="promoSelect"
           value={impresoraDefault}
           onChange={(e) => setImpresoraDefault(e.target.value)}
         >
@@ -149,7 +165,7 @@ function Config() {
             </option>
           ))}
         </select>
-        <button onClick={guardarImpresora}>Guardar impresora</button>
+        <button className="guardarTicketeraBtn" onClick={guardarImpresora}>Guardar impresora</button>
       </div>
 
       {modalAbierto && (
