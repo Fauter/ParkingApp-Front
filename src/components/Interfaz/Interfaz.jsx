@@ -12,6 +12,7 @@ import Abono from '../Abono/Abono';
 import Turnos from '../Turnos/Turnos';
 import ModalHeader from './Header/ModalHeader/ModalHeader';
 import ModalMensaje from '../ModalMensaje/ModalMensaje';
+import Config from '../Config/Config';
 
 // Formatea el número con puntos cada 3 cifras
 const formatearVisualmente = (valor) => {
@@ -413,6 +414,7 @@ function Interfaz() {
             onVolver={volverAClientes} 
           />
         )}
+        {vistaActual === 'config' && <Config />}
         <PanelDerecho 
           barreraIzquierdaAbierta={barreraIzqAbierta} 
           barreraDerechaAbierta={barreraDerAbierta} 

@@ -137,6 +137,7 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           factura,
           monto: totalConDescuento,
           tipoTarifa: "hora",
+          ticket: vehiculoLocal.estadiaActual?.ticket || undefined
         };
 
         return fetch("http://localhost:5000/api/movimientos/registrar", {

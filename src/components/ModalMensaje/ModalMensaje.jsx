@@ -1,11 +1,11 @@
 import React from 'react';
-import './ModalMensaje.css'; // usarás el CSS que ya tenés o podés crear uno propio similar
+import './ModalMensaje.css'; // tu CSS actual
 
-function ModalMensaje({ titulo = "Mensaje", mensaje, onClose }) {
+function ModalMensaje({ titulo = "Mensaje", mensaje, onClose, children }) {
   if (!mensaje) return null;
 
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-contenedor" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{titulo}</h2>
@@ -13,6 +13,8 @@ function ModalMensaje({ titulo = "Mensaje", mensaje, onClose }) {
         </div>
         <div className="modal-body">
           <p>{mensaje}</p>
+          {/* Renderizar aquí los children */}
+          {children}
         </div>
       </div>
     </div>

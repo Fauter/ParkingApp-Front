@@ -67,6 +67,8 @@ function Header({
           return boton === 'cierreparcial' ? 'boton-activo' : '';
         case 'incidente':
           return boton === 'incidente' ? 'boton-activo' : '';
+        case 'config':
+          return !mostrarSubmenu && vistaActiva === 'config' ? 'boton-activo' : '';
         default:
           return '';
       }
@@ -156,9 +158,16 @@ function Header({
           href="https://admin.garageia.com/"
           className="menu-button"
           onClick={cerrarSubmenuYOverlay}
-        >
+        >4
           Admin
         </a> */}
+        <button
+          className={getButtonClass('config')}
+          onClick={() => manejarCambioVista('config')}
+          disabled={modalActivo !== null}
+        >
+          Config
+        </button>
         <button
           className="boton-bot"
           onClick={handleEjecutarBot}

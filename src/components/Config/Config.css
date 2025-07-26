@@ -1,0 +1,59 @@
+.config-container {
+  padding: 20px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.config-container h2 {
+  color: white;
+}
+
+.campo-config {
+  margin-top: 15px;
+}
+
+/* Label */
+.campo-config label {
+  display: block;
+  font-weight: bold;
+}
+
+/* Input con estilo oscuro y borde azul grisáceo */
+.campo-config input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background-color: #2a2a38;   /* input fondo */
+  color: white;
+  border: 2px solid #444a5a;  /* borde input */
+  font-size: 16px;
+  box-sizing: border-box;
+  margin: 10px 0px;
+}
+
+/* Botones estilo menu: color de fondo y texto */
+.campo-config button {
+  margin-left: 1rem;           /* espacio entre botones */
+  background-color: #444a5a;   /* fondo botón */
+  color: white;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+  font-size: 16px;
+}
+
+/* Hover para botón */
+.campo-config button:hover:not(:disabled) {
+  background-color: #5a6175;
+  transform: scale(1.05);
+}
+
+/* Disabled */
+.campo-config button:disabled {
+  background-color: #666d81;
+  cursor: not-allowed;
+  transform: none;
+  color: #ccc;
+}
