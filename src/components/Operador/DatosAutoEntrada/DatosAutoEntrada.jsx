@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./DatosAutoEntrada.css";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import AutoPlaceHolder from "../../../../public/images/placeholder.png";
+import AutoPlaceHolderNoimage from "../../../../public/images/placeholderNoimage.png";
 
 function DatosAutoEntrada({
   user,
@@ -54,14 +55,29 @@ function DatosAutoEntrada({
 
   // Actualiza la foto cuando cambia ticketPendiente o timestamp
   useEffect(() => {
-    if (ticketPendiente) {
-      const url = ticketPendiente.fotoUrl
-        ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
-        : `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${timestamp}`;
-      setFotoUrl(url);
-    } else {
-      setFotoUrl(AutoPlaceHolder);
-    }
+    const verificarFoto = async () => {
+      if (ticketPendiente) {
+        const url = ticketPendiente.fotoUrl
+          ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
+          : `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${timestamp}`;
+
+        try {
+          const res = await fetch(url, { method: "HEAD" });
+          if (res.ok) {
+            setFotoUrl(url);
+          } else {
+            setFotoUrl(AutoPlaceHolderNoimage);
+          }
+        } catch (error) {
+          console.warn("No se pudo cargar la foto del vehículo:", error);
+          setFotoUrl(AutoPlaceHolderNoimage);
+        }
+      } else {
+        setFotoUrl(AutoPlaceHolder);
+      }
+    };
+
+    verificarFoto();
   }, [ticketPendiente, timestamp]);
 
   // Normalizar texto a minuscula para precios

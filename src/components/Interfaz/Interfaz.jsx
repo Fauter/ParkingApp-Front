@@ -318,18 +318,33 @@ function Interfaz() {
   };
   
   const ejecutarBot = async () => {
-    /* 1️⃣ SACAR FOTO */
     let fotoUrl = null;
+
+    // 1️⃣ Intentar sacar foto con timeout de 4s
     try {
-      const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto');
-      await resFoto.text();
-      fotoUrl = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // ⏱️ 4 segundos
+
+      const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto', {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const json = await resFoto.json();
+      if (json.exito) {
+        fotoUrl = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
+      } else {
+        console.warn("⚠️ No se pudo capturar foto:", json.mensaje);
+      }
     } catch (err) {
-      console.error('Error al sacar foto:', err);
-      return;
+      if (err.name === 'AbortError') {
+        console.warn("⏰ Timeout al intentar sacar la foto");
+      } else {
+        console.error("❌ Error al sacar foto:", err);
+      }
     }
 
-    /* 2️⃣ CREAR TICKET */
+    // 2️⃣ Crear ticket
     let ticketCreado = null;
     try {
       const resTicket = await fetch('http://localhost:5000/api/tickets', {
@@ -348,17 +363,17 @@ function Interfaz() {
 
       setTicketPendiente(ticketCreado.ticket);
     } catch (err) {
-      console.error('Error al crear ticket:', err);
+      console.error("❌ Error al crear ticket:", err);
       return;
     }
 
-    /* 3️⃣ IMPRIMIR TICKET */
+    // 3️⃣ Imprimir ticket
     try {
       const ahora = new Date();
       const horaMin = ahora.toTimeString().slice(0, 5);
       const fecha = ahora.toISOString().split('T')[0];
-
       const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
+
       const textoTicket = `${ticketNumFormateado}\nEntrada\nFecha: ${fecha}\nHora: ${horaMin}`;
 
       await fetch('http://localhost:5000/api/ticket/imprimir', {
@@ -367,16 +382,16 @@ function Interfaz() {
         body: JSON.stringify({ texto: textoTicket, ticketNumero: ticketNumFormateado }),
       });
     } catch (err) {
-      console.error('Error al imprimir ticket:', err);
+      console.error("❌ Error al imprimir ticket:", err);
     }
 
-    /* 4️⃣ ABRIR BARRERA después de 1.5 segundos */
+    // 4️⃣ Abrir barrera
     setTimeout(() => {
-      console.log('Abriendo barrera de entrada');
+      console.log('✅ Abriendo barrera de entrada');
       setBarreraIzqAbierta(true);
 
       setTimeout(() => {
-        console.log('Cerrando barrera de entrada');
+        console.log('✅ Cerrando barrera de entrada');
         setBarreraIzqAbierta(false);
       }, 10000);
     }, 1500);

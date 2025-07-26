@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./DatosAutoSalida.css";
 import { useTarifasData, calcularTarifaAPI } from "../../../hooks/tarifasService";
-import ModalMensaje from "../../ModalMensaje/ModalMensaje";  // ajustá ruta si hace falta
+import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 
 import AutoPlaceHolder from "../../../../public/images/placeholder.png";
+import AutoPlaceHolderNoimage from "../../../../public/images/placeholderNoimage.png";
 
 function DatosAutoSalida({
   buscarVehiculo,
@@ -27,6 +28,9 @@ function DatosAutoSalida({
   const [modalMensaje, setModalMensaje] = useState("");
   const [modalTitulo, setModalTitulo] = useState("Atención");
 
+  // *** NUEVO estado para controlar la imagen mostrada ***
+  const [imgSrc, setImgSrc] = useState(AutoPlaceHolder);
+
   // Limpiar input cuando se recibe el trigger
   useEffect(() => {
     if (limpiarInputTrigger) {
@@ -38,6 +42,25 @@ function DatosAutoSalida({
   useEffect(() => {
     if (!vehiculoLocal) {
       setInputPatente("");
+    }
+  }, [vehiculoLocal]);
+
+  // *** NUEVO efecto para actualizar imgSrc cuando cambia vehiculoLocal ***
+  useEffect(() => {
+    if (!vehiculoLocal) {
+      // Sin vehículo: imagen por defecto
+      setImgSrc(AutoPlaceHolder);
+      return;
+    }
+
+    const fotoUrl = vehiculoLocal.estadiaActual?.fotoUrl;
+
+    if (fotoUrl) {
+      // Intentamos mostrar la foto real
+      setImgSrc(`http://localhost:5000${fotoUrl}`);
+    } else {
+      // Si no hay foto, mostramos imagen "noimage"
+      setImgSrc(AutoPlaceHolderNoimage);
     }
   }, [vehiculoLocal]);
 
@@ -402,16 +425,12 @@ function DatosAutoSalida({
       <div className="datosAutoSalida">
         <div className="fotoAutoSalida">
           <img
-            src={
-              vehiculoLocal?.estadiaActual?.fotoUrl
-                ? `http://localhost:5000${vehiculoLocal.estadiaActual.fotoUrl}`
-                : AutoPlaceHolder
-            }
+            src={imgSrc}
             alt="Auto"
             className="foto-vehiculo"
             onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = AutoPlaceHolder;
+              e.target.onerror = null; // evita loop infinito
+              setImgSrc(AutoPlaceHolderNoimage);
             }}
           />
         </div>
@@ -453,7 +472,6 @@ function DatosAutoSalida({
         </div>
       </div>
 
-      {/* Modal para mostrar mensajes */}
       <ModalMensaje
         titulo={modalTitulo}
         mensaje={modalMensaje}
