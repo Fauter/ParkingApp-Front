@@ -143,6 +143,14 @@ function VehiculosDentro() {
     setModalAbierto(false);
   };
 
+  const handlePatenteChange = (e) => {
+    const valor = e.target.value.toUpperCase().replace(/\s/g, '');
+    const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
+    if (valor === "" || regexParcial.test(valor)) {
+      setNuevoVehiculo({ ...nuevoVehiculo, patente: valor });
+    }
+  };
+
   const crearAlertaConflicto = async (tipoConflicto) => {
     const fecha = new Date().toISOString().split('T')[0];
     const hora = new Date().toLocaleTimeString();
@@ -285,7 +293,6 @@ function VehiculosDentro() {
               <th>Patente</th>
               <th>Entrada</th>
               <th>Tipo de Vehículo</th>
-              <th>Estado</th>
               <th>Auditoría</th>
             </tr>
           </thead>
@@ -295,13 +302,12 @@ function VehiculosDentro() {
               const entradaValida = fechaEntrada && !isNaN(fechaEntrada);
               const estaChequeado = vehiculosChequeados.includes(v._id);
               const esTemporal = v._id.toString().startsWith('temp-');
-              
+
               return (
                 <tr key={v._id} className={`${estaChequeado ? 'checked' : ''} ${esTemporal ? 'vehiculo-temporal' : ''}`}>
                   <td>{v.patente}</td>
                   <td>{entradaValida ? fechaEntrada.toLocaleString() : 'Entrada no disponible'}</td>
                   <td>{v.tipoVehiculo?.charAt(0).toUpperCase() + v.tipoVehiculo?.slice(1) || 'Desconocido'}</td>
-                  <td>{esTemporal ? 'Temporal' : 'Sistema'}</td>
                   <td>
                     <input 
                       type="checkbox" 
@@ -315,15 +321,13 @@ function VehiculosDentro() {
               );
             })}
 
+            {/* Filas vacías para mantener siempre 10 visibles */}
             {Array.from({ length: ITEMS_POR_PAGINA - vehiculosPaginados.length }).map((_, i) => (
               <tr key={`empty-${i}`} className="fila-vacia">
                 <td>-</td>
                 <td>-</td>
                 <td>-</td>
-                <td>-</td>
-                <td>
-                  <input type="checkbox" disabled />
-                </td>
+                <td></td>
               </tr>
             ))}
           </tbody>
@@ -353,9 +357,10 @@ function VehiculosDentro() {
             <input
               type="text"
               value={nuevoVehiculo.patente}
-              onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, patente: e.target.value})}
-              placeholder="Ej: ABC123"
+              onChange={handlePatenteChange}
+              placeholder="Ej: ABC123 o AB123CD"
               required
+              maxLength={7}
               className="modal-input-audit"
             />
           </div>

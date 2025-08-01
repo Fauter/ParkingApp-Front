@@ -431,7 +431,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">
       <label className="file-visible-label">{label}</label>
-      <label className="file-label">
+      <label className="file-label" onClick={(e) => e.preventDefault()}>
         <div className="icon-wrapper">
           <FaCamera className="icon" />
         </div>
@@ -441,11 +441,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
         ) : (
           <div className="file-text">
-            <span>Seleccionar</span>
-            <span>Imagen</span>
+            <span>Sacar</span>
+            <span>Foto</span>
           </div>
         )}
-        <input type="file" name={name} accept="image/*" onChange={handleChange} />
+        {/* El input está oculto para que no haga nada */}
+        <input type="file" name={name} accept="image/*" onChange={handleChange} style={{ display: "none" }} />
       </label>
     </div>
   );

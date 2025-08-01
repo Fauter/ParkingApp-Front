@@ -30,6 +30,7 @@
     "preview": "vite preview",
     "electron": "wait-on tcp:3001 && electron .",
     "electron-dev": "concurrently -k \"npm run dev\" \"npm run electron\"",
+    "electron-prod": "npm run build && powershell -Command \"$env:NODE_ENV='production'; electron .\"",
     "electron-build": "vite build && electron-builder"
   },
   "eslintConfig": {

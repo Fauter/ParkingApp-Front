@@ -426,7 +426,7 @@ function Interfaz() {
         {vistaActual === 'detalleCliente' && clienteSeleccionado && (
           <DetalleClienteCajero 
             clienteId={clienteSeleccionado} 
-            onVolver={volverAClientes} 
+            volver={volverAClientes} 
           />
         )}
         {vistaActual === 'config' && <Config />}
