@@ -179,7 +179,7 @@ const DatosAutoTurnos = ({ user }) => {
           <div className="paymentButtons">
             {["CC", "A", "Final"].map((tipo) => (
               <button
-                key={tipo}
+                key={tipo.nombre}
                 type="button"
                 className={factura === tipo ? "boton-turno-seleccionado" : "boton-turno"}
                 onClick={() => setFactura(tipo)}

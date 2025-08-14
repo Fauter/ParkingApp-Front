@@ -529,8 +529,9 @@ const ModalVehiculoCajero = ({
                 {!tiposLoading &&
                   !tiposError &&
                   tiposVehiculo.map((tipo) => (
-                    <option key={tipo} value={tipo}>
-                      {tipo.charAt(0).toUpperCase() + tipo.slice(1)} - 
+                    <option key={tipo.nombre} value={tipo.nombre}
+>
+                      {tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)} - 
                       ${precios[tipo]?.mensual?.toLocaleString() || "N/A"}
                     </option>
                   ))}
@@ -585,7 +586,8 @@ const ModalVehiculoCajero = ({
               >
                 <option value="" disabled>Tipo de factura</option>
                 {tiposFactura.map((tipo) => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
+                  <option key={tipo.nombre} value={tipo.nombre}
+>{tipo}</option>
                 ))}
               </select>
             </div>

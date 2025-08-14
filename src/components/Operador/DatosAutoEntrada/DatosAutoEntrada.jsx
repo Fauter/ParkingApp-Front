@@ -276,9 +276,9 @@ function DatosAutoEntrada({
           className="selectVehiculo"
         >
           <option value="">Seleccione un tipo</option>
-          {tiposVehiculoDisponibles.map((tipo) => (
-            <option key={tipo} value={tipo}>
-              {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+          {tiposVehiculoDisponibles.map(({ nombre }) => (
+            <option key={nombre} value={nombre}>
+              {nombre.charAt(0).toUpperCase() + nombre.slice(1)}
             </option>
           ))}
         </select>

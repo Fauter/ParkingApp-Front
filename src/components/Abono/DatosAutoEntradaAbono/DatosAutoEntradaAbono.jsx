@@ -264,8 +264,9 @@ function DatosAutoEntradaAbono({
         >
           <option value="">Seleccione un tipo</option>
           {tiposVehiculoDisponibles.map((tipo) => (
-            <option key={tipo} value={tipo}>
-              {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+            <option key={tipo.nombre} value={tipo.nombre}
+>
+              {tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)}
             </option>
           ))}
         </select>

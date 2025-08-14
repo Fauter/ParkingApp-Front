@@ -14,16 +14,14 @@ import ModalHeader from './Header/ModalHeader/ModalHeader';
 import ModalMensaje from '../ModalMensaje/ModalMensaje';
 import Config from '../Config/Config';
 
-// Formatea el número con puntos cada 3 cifras
+const TOKEN_KEY = 'token';
+const OPERADOR_KEY = 'operador';
+
 const formatearVisualmente = (valor) => {
   if (!valor) return '';
   return valor.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
-
-// Limpia el número visual (quita puntos)
-const limpiarNumero = (valor) => {
-  return valor.replace(/\./g, '');
-};
+const limpiarNumero = (valor) => valor.replace(/\./g, '');
 
 function Interfaz() {
   const [vistaActual, setVistaActual] = useState('operador');
@@ -40,17 +38,29 @@ function Interfaz() {
   const [barreraDerAbierta, setBarreraDerAbierta] = useState(false);
   const [user, setUser] = useState(null);
   const [mensajeModal, setMensajeModal] = useState(null);
+  const [timestamp, setTimestamp] = useState(Date.now());
 
   const navigate = useNavigate();
 
+  // ✅ Cargar operador local inmediatamente
+  useEffect(() => {
+    const operadorStr = localStorage.getItem(OPERADOR_KEY);
+    if (operadorStr) {
+      try {
+        const op = JSON.parse(operadorStr);
+        if (op && op.username) setUser(op);
+      } catch {}
+    }
+  }, []);
+
+  // ✅ Refrescar con /profile (JWT) — requiere middleware en back
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem(TOKEN_KEY);
       if (!token) {
-        navigate('/login');
+        navigate('/login', { replace: true });
         return;
       }
-
       try {
         const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
@@ -60,27 +70,24 @@ function Interfaz() {
           },
           credentials: 'include'
         });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch user');
-        }
-
+        if (!response.ok) throw new Error('Failed to fetch user');
         const data = await response.json();
-        setUser(data);
-        return data;
+        if (data && data.username) {
+          setUser(data);
+          // mantener en localStorage sincronizado
+          localStorage.setItem(OPERADOR_KEY, JSON.stringify(data));
+        }
       } catch (error) {
         console.error('Error al obtener usuario:', error);
-        localStorage.removeItem('token');
-        navigate('/login');
-        return null;
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(OPERADOR_KEY);
+        navigate('/login', { replace: true });
       }
     };
-
     fetchUser();
   }, [navigate]);
 
   const manejarSeleccionCliente = (idCliente) => {
-    console.log('ID recibido en Interfaz:', idCliente);
     setClienteSeleccionado(idCliente);
     setVistaActual('detalleCliente');
   };
@@ -118,17 +125,21 @@ function Interfaz() {
   };
 
   const abrirBarreraSalida = () => {
-    console.log('Abriendo barrera de salida');
     setBarreraDerAbierta(true);
+    setTimeout(() => setBarreraDerAbierta(false), 10000);
+  };
 
-    setTimeout(() => {
-      console.log('Cerrando barrera de salida');
-      setBarreraDerAbierta(false);
-    }, 10000);
+  // 🔴 Helper: arma objeto operador estable para payloads
+  const operadorPayload = () => {
+    if (!user) return null;
+    const { _id, username, nombre, apellido, role } = user;
+    return { _id, username, nombre, apellido, role };
   };
 
   const enviarCierreDeCaja = async () => {
-    if (!user) return;
+    const op = operadorPayload();
+    if (!op) return;
+
     const { fecha, hora } = getFechaHora();
     const totalRecaudado = parseFloat(limpiarNumero(recaudado));
     const dejoEnCaja = parseFloat(limpiarNumero(enCaja));
@@ -140,15 +151,15 @@ function Interfaz() {
       totalRecaudado,
       dejoEnCaja,
       totalRendido,
-      operador: user.nombre,
+      operador: op, // ✅ objeto, no string
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/cierresdecaja', {
+      const res = await fetch('http://localhost:5000/api/cierresDeCaja', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
         },
         body: JSON.stringify(data),
       });
@@ -156,8 +167,10 @@ function Interfaz() {
       const content = await res.json();
 
       if (res.ok) {
-        localStorage.removeItem('token');
-        if (localStorage.getItem('token')) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(OPERADOR_KEY);
+
+        if (localStorage.getItem(TOKEN_KEY)) {
           setMensajeModal({
             titulo: 'Error',
             mensaje: 'No se pudo desloguear, no se realizó el cierre de caja.',
@@ -172,7 +185,7 @@ function Interfaz() {
           onClose: () => {
             setMensajeModal(null);
             cerrarModal();
-            navigate('/login');
+            navigate('/login', { replace: true });
           }
         });
       } else {
@@ -194,24 +207,25 @@ function Interfaz() {
   };
 
   const enviarCierreParcial = async () => {
-    if (!user) return;
-    const { fecha, hora } = getFechaHora();
+    const op = operadorPayload();
+    if (!op) return;
 
+    const { fecha, hora } = getFechaHora();
     const monto = parseFloat(limpiarNumero(montoParcial));
 
     const dataCierreParcial = {
       fecha,
       hora,
       monto,
-      operador: user.nombre,
+      operador: op, // ✅ objeto
     };
 
     try {
-      const resCierreParcial = await fetch('http://localhost:5000/api/cierresdecaja/parcial', {
+      const resCierreParcial = await fetch('http://localhost:5000/api/cierresDeCaja/parcial', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
         },
         body: JSON.stringify(dataCierreParcial),
       });
@@ -229,14 +243,14 @@ function Interfaz() {
         fecha,
         hora,
         tipoDeAlerta: `Cierre Parcial ($${monto.toLocaleString('es-AR')})`,
-        operador: user.nombre,
+        operador: op, // ✅ objeto
       };
 
       const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
         },
         body: JSON.stringify(dataAlerta),
       });
@@ -269,14 +283,16 @@ function Interfaz() {
   };
 
   const enviarIncidente = async () => {
-    if (!user) return;
+    const op = operadorPayload();
+    if (!op) return;
+
     const { fecha, hora } = getFechaHora();
 
     const data = {
       fecha,
       hora,
       texto: incidente,
-      operador: user.nombre,
+      operador: op, // ✅ objeto
     };
 
     try {
@@ -284,7 +300,7 @@ function Interfaz() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
         },
         body: JSON.stringify(data),
       });
@@ -316,14 +332,13 @@ function Interfaz() {
       });
     }
   };
-  
+
   const ejecutarBot = async () => {
     let fotoUrl = null;
 
-    // 1️⃣ Intentar sacar foto con timeout de 4s
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // ⏱️ 4 segundos
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto', {
         signal: controller.signal,
@@ -337,14 +352,10 @@ function Interfaz() {
         console.warn("⚠️ No se pudo capturar foto:", json.mensaje);
       }
     } catch (err) {
-      if (err.name === 'AbortError') {
-        console.warn("⏰ Timeout al intentar sacar la foto");
-      } else {
-        console.error("❌ Error al sacar foto:", err);
-      }
+      if (err.name === 'AbortError') console.warn("⏰ Timeout al intentar sacar la foto");
+      else console.error("❌ Error al sacar foto:", err);
     }
 
-    // 2️⃣ Crear ticket
     let ticketCreado = null;
     try {
       const resTicket = await fetch('http://localhost:5000/api/tickets', {
@@ -367,7 +378,6 @@ function Interfaz() {
       return;
     }
 
-    // 3️⃣ Imprimir ticket
     try {
       const ahora = new Date();
       const horaMin = ahora.toTimeString().slice(0, 5);
@@ -385,15 +395,9 @@ function Interfaz() {
       console.error("❌ Error al imprimir ticket:", err);
     }
 
-    // 4️⃣ Abrir barrera
     setTimeout(() => {
-      console.log('✅ Abriendo barrera de entrada');
       setBarreraIzqAbierta(true);
-
-      setTimeout(() => {
-        console.log('✅ Cerrando barrera de entrada');
-        setBarreraIzqAbierta(false);
-      }, 10000);
+      setTimeout(() => setBarreraIzqAbierta(false), 10000);
     }, 1500);
   };
 
@@ -405,7 +409,7 @@ function Interfaz() {
         vistaActiva={vistaActual}
         abrirModal={setModalActivo}
         setMostrarOverlay={setMostrarOverlay}
-        modalActivo={modalActivo} 
+        modalActivo={modalActivo}
         onEjecutarBot={ejecutarBot}
         user={user}
         ticketPendiente={ticketPendiente}

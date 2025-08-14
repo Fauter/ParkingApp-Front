@@ -20,12 +20,35 @@ function ModalAudit({ titulo, onClose, children }) {
   );
 }
 
+// ---------- Helpers robustos ----------
+const getIdStr = (x) => {
+  try {
+    const id = x?._id ?? x?.id ?? x;
+    if (id == null) return "";
+    if (typeof id === "string") return id;
+    if (typeof id === "number" || typeof id === "bigint") return String(id);
+    // ObjectId, {_bsontype}, etc.
+    if (id && typeof id.toString === "function") return id.toString();
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+const toName = (tipo) => {
+  if (!tipo) return "";
+  if (typeof tipo === "string") return tipo;
+  return tipo?.nombre ?? "";
+};
+
+const normalizeStr = (s) => (s == null ? "" : String(s)).toLowerCase().trim();
+
 function VehiculosDentro() {
   const [vehiculos, setVehiculos] = useState([]);
   const [vehiculosTemporales, setVehiculosTemporales] = useState([]);
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState('');
-  const [vehiculosChequeados, setVehiculosChequeados] = useState([]);
+  const [vehiculosChequeados, setVehiculosChequeados] = useState([]); // siempre strings
   const [generandoAuditoria, setGenerandoAuditoria] = useState(false);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
@@ -37,9 +60,9 @@ function VehiculosDentro() {
     tipoVehiculo: 'auto'
   });
   const [user, setUser] = useState(null);
-  const [modalMensaje, setModalMensaje] = useState(''); // ✅ Estado para mensajes
-
+  const [modalMensaje, setModalMensaje] = useState(''); // ✅ mensajes
   const navigate = useNavigate();
+
   const ITEMS_POR_PAGINA = 10;
 
   useEffect(() => {
@@ -75,16 +98,31 @@ function VehiculosDentro() {
 
     const cargarDatos = async () => {
       try {
+        // Vehículos
         const responseVehiculos = await fetch('http://localhost:5000/api/vehiculos');
         const dataVehiculos = await responseVehiculos.json();
-        const filtrados = dataVehiculos.filter(v => 
-          v.estadiaActual && v.estadiaActual.entrada && !v.estadiaActual.salida
-        );
-        setVehiculos(filtrados.reverse());
 
+        const filtrados = (Array.isArray(dataVehiculos) ? dataVehiculos : []).filter(v => 
+          v?.estadiaActual && v.estadiaActual.entrada && !v.estadiaActual.salida
+        );
+
+        // 🔒 Normalizo _id a string acá para TODO el ciclo de vida en FE
+        const normalizados = filtrados.map(v => ({
+          ...v,
+          _id: getIdStr(v),
+          tipoVehiculo: toName(v.tipoVehiculo) || 'desconocido',
+        }));
+
+        setVehiculos(normalizados.reverse());
+
+        // Tipos de vehículo
         const responseTipos = await fetch('http://localhost:5000/api/tipos-vehiculo');
         const dataTipos = await responseTipos.json();
-        setTiposVehiculo(dataTipos);
+        // Acepto tanto strings como objetos {nombre}
+        const tiposOk = (Array.isArray(dataTipos) ? dataTipos : [])
+          .map(t => ({ nombre: toName(t) }))
+          .filter(t => t.nombre);
+        setTiposVehiculo(tiposOk);
       } catch (err) {
         console.error('Error al cargar los datos:', err);
       }
@@ -94,24 +132,25 @@ function VehiculosDentro() {
     cargarDatos();
   }, [navigate]);
 
-  const normalizar = str => str?.toString().toLowerCase().trim();
   const vehiculosCombinados = [...vehiculos, ...vehiculosTemporales];
 
   const vehiculosFiltrados = vehiculosCombinados.filter(v =>
-    normalizar(v.patente).includes(normalizar(busqueda))
+    normalizeStr(v?.patente).includes(normalizeStr(busqueda))
   );
 
-  const totalPaginas = Math.ceil(vehiculosFiltrados.length / ITEMS_POR_PAGINA);
+  const totalPaginas = Math.max(1, Math.ceil(vehiculosFiltrados.length / ITEMS_POR_PAGINA));
   const vehiculosPaginados = vehiculosFiltrados.slice(
     (paginaActual - 1) * ITEMS_POR_PAGINA,
     paginaActual * ITEMS_POR_PAGINA
   );
 
-  const handleCheckVehiculo = (id) => {
+  const handleCheckVehiculo = (idLike) => {
+    const idStr = getIdStr(idLike);
+    if (!idStr) return;
     setVehiculosChequeados(prev => 
-      prev.includes(id) 
-        ? prev.filter(item => item !== id) 
-        : [...prev, id]
+      prev.includes(idStr) 
+        ? prev.filter(item => item !== idStr) 
+        : [...prev, idStr]
     );
   };
 
@@ -159,7 +198,7 @@ function VehiculosDentro() {
       fecha,
       hora,
       tipoDeAlerta: `Conflicto Auditoría: ${tipoConflicto}`,
-      operador: user.nombre,
+      operador: user?.nombre ?? 'Operador Desconocido',
     };
 
     try {
@@ -191,7 +230,8 @@ function VehiculosDentro() {
     try {
       const operador = user?.nombre || 'Operador Desconocido';
 
-      const idsNormales = vehiculosChequeados.filter(id => !id.toString().startsWith('temp-'));
+      // 🔒 ya tengo strings en vehiculosChequeados
+      const idsNormales = vehiculosChequeados.filter(id => !id.startsWith('temp-'));
       const vehiculosTemporalesAuditados = vehiculosTemporales;
 
       const response = await fetch('http://localhost:5000/api/auditorias', {
@@ -241,6 +281,8 @@ function VehiculosDentro() {
       setGenerandoAuditoria(false);
     }
   };
+
+  const totalPaginasSafe = Number.isFinite(totalPaginas) && totalPaginas > 0 ? totalPaginas : 1;
 
   return (
     <div className="vehiculos-dentro">
@@ -297,24 +339,25 @@ function VehiculosDentro() {
             </tr>
           </thead>
           <tbody>
-            {vehiculosPaginados.map(v => {
-              const fechaEntrada = v.estadiaActual?.entrada ? new Date(v.estadiaActual.entrada) : null;
+            {vehiculosPaginados.map((v, i) => {
+              const idStr = getIdStr(v);
+              const fechaEntrada = v?.estadiaActual?.entrada ? new Date(v.estadiaActual.entrada) : null;
               const entradaValida = fechaEntrada && !isNaN(fechaEntrada);
-              const estaChequeado = vehiculosChequeados.includes(v._id);
-              const esTemporal = v._id.toString().startsWith('temp-');
+              const estaChequeado = idStr ? vehiculosChequeados.includes(idStr) : false;
+              const esTemporal = idStr.startsWith('temp-');
 
               return (
-                <tr key={v._id} className={`${estaChequeado ? 'checked' : ''} ${esTemporal ? 'vehiculo-temporal' : ''}`}>
-                  <td>{v.patente}</td>
+                <tr key={idStr || v?.patente || `row-${i}`} className={`${estaChequeado ? 'checked' : ''} ${esTemporal ? 'vehiculo-temporal' : ''}`}>
+                  <td>{v?.patente || '-'}</td>
                   <td>{entradaValida ? fechaEntrada.toLocaleString() : 'Entrada no disponible'}</td>
-                  <td>{v.tipoVehiculo?.charAt(0).toUpperCase() + v.tipoVehiculo?.slice(1) || 'Desconocido'}</td>
+                  <td>{(v?.tipoVehiculo ? (v.tipoVehiculo.charAt(0).toUpperCase() + v.tipoVehiculo.slice(1)) : 'Desconocido')}</td>
                   <td>
                     <input 
                       type="checkbox" 
                       checked={esTemporal || estaChequeado}
-                      onChange={() => !esTemporal && handleCheckVehiculo(v._id)}
+                      onChange={() => !esTemporal && handleCheckVehiculo(idStr)}
                       className="check-auditoria"
-                      disabled={esTemporal}
+                      disabled={esTemporal || !idStr}
                     />
                   </td>
                 </tr>
@@ -322,7 +365,7 @@ function VehiculosDentro() {
             })}
 
             {/* Filas vacías para mantener siempre 10 visibles */}
-            {Array.from({ length: ITEMS_POR_PAGINA - vehiculosPaginados.length }).map((_, i) => (
+            {Array.from({ length: Math.max(0, ITEMS_POR_PAGINA - vehiculosPaginados.length) }).map((_, i) => (
               <tr key={`empty-${i}`} className="fila-vacia">
                 <td>-</td>
                 <td>-</td>
@@ -340,9 +383,9 @@ function VehiculosDentro() {
           >
             Anterior
           </button>
-          <span>Página {paginaActual} de {totalPaginas}</span>
+          <span>Página {paginaActual} de {totalPaginasSafe}</span>
           <button
-            disabled={paginaActual === totalPaginas}
+            disabled={paginaActual === totalPaginasSafe}
             onClick={() => setPaginaActual(paginaActual + 1)}
           >
             Siguiente
@@ -401,11 +444,14 @@ function VehiculosDentro() {
               onChange={(e) => setNuevoVehiculo({...nuevoVehiculo, tipoVehiculo: e.target.value})}
               className="modal-input-audit"
             >
-              {tiposVehiculo.map(tipo => (
-                <option key={tipo} value={tipo}>
-                  {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
-                </option>
-              ))}
+              {tiposVehiculo.map((tipo, idx) => {
+                const nombre = toName(tipo);
+                return (
+                  <option key={`${nombre}-${idx}`} value={nombre}>
+                    {nombre ? (nombre.charAt(0).toUpperCase() + nombre.slice(1)) : 'Desconocido'}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div className="modal-botones-audit">
