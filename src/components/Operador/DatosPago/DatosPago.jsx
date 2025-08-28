@@ -2,7 +2,13 @@ import React, { useState, useEffect } from "react";
 import "./DatosPago.css";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 
-function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAbrirBarreraSalida }) {
+function DatosPago({
+  vehiculoLocal,
+  limpiarVehiculo,
+  tarifaCalculada,
+  user,
+  onAbrirBarreraSalida,
+}) {
   const [metodoPago, setMetodoPago] = useState("Efectivo");
   const [factura, setFactura] = useState("CC");
   const [promos, setPromos] = useState([]);
@@ -12,6 +18,11 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
   const [totalConDescuento, setTotalConDescuento] = useState(0);
   const [tarifaAplicada, setTarifaAplicada] = useState(null);
   const [horaSalida, setHoraSalida] = useState(null);
+
+  const [modalCamAbierto, setModalCamAbierto] = useState(false);
+  const [videoStream, setVideoStream] = useState(null);
+  const [fotoUrl, setFotoUrl] = useState(null);
+  const videoRef = React.useRef(null);
 
   // 🔔 Modal de mensaje
   const [mensajeModal, setMensajeModal] = useState(null);
@@ -106,20 +117,26 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
-    fetch(`http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        salida: horaSalida || new Date().toISOString(),
-        costo: totalConDescuento,
-        tarifa: tarifaAplicada || null,
-        tiempoHoras: horas,
-      }),
-    })
+    fetch(
+      `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          salida: horaSalida || new Date().toISOString(),
+          costo: totalConDescuento,
+          tarifa: tarifaAplicada || null,
+          tiempoHoras: horas,
+        }),
+      }
+    )
       .then((res) => res.json())
       .then((dataSalida) => {
         if (!dataSalida || dataSalida.error) {
-          console.error("❌ Error al registrar salida:", dataSalida?.msg || "Error desconocido");
+          console.error(
+            "❌ Error al registrar salida:",
+            dataSalida?.msg || "Error desconocido"
+          );
           setMensajeModal({
             tipo: "error",
             titulo: "Error al registrar salida",
@@ -137,7 +154,8 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           factura,
           monto: totalConDescuento,
           tipoTarifa: "hora",
-          ticket: vehiculoLocal.estadiaActual?.ticket || undefined
+          ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
+          foto: fotoUrl || null,
         };
 
         return fetch("http://localhost:5000/api/movimientos/registrar", {
@@ -165,7 +183,10 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
             onAbrirBarreraSalida();
           }
         } else {
-          console.error("❌ Error al registrar movimiento:", dataMovimiento.msg);
+          console.error(
+            "❌ Error al registrar movimiento:",
+            dataMovimiento.msg
+          );
           setMensajeModal({
             tipo: "error",
             titulo: "Error al registrar movimiento",
@@ -183,10 +204,74 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
       });
   };
 
+  const abrirModalCam = async () => {
+    setFotoUrl(null);
+    setModalCamAbierto(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setVideoStream(stream);
+    } catch (err) {
+      setVideoStream(null);
+      setMensajeModal({
+        tipo: "error",
+        titulo: "Error de cámara",
+        mensaje: "No se pudo acceder a la webcam.",
+      });
+    }
+  };
+
+  const tomarFoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    setFotoUrl(canvas.toDataURL("image/png"));
+  };
+
+const volverACamara = async () => {
+  setFotoUrl(null);
+  // Detén el stream anterior si existe
+  if (videoStream) {
+    videoStream.getTracks().forEach(track => track.stop());
+    setVideoStream(null);
+  }
+  // Solicita un nuevo stream
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    setVideoStream(stream);
+  } catch (err) {
+    setVideoStream(null);
+    setMensajeModal({
+      tipo: "error",
+      titulo: "Error de cámara",
+      mensaje: "No se pudo acceder a la webcam.",
+    });
+  }
+};
+
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [videoStream]);
+
+  const cerrarModalCam = () => {
+    setModalCamAbierto(false);
+    if (videoStream) {
+      videoStream.getTracks().forEach((track) => track.stop());
+      setVideoStream(null);
+    }
+    setFotoUrl(null);
+  };
+
   return (
     <div className="datosPago">
       <div className="precioTotal">
-        <div className="precioContainer">${totalConDescuento.toLocaleString("es-AR")}</div>
+        <div className="precioContainer">
+          ${totalConDescuento.toLocaleString("es-AR")}
+        </div>
         <div className="promo">
           <select
             className="promoSelect"
@@ -200,13 +285,17 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
               </option>
             ))}
           </select>
-          <a href="#" className="iconContainer">
+          <button
+            type="button"
+            className="iconContainer"
+            onClick={abrirModalCam}
+          >
             <img
               src="https://www.svgrepo.com/show/904/photo-camera.svg"
               alt=""
               className="camIcon"
             />
-          </a>
+          </button>
         </div>
       </div>
 
@@ -217,7 +306,9 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
             {["Efectivo", "Débito", "Crédito", "QR"].map((metodo) => (
               <div
                 key={metodo}
-                className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`}
+                className={`metodoOption ${
+                  metodoPago === metodo ? "selected" : ""
+                }`}
                 onClick={() => handleSelectMetodoPago(metodo)}
               >
                 {metodo}
@@ -232,7 +323,9 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
             {["CC", "A", "Final"].map((opcion) => (
               <div
                 key={opcion}
-                className={`facturaOption ${factura === opcion ? "selected" : ""}`}
+                className={`facturaOption ${
+                  factura === opcion ? "selected" : ""
+                }`}
                 onClick={() => handleSelectFactura(opcion)}
               >
                 {opcion}
@@ -254,6 +347,53 @@ function DatosPago({ vehiculoLocal, limpiarVehiculo, tarifaCalculada, user, onAb
           mensaje={mensajeModal.mensaje}
           onClose={() => setMensajeModal(null)}
         />
+      )}
+
+      {modalCamAbierto && (
+        <ModalMensaje
+          titulo="Webcam"
+          mensaje="Vista previa de la cámara"
+          onClose={cerrarModalCam}
+        >
+          <div style={{ textAlign: "center" }}>
+            {!fotoUrl ? (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  style={{
+                    width: "320px",
+                    height: "240px",
+                    borderRadius: "6px",
+                    background: "#222",
+                  }}
+                />
+                <button
+                  className="guardarWebcamBtn"
+                  style={{ marginTop: "1rem" }}
+                  onClick={tomarFoto}
+                >
+                  Tomar Foto
+                </button>
+              </>
+            ) : (
+              <>
+                <img
+                  src={fotoUrl}
+                  alt="Foto tomada"
+                  style={{ width: "320px", borderRadius: "6px" }}
+                />
+                <button
+                  className="guardarWebcamBtn"
+                  style={{ marginTop: "1rem" }}
+                  onClick={volverACamara}
+                >
+                  Volver a cámara
+                </button>
+              </>
+            )}
+          </div>
+        </ModalMensaje>
       )}
     </div>
   );

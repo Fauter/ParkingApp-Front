@@ -130,3 +130,21 @@
   color: white;
   border-color: rgba(109, 109, 109, 0.21);
 }
+
+
+
+.guardarWebcamBtn {
+  background-color: #444a5a;
+  color: white;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.guardarWebcamBtn:hover {
+  background-color: #5a6175;
+  transform: scale(1.05);
+}
