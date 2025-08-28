@@ -70,10 +70,10 @@ function Config() {
     fetchImpresoras();
   }, []);
   useEffect(() => {
-  if (videoRef.current && videoStream) {
-    videoRef.current.srcObject = videoStream;
-  }
-}, [videoStream]);
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [videoStream]);
 
   const handleChange = (e) => setIpCamara(e.target.value);
 
@@ -165,19 +165,19 @@ function Config() {
     }
   };
 
-  const GuardarWebCam = async () => {
+  const guardarWebCam = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/impresoras`, {
+      const res = await fetch(`${BASE_URL}/api/webcam`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ impresora: impresoraDefault }),
+        body: JSON.stringify({ webcam: webcamDefault }),
       });
-      if (!res.ok) throw new Error("Error al guardar impresora");
-      setMensaje("✅ WebCam guardada correctamente");
+      if (!res.ok) throw new Error("Error al guardar webcam");
+      setMensaje("✅ Webcam guardada correctamente");
       setModalAbierto(true);
     } catch (err) {
       console.error(err);
-      setMensaje("❌ No se pudo guardar la WEBCAM");
+      setMensaje("❌ No se pudo guardar la webcam");
       setModalAbierto(true);
     }
   };
@@ -225,12 +225,10 @@ function Config() {
             </option>
           ))}
         </select>
-        <button className="guardarWebCamBtn" onClick={GuardarWebCam}>
-          Guardar Foto
+        <button className="guardarWebCamBtn" onClick={guardarWebCam}>
+          Guardar Webcam
         </button>
-        <button
-        onClick={testearWebCam} disabled={loading}
-        >
+        <button onClick={testearWebCam} disabled={loading}>
           {loading ? "Cargando..." : "Testear Cámara"}
         </button>
       </div>
