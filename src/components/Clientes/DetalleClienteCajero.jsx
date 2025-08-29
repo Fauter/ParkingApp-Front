@@ -35,6 +35,28 @@ function DetalleClienteCajero({ clienteId, volver }) {
     fotoCedulaAzul: null,
   });
 
+  // === Helpers de estado de abono (derivado por fecha) ===
+  const obtenerFinAbono = (cli) => {
+    if (!cli) return null;
+    let fin = cli.finAbono ? new Date(cli.finAbono) : null;
+    if ((!fin || isNaN(fin)) && Array.isArray(cli.abonos) && cli.abonos.length) {
+      for (const a of cli.abonos) {
+        if (a && a.fechaExpiracion) {
+          const f = new Date(a.fechaExpiracion);
+          if (!isNaN(f) && (!fin || f > fin)) fin = f;
+        }
+      }
+    }
+    return fin || null;
+  };
+
+  const esAbonoActivo = (cli) => {
+    const fin = obtenerFinAbono(cli);
+    if (!fin) return false;
+    const ahora = new Date();
+    return fin >= ahora;
+  };
+
   const cargarCliente = async () => {
     try {
       if (!clienteId) {
@@ -72,13 +94,13 @@ function DetalleClienteCajero({ clienteId, volver }) {
     const totalDiasMes = ultimoDiaMes.getDate();
     const diaActual = hoy.getDate();
     const diasRestantesCalculados = totalDiasMes - diaActual + 1;
-    
+
     setDiasRestantes(diasRestantesCalculados);
-    
+
     if (diaActual === 1) {
       return precioMensual;
     }
-    
+
     return Math.round((precioMensual / totalDiasMes) * diasRestantesCalculados);
   };
 
@@ -103,18 +125,22 @@ function DetalleClienteCajero({ clienteId, volver }) {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       if (!response.ok) {
         throw new Error('Error al obtener precios');
       }
-      
+
       const precios = await response.json();
-      const precioMensual = precios[cliente.precioAbono]?.mensual || 0;
+
+      // 🔧 Normalizo el tipo a minúsculas para leer el mapa de precios
+      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '').toLowerCase();
+      const precioMensual = precios?.[tipo]?.mensual || 0;
+
       const precioProporcional = calcularPrecioProporcional(precioMensual);
-      
+
       setPrecioRenovacion(precioProporcional);
       setModalRenovarVisible(true);
-      
+
     } catch (error) {
       console.error('Error al calcular precio:', error);
       setMensajeModal({
@@ -125,15 +151,17 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
+  // ⚠️ Ya no se usa en la renovación (el back ya registra los movimientos).
   const registrarMovimientos = async (patente, monto, descripcion) => {
     try {
       const token = localStorage.getItem('token');
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
-      
+      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '');
+
       const movimientoData = {
         patente,
         operador,
-        tipoVehiculo: cliente.precioAbono,
+        tipoVehiculo: tipo,
         metodoPago,
         factura,
         monto,
@@ -143,7 +171,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -157,14 +185,15 @@ function DetalleClienteCajero({ clienteId, volver }) {
         email: cliente.email || '',
         descripcion,
         monto,
-        tipoVehiculo: cliente.precioAbono,
+        tipoVehiculo: tipo,
         operador,
         patente,
       };
-      
-      await fetch('http://localhost:5000/api/movimientosclientes', {
+
+      // Ruta correcta con C en mayúscula (por si lo reutilizás)
+      await fetch('http://localhost:5000/api/movimientosClientes', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -180,11 +209,12 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const handleRenovarAbono = async () => {
     try {
       setLoading(true);
-      
+
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
       const patente = cliente.abonos?.[0]?.patente || 'N/A';
-      const descripcion = `Renovación abono ${cliente.precioAbono}`;
-      
+      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '');
+      // const descripcion = `Renovación abono ${tipo}`; // el back ya registra esto
+
       const response = await fetch(`http://localhost:5000/api/clientes/${clienteId}/renovar-abono`, {
         method: 'POST',
         headers: {
@@ -197,7 +227,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
           factura,
           operador,
           patente,
-          tipoVehiculo: cliente.precioAbono,
+          tipoVehiculo: tipo,
           diasRestantes
         })
       });
@@ -207,16 +237,16 @@ function DetalleClienteCajero({ clienteId, volver }) {
         throw new Error(errorData.message || 'Error al renovar abono');
       }
 
-      await registrarMovimientos(patente, precioRenovacion, descripcion);
+      // ✅ NO registramos nada extra acá: el back ya creó Movimiento y MovimientoCliente
       await cargarCliente();
-      
+
       setModalRenovarVisible(false);
       setMensajeModal({
         titulo: 'Éxito',
         mensaje: 'Abono renovado exitosamente',
         onClose: () => setMensajeModal(null)
       });
-      
+
     } catch (error) {
       console.error('Error al renovar abono:', error);
       setMensajeModal({
@@ -281,13 +311,21 @@ function DetalleClienteCajero({ clienteId, volver }) {
       return;
     }
 
-    const nombreDecodificado = decodeURIComponent(nombre);
+    const raw = decodeURIComponent(nombre).trim();
 
     let rutaFoto;
-    if (nombreDecodificado.startsWith('/fotos/')) {
-      rutaFoto = `http://localhost:5000/uploads${nombreDecodificado}`;
+    if (/^https?:\/\//i.test(raw)) {
+      // URL completa
+      rutaFoto = raw;
+    } else if (raw.startsWith('/uploads/')) {
+      // Ya viene con /uploads/...
+      rutaFoto = `http://localhost:5000${raw}`;
+    } else if (raw.startsWith('/fotos/')) {
+      // Caso viejo: /fotos/... (colgado de /uploads)
+      rutaFoto = `http://localhost:5000/uploads${raw}`;
     } else {
-      rutaFoto = `http://localhost:5000/uploads/fotos/${nombreDecodificado}`;
+      // Nombre pelado
+      rutaFoto = `http://localhost:5000/uploads/fotos/${raw}`;
     }
 
     const urlConTimestamp = `${rutaFoto}?t=${Date.now()}`;
@@ -304,18 +342,18 @@ function DetalleClienteCajero({ clienteId, volver }) {
       setLoading(false);
       setModalAgregarVisible(false);
       setFormData({
-        patente: '', 
-        marca: '', 
-        modelo: '', 
-        anio: '', 
+        patente: '',
+        marca: '',
+        modelo: '',
+        anio: '',
         color: '',
-        tipoVehiculo: '', 
+        tipoVehiculo: '',
         companiaSeguro: '',
         metodoPago: '',
         factura: '',
-        fotoDNI: null, 
+        fotoDNI: null,
         fotoSeguro: null,
-        fotoCedulaVerde: null, 
+        fotoCedulaVerde: null,
         fotoCedulaAzul: null,
       });
     }
@@ -350,6 +388,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
     );
   }
 
+  const finDerivado = obtenerFinAbono(cliente);
+  const abonoActivo = esAbonoActivo(cliente);
+
   return (
     <div className="detalle-cliente-cajero">
       <div className="header-detalle">
@@ -358,17 +399,17 @@ function DetalleClienteCajero({ clienteId, volver }) {
       </div>
 
       <div className="status-abono-container">
-        <div className={`status-abono ${cliente.abonado ? 'activo' : 'inactivo'}`}>
-          {cliente.abonado ? (
+        <div className={`status-abono ${abonoActivo ? 'activo' : 'inactivo'}`}>
+          {abonoActivo ? (
             <>
               <span className="status-text">ABONADO HASTA</span>
-              <span className="status-fecha">{formatearFechaCorta(cliente.finAbono)}</span>
+              <span className="status-fecha">{formatearFechaCorta(finDerivado)}</span>
             </>
           ) : (
             <span className="status-text">ABONO EXPIRADO</span>
           )}
-          {!cliente.abonado && (
-            <button 
+          {!abonoActivo && (
+            <button
               className="btn-renovar"
               onClick={calcularPrecioRenovacion}
             >
@@ -460,58 +501,58 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       {modalRenovarVisible && (
         <div className="modal-renovar-overlay" onClick={() => setModalRenovarVisible(false)}>
-            <div className="modal-renovar-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-renovar-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={() => setModalRenovarVisible(false)}>
-                &times;
+              &times;
             </button>
-            
+
             <div className="modal-renovar-header">
-                <h3>Renovar Abono</h3>
+              <h3>Renovar Abono</h3>
             </div>
-            
+
             <div className="detalles-renovacion">
-                <p><strong>Tipo de vehículo:</strong> {cliente.precioAbono}</p>
-                <p><strong>Días restantes del mes:</strong> {diasRestantes}</p>
-                <p><strong>Precio a cobrar:</strong> ${precioRenovacion}</p>
-                
-                <div className="form-group">
+              <p><strong>Tipo de vehículo:</strong> {cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '---'}</p>
+              <p><strong>Días restantes del mes:</strong> {diasRestantes}</p>
+              <p><strong>Precio a cobrar:</strong> ${precioRenovacion}</p>
+
+              <div className="form-group">
                 <label>Método de pago:</label>
-                <select 
-                    value={metodoPago} 
-                    onChange={(e) => setMetodoPago(e.target.value)}
-                    className="form-control"
-                    required
+                <select
+                  value={metodoPago}
+                  onChange={(e) => setMetodoPago(e.target.value)}
+                  className="form-control"
+                  required
                 >
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Débito">Débito</option>
-                    <option value="Crédito">Crédito</option>
-                    <option value="QR">QR</option>
+                  <option value="Efectivo">Efectivo</option>
+                  <option value="Débito">Débito</option>
+                  <option value="Crédito">Crédito</option>
+                  <option value="QR">QR</option>
                 </select>
-                </div>
-                
-                <div className="form-group">
+              </div>
+
+              <div className="form-group">
                 <label>Tipo de factura:</label>
-                <select 
-                    value={factura} 
-                    onChange={(e) => setFactura(e.target.value)}
-                    className="form-control"
-                    required
+                <select
+                  value={factura}
+                  onChange={(e) => setFactura(e.target.value)}
+                  className="form-control"
+                  required
                 >
-                    <option value="CC">CC</option>
-                    <option value="A">A</option>
-                    <option value="Final">Final</option>
+                  <option value="CC">CC</option>
+                  <option value="A">A</option>
+                  <option value="Final">Final</option>
                 </select>
-                </div>
+              </div>
             </div>
-            
-            <button 
-                onClick={handleRenovarAbono}
-                className="btn-confirmar"
-                disabled={loading}
+
+            <button
+              onClick={handleRenovarAbono}
+              className="btn-confirmar"
+              disabled={loading}
             >
-                {loading ? 'Procesando...' : 'Confirmar Renovación'}
+              {loading ? 'Procesando...' : 'Confirmar Renovación'}
             </button>
-            </div>
+          </div>
         </div>
       )}
 
@@ -519,9 +560,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
         <div className="modal-foto-overlay" onClick={cerrarModal}>
           <div className="modal-foto-content" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={cerrarModal}>&times;</button>
-            <img 
-              src={modalFotoUrl} 
-              alt="Documento del cliente" 
+            <img
+              src={modalFotoUrl}
+              alt="Documento del cliente"
               onError={(e) => {
                 e.target.onerror = null;
                 e.target.src = '';

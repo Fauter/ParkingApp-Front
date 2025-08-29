@@ -31,6 +31,23 @@ const ModalVehiculoCajero = ({
   const metodosPago = ["Efectivo", "Débito", "Crédito", "QR"];
   const tiposFactura = ["CC", "A", "Final"];
 
+  // ---- helpers ----
+  const formatARS = (n) => {
+    if (typeof n !== "number") return null;
+    try {
+      return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
+    } catch {
+      return n?.toString() ?? "";
+    }
+  };
+
+  const precioMensualDe = (tipoStr) => {
+    const k = (tipoStr || "").toLowerCase();
+    return precios?.[k]?.mensual || 0;
+  };
+
+  const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+
   // Obtener usuario autenticado
   useEffect(() => {
     const fetchUser = async () => {
@@ -39,7 +56,6 @@ const ModalVehiculoCajero = ({
         navigate('/login');
         return;
       }
-
       try {
         const response = await fetch('http://localhost:5000/api/auth/profile', {
           method: 'GET',
@@ -48,7 +64,6 @@ const ModalVehiculoCajero = ({
             'Content-Type': 'application/json',
           },
         });
-
         const data = await response.json();
         if (response.ok) {
           setUser(data);
@@ -61,24 +76,20 @@ const ModalVehiculoCajero = ({
         setErrorMessage("Error al verificar usuario. Intente nuevamente.");
       }
     };
-
     if (visible) fetchUser();
   }, [visible, navigate]);
 
   // Obtener tipos de vehículo y precios
   useEffect(() => {
     if (!visible) return;
-
     const fetchData = async () => {
       setTiposLoading(true);
       setTiposError(null);
-      
       try {
         const [tiposRes, preciosRes] = await Promise.all([
           fetch("http://localhost:5000/api/tipos-vehiculo"),
           fetch("http://localhost:5000/api/precios")
         ]);
-
         if (!tiposRes.ok) throw new Error("Error al obtener tipos de vehículo");
         if (!preciosRes.ok) throw new Error("Error al obtener precios");
 
@@ -87,8 +98,8 @@ const ModalVehiculoCajero = ({
           preciosRes.json()
         ]);
 
-        setTiposVehiculo(tiposData);
-        setPrecios(preciosData);
+        setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
+        setPrecios(preciosData || {});
       } catch (error) {
         console.error("Error fetching data:", error);
         setTiposError("No se pudieron cargar los datos necesarios");
@@ -96,7 +107,6 @@ const ModalVehiculoCajero = ({
         setTiposLoading(false);
       }
     };
-
     fetchData();
   }, [visible]);
 
@@ -107,25 +117,22 @@ const ModalVehiculoCajero = ({
     const finAbono = new Date(cliente.finAbono);
     const diffTime = Math.max(0, finAbono - hoy);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
     if (diffDays <= 0) return 0;
 
-    const precioNuevo = precios[nuevoTipo]?.mensual || 0;
-    const precioActual = precios[tipoActual]?.mensual || 0;
+    const precioNuevo = precioMensualDe(nuevoTipo);
+    const precioActual = precioMensualDe(tipoActual);
     const diferenciaDiaria = (precioNuevo - precioActual) / 30;
-    
+
     return Math.round(diferenciaDiaria * diffDays);
   };
 
   const verificarDiferencia = (nuevoTipo) => {
     const tipoActual = cliente?.precioAbono;
-    
     if (!tipoActual || !nuevoTipo) return false;
-    if (!precios[nuevoTipo] || !precios[tipoActual]) return false;
 
-    const precioNuevo = precios[nuevoTipo]?.mensual || 0;
-    const precioActual = precios[tipoActual]?.mensual || 0;
-    
+    const precioNuevo = precioMensualDe(nuevoTipo);
+    const precioActual = precioMensualDe(tipoActual);
+
     if (precioNuevo > precioActual) {
       const diferencia = calcularDiferencia(nuevoTipo, tipoActual);
       if (diferencia > 0) {
@@ -139,7 +146,6 @@ const ModalVehiculoCajero = ({
 
   const onInputChange = (e) => {
     const { name, type, files, value } = e.target;
-    
     if (type === "file") {
       setFormData(prev => ({
         ...prev,
@@ -150,7 +156,6 @@ const ModalVehiculoCajero = ({
         ...prev,
         [name]: value,
       }));
-      
       if (name === "tipoVehiculo") {
         verificarDiferencia(value);
       }
@@ -170,18 +175,15 @@ const ModalVehiculoCajero = ({
       setErrorMessage("Debe seleccionar un método de pago");
       return;
     }
-
     if (!pagoDiferenciaData.factura) {
       setErrorMessage("Debe seleccionar un tipo de factura");
       return;
     }
-
     setFormData(prev => ({
       ...prev,
       metodoPago: pagoDiferenciaData.metodoPago,
       factura: pagoDiferenciaData.factura,
     }));
-
     setShowDiferenciaModal(false);
     setErrorMessage("");
   };
@@ -300,7 +302,6 @@ const ModalVehiculoCajero = ({
       }
 
       const abonoFormData = new FormData();
-      
       abonoFormData.append("clienteId", cliente._id);
       abonoFormData.append("nombreApellido", cliente?.nombreApellido || "");
       abonoFormData.append("domicilio", cliente?.domicilio || "");
@@ -311,7 +312,6 @@ const ModalVehiculoCajero = ({
       abonoFormData.append("telefonoTrabajo", cliente?.telefonoTrabajo || "");
       abonoFormData.append("email", cliente?.email || "");
       abonoFormData.append("dniCuitCuil", cliente?.dniCuitCuil || "");
-      
       abonoFormData.append("patente", patente);
       abonoFormData.append("marca", formData.marca || "");
       abonoFormData.append("modelo", formData.modelo || "");
@@ -319,10 +319,8 @@ const ModalVehiculoCajero = ({
       abonoFormData.append("anio", formData.anio || "");
       abonoFormData.append("companiaSeguro", formData.companiaSeguro || "");
       abonoFormData.append("tipoVehiculo", formData.tipoVehiculo || "");
-      
       abonoFormData.append("metodoPago", formData.metodoPago || "");
       abonoFormData.append("factura", formData.factura || "Sin factura");
-      
       if (formData.fotoSeguro) abonoFormData.append("fotoSeguro", formData.fotoSeguro);
       if (formData.fotoDNI) abonoFormData.append("fotoDNI", formData.fotoDNI);
       if (formData.fotoCedulaVerde) abonoFormData.append("fotoCedulaVerde", formData.fotoCedulaVerde);
@@ -342,8 +340,7 @@ const ModalVehiculoCajero = ({
       }
 
       if (cliente?.abonado && formData.tipoVehiculo) {
-        const precioMensual = precios[formData.tipoVehiculo]?.mensual || 0;
-        
+        const precioMensual = precioMensualDe(formData.tipoVehiculo);
         await fetch(`http://localhost:5000/api/clientes/${cliente._id}/actualizar-precio-abono`, {
           method: "PUT",
           headers: { 
@@ -359,14 +356,11 @@ const ModalVehiculoCajero = ({
 
       const tipoActual = cliente?.precioAbono;
       const nuevoTipo = formData.tipoVehiculo;
-      
       if (tipoActual && nuevoTipo) {
-        const precioNuevo = precios[nuevoTipo]?.mensual || 0;
-        const precioActual = precios[tipoActual]?.mensual || 0;
-        
+        const precioNuevo = precioMensualDe(nuevoTipo);
+        const precioActual = precioMensualDe(tipoActual);
         if (precioNuevo > precioActual) {
           const diferencia = calcularDiferencia(nuevoTipo, tipoActual);
-          
           if (diferencia > 0 && formData.metodoPago && formData.factura) {
             await registrarMovimientosDiferencia(patente, diferencia);
           }
@@ -413,7 +407,6 @@ const ModalVehiculoCajero = ({
 
   const renderFileInput = (label, name) => {
     const archivoCargado = formData[name] != null;
-
     return (
       <div className="modal-vehiculo-file-input">
         <label className="file-visible-label">{label}</label>
@@ -471,7 +464,7 @@ const ModalVehiculoCajero = ({
                     patente: e.target.value.toUpperCase(),
                   })
                 }
-                maxLength={7}
+                maxLength={8}
                 required
               />
               <input
@@ -510,6 +503,7 @@ const ModalVehiculoCajero = ({
                 value={formData.companiaSeguro || ""}
                 onChange={onInputChange}
               />
+
               <select
                 id="tipoVehiculo"
                 name="tipoVehiculo"
@@ -526,15 +520,20 @@ const ModalVehiculoCajero = ({
                     ? "Error cargando tipos"
                     : "Seleccioná un tipo"}
                 </option>
+
                 {!tiposLoading &&
                   !tiposError &&
-                  tiposVehiculo.map((tipo) => (
-                    <option key={tipo.nombre} value={tipo.nombre}
->
-                      {tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)} - 
-                      ${precios[tipo]?.mensual?.toLocaleString() || "N/A"}
-                    </option>
-                  ))}
+                  tiposVehiculo.map((tipo) => {
+                    const nombre = tipo?.nombre || "";
+                    const key = nombre.toLowerCase?.() ?? "";
+                    const mensual = precios?.[key]?.mensual;
+                    const labelPrecio = typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
+                    return (
+                      <option key={nombre} value={nombre}>
+                        {capitalizar(nombre)} - {labelPrecio}
+                      </option>
+                    );
+                  })}
               </select>
             </div>
 
@@ -557,7 +556,7 @@ const ModalVehiculoCajero = ({
             <h3>Cambio a abono más caro</h3>
             <p>El vehículo seleccionado tiene un abono más caro que el actual.</p>
             <p className="diferencia-monto">
-              Diferencia a pagar: <strong>${diferenciaAPagar.toLocaleString()}</strong>
+              Diferencia a pagar: <strong>${formatARS(diferenciaAPagar)}</strong>
             </p>
             <p className="diferencia-info">
               Esta diferencia cubre los días restantes del abono actual.
@@ -586,8 +585,7 @@ const ModalVehiculoCajero = ({
               >
                 <option value="" disabled>Tipo de factura</option>
                 {tiposFactura.map((tipo) => (
-                  <option key={tipo.nombre} value={tipo.nombre}
->{tipo}</option>
+                  <option key={tipo} value={tipo}>{tipo}</option>
                 ))}
               </select>
             </div>

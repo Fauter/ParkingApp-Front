@@ -49,31 +49,19 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const [nombreTemporal, setNombreTemporal] = useState("");
   const [sugerencias, setSugerencias] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState({
-    show: false,
-    title: "",
-    message: "",
-    icon: null,
-    onClose: null
-  });
+
+  // 👇 ModalMensaje: usa {titulo, mensaje}; se muestra solo si "mensaje" es truthy
+  const [modal, setModal] = useState({ titulo: "", mensaje: "" });
+  const closeModal = () => setModal({ titulo: "", mensaje: "" });
+  const showModal = (titulo, mensaje) => setModal({ titulo, mensaje });
 
   const formatARS = (n) => {
     if (typeof n !== "number") return null;
     try {
       return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
     } catch {
-      return n.toString();
+      return n?.toString() ?? "";
     }
-  };
-
-  const showModal = (title, message, icon = "info", onClose = null) => {
-    setModal({
-      show: true,
-      title,
-      message,
-      icon,
-      onClose: onClose || (() => setModal(prev => ({...prev, show: false})))
-    });
   };
 
   const fetchClientes = async () => {
@@ -82,10 +70,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (res.ok) {
         const data = await res.json();
         setClientes(Array.isArray(data) ? data : []);
+      } else {
+        showModal("Error", "No se pudo cargar la lista de clientes.");
       }
     } catch (err) {
       console.error("Error al cargar clientes:", err);
-      showModal("Error", "Error al cargar lista de clientes", "error");
+      showModal("Error", "Error al cargar lista de clientes.");
     }
   };
 
@@ -103,15 +93,17 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     const fetchData = async () => {
       try {
         const tiposRes = await fetch("http://localhost:5000/api/tipos-vehiculo");
+        if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
         const tiposData = await tiposRes.json();
         setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
 
         const preciosRes = await fetch("http://localhost:5000/api/precios");
+        if (!preciosRes.ok) throw new Error("No se pudo cargar precios");
         const preciosData = await preciosRes.json();
         setPrecios(preciosData || {});
       } catch (err) {
         console.error("Error al cargar datos:", err);
-        showModal("Error", "Error al cargar datos de vehículos y precios", "error");
+        showModal("Error", "Error al cargar datos de vehículos y precios.");
       }
     };
     fetchData();
@@ -120,9 +112,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   useEffect(() => { fetchClientes(); }, []);
 
   useEffect(() => {
-    if (nombreTemporal.trim().length >= 3) {
+    const q = nombreTemporal.trim().toLowerCase();
+    if (q.length >= 3) {
       const coincidencias = clientes.filter((c) =>
-        (c.nombreApellido || "").toLowerCase().includes(nombreTemporal.trim().toLowerCase())
+        (c.nombreApellido || "").toLowerCase().includes(q)
       );
       setSugerencias(coincidencias);
     } else {
@@ -171,12 +164,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   };
 
   const validarPatente = (patente) => {
-    const formatoViejo = /^[A-Z]{3}\d{3}$/;
-    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
+    const formatoViejo = /^[A-Z]{3}\d{3}$/;       // ABC123
+    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/; // AB123CD
     return formatoViejo.test(patente) || formatoNuevo.test(patente);
   };
 
-  // 🔐 ensureCliente: ahora busca por dni/email además de nombre
+  // 🔐 ensureCliente: busca por dni/email/nombre y actualiza si existe
   const ensureCliente = async () => {
     const nombre = (formData.nombreApellido || "").trim().toLowerCase();
     const dni = (formData.dniCuitCuil || "").trim();
@@ -188,24 +181,24 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       (clientes || []).find(c => (c.nombreApellido || '').trim().toLowerCase() === nombre);
 
     if (candidato && candidato._id) {
-      // actualiza datos básicos
-      const putRes = await fetch(`http://localhost:5000/api/clientes/${candidato._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombreApellido: formData.nombreApellido,
-          dniCuitCuil: formData.dniCuitCuil,
-          domicilio: formData.domicilio,
-          localidad: formData.localidad,
-          telefonoParticular: formData.telefonoParticular,
-          telefonoEmergencia: formData.telefonoEmergencia,
-          domicilioTrabajo: formData.domicilioTrabajo,
-          telefonoTrabajo: formData.telefonoTrabajo,
-          email: formData.email
-        }),
-      });
-      if (putRes.ok) return candidato._id;
-      // si falló, continúa con creación
+      try {
+        const putRes = await fetch(`http://localhost:5000/api/clientes/${candidato._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nombreApellido: formData.nombreApellido,
+            dniCuitCuil: formData.dniCuitCuil,
+            domicilio: formData.domicilio,
+            localidad: formData.localidad,
+            telefonoParticular: formData.telefonoParticular,
+            telefonoEmergencia: formData.telefonoEmergencia,
+            domicilioTrabajo: formData.domicilioTrabajo,
+            telefonoTrabajo: formData.telefonoTrabajo,
+            email: formData.email
+          }),
+        });
+        if (putRes.ok) return candidato._id;
+      } catch (_) { /* si falla, creamos nuevo */ }
     }
 
     const nuevoClienteRes = await fetch('http://localhost:5000/api/clientes', {
@@ -238,10 +231,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     try {
       const patente = (formData.patente || "").toUpperCase();
 
-      if (!validarPatente(patente)) throw new Error("Patente inválida (ABC123 o AB123CD)");
-      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar tipo de vehículo");
-      if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre del cliente");
-      if (!formData.email?.trim()) throw new Error("Debe ingresar un email");
+      // Validaciones con feedback por Modal
+      if (!validarPatente(patente)) throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
+      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
+      if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre y apellido del cliente.");
+      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
 
       const clienteId = await ensureCliente();
 
@@ -260,58 +254,55 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.message || 'Error al registrar abono');
+        throw new Error(err?.message || 'Error al registrar abono.');
       }
 
-      // refrescar clientes para que las sugerencias queden al día
+      // refrescar sugerencias
       await fetchClientes();
 
-      // opcional: forzar un SYNC inmediato (si el backend lo tiene habilitado)
+      // opcional: disparar sync
       fetch('http://localhost:5000/api/sync/run-now', { method: 'POST' }).catch(() => {});
 
-      showModal(
-        "Éxito",
-        `Abono registrado correctamente para ${patente}.`,
-        "success",
-        () => {
-          setModal(prev => ({...prev, show: false}));
-          setFormData({
-            nombreApellido: "",
-            dniCuitCuil: "",
-            domicilio: "",
-            localidad: "",
-            telefonoParticular: "",
-            telefonoEmergencia: "",
-            domicilioTrabajo: "",
-            telefonoTrabajo: "",
-            email: "",
-            patente: datosVehiculo?.patente || "",
-            tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
-            marca: "",
-            modelo: "",
-            color: "",
-            anio: "",
-            companiaSeguro: "",
-            metodoPago: "Efectivo",
-            factura: "CC",
-            fotoSeguro: null,
-            fotoDNI: null,
-            fotoCedulaVerde: null,
-            fotoCedulaAzul: null,
-          });
-          setFileUploaded({
-            fotoSeguro: false,
-            fotoDNI: false,
-            fotoCedulaVerde: false,
-            fotoCedulaAzul: false,
-          });
-          setNombreTemporal("");
-        }
-      );
+      // Éxito → ModalMensaje
+      showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
+
+      // Reset de formulario
+      setFormData({
+        nombreApellido: "",
+        dniCuitCuil: "",
+        domicilio: "",
+        localidad: "",
+        telefonoParticular: "",
+        telefonoEmergencia: "",
+        domicilioTrabajo: "",
+        telefonoTrabajo: "",
+        email: "",
+        patente: datosVehiculo?.patente || "",
+        tipoVehiculo: datosVehiculo?.tipoVehiculo || "",
+        marca: "",
+        modelo: "",
+        color: "",
+        anio: "",
+        companiaSeguro: "",
+        metodoPago: "Efectivo",
+        factura: "CC",
+        fotoSeguro: null,
+        fotoDNI: null,
+        fotoCedulaVerde: null,
+        fotoCedulaAzul: null,
+      });
+      setFileUploaded({
+        fotoSeguro: false,
+        fotoDNI: false,
+        fotoCedulaVerde: false,
+        fotoCedulaAzul: false,
+      });
+      setNombreTemporal("");
 
     } catch (error) {
       console.error(error);
-      showModal("Error", error.message, "error");
+      // Error → ModalMensaje
+      showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
     } finally {
       setLoading(false);
     }
@@ -435,9 +426,9 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             >
               <option value="">Seleccione</option>
               {tiposVehiculo.map((tipo) => {
-                const mensual = precios?.[tipo.nombre.toLowerCase()]?.mensual;
+                const mensual = precios?.[tipo.nombre?.toLowerCase?.() ?? ""]?.mensual;
                 const labelPrecio = typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
-                const capitalized = tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1);
+                const capitalized = tipo.nombre ? (tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)) : "";
                 return (
                   <option key={tipo.nombre} value={tipo.nombre}>
                     {capitalized} - {labelPrecio}
@@ -453,12 +444,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         </button>
       </form>
 
+      {/* ModalMensaje: se muestra si "modal.mensaje" tiene contenido */}
       <ModalMensaje
-        show={modal.show}
-        title={modal.title}
-        message={modal.message}
-        icon={modal.icon}
-        onClose={modal.onClose}
+        titulo={modal.titulo}
+        mensaje={modal.mensaje}
+        onClose={closeModal}
       />
     </div>
   );
