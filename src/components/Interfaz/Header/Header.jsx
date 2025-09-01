@@ -16,7 +16,7 @@ function Header({
 }) {
   const [mostrarSubmenu, setMostrarSubmenu] = useState(false);
   const [mostrarModalEntrada, setMostrarModalEntrada] = useState(false);
-  const [timestamp, setTimestamp] = useState(Date.now()); // 👈 NUEVO
+  const [timestamp, setTimestamp] = useState(Date.now());
   const menuRef = useRef();
 
   useEffect(() => {
@@ -158,7 +158,7 @@ function Header({
           href="https://admin.garageia.com/"
           className="menu-button"
           onClick={cerrarSubmenuYOverlay}
-        >4
+        >
           Admin
         </a> */}
         <button

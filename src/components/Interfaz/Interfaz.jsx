@@ -17,22 +17,47 @@ import Config from '../Config/Config';
 const TOKEN_KEY = 'token';
 const OPERADOR_KEY = 'operador';
 
+// Formatea con separadores de miles (.)
 const formatearVisualmente = (valor) => {
-  if (!valor) return '';
-  return valor.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (!valor && valor !== 0) return '';
+  const s = valor.toString();
+  if (!s) return '';
+  return s.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
-const limpiarNumero = (valor) => valor.replace(/\./g, '');
+// Deja solo dígitos (elimina todo lo que no sea 0-9)
+const limpiarNumero = (valor) => (valor || '').replace(/[^\d]/g, '');
+
+// Bloquea teclas no numéricas (permite navegación/edición)
+const handleNumericKeyDown = (e) => {
+  const permitidas = [
+    'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'
+  ];
+  // Permitir combos Ctrl/Cmd (copiar, pegar, etc.)
+  if (e.ctrlKey || e.metaKey) return;
+  if (permitidas.includes(e.key)) return;
+  // Permitir solo dígitos
+  if (!/^\d$/.test(e.key)) e.preventDefault();
+};
 
 function Interfaz() {
   const [vistaActual, setVistaActual] = useState('operador');
   const [modalActivo, setModalActivo] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [ticketPendiente, setTicketPendiente] = useState(null);
-  const [recaudado, setRecaudado] = useState('');
-  const [enCaja, setEnCaja] = useState('');
+
+  // Cierre de Caja
+  const [recaudado, setRecaudado] = useState('');  // solo dígitos
+  const [enCaja, setEnCaja] = useState('');        // solo dígitos
   const [confirmandoCaja, setConfirmandoCaja] = useState(false);
-  const [montoParcial, setMontoParcial] = useState('');
+
+  // Cierre Parcial
+  const [montoParcial, setMontoParcial] = useState(''); // solo dígitos
+  const [nombreParcial, setNombreParcial] = useState(''); // texto
+  const [textoParcial, setTextoParcial] = useState('');   // texto
+
+  // Incidente
   const [incidente, setIncidente] = useState('');
+
   const [mostrarOverlay, setMostrarOverlay] = useState(false);
   const [barreraIzqAbierta, setBarreraIzqAbierta] = useState(false);
   const [barreraDerAbierta, setBarreraDerAbierta] = useState(false);
@@ -107,6 +132,8 @@ function Interfaz() {
     setRecaudado('');
     setEnCaja('');
     setMontoParcial('');
+    setNombreParcial('');
+    setTextoParcial('');
     setIncidente('');
     setConfirmandoCaja(false);
   };
@@ -115,6 +142,11 @@ function Interfaz() {
     const rec = parseFloat(limpiarNumero(recaudado));
     const caja = parseFloat(limpiarNumero(enCaja));
     return !isNaN(rec) && !isNaN(caja) && rec >= 0 && caja >= 0;
+  };
+
+  const isMontoParcialValido = () => {
+    const m = parseFloat(limpiarNumero(montoParcial));
+    return !isNaN(m) && m >= 0;
   };
 
   const getFechaHora = () => {
@@ -217,6 +249,8 @@ function Interfaz() {
       fecha,
       hora,
       monto,
+      nombre: nombreParcial || '',
+      texto: textoParcial || '',
       operador: op, // ✅ objeto
     };
 
@@ -379,12 +413,10 @@ function Interfaz() {
     }
 
     try {
-      const ahora = new Date();
-      const horaMin = ahora.toTimeString().slice(0, 5);
-      const fecha = ahora.toISOString().split('T')[0];
       const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
 
-      const textoTicket = `${ticketNumFormateado}\nEntrada\nFecha: ${fecha}\nHora: ${horaMin}`;
+      // CAMBIO: textoTicket minimal (solo primera línea con el número de ticket).
+      const textoTicket = `${ticketNumFormateado}`;
 
       await fetch('http://localhost:5000/api/ticket/imprimir', {
         method: 'POST',
@@ -399,6 +431,13 @@ function Interfaz() {
       setBarreraIzqAbierta(true);
       setTimeout(() => setBarreraIzqAbierta(false), 10000);
     }, 1500);
+  };
+
+  const totalRendidoPreview = () => {
+    const rec = parseFloat(limpiarNumero(recaudado));
+    const caja = parseFloat(limpiarNumero(enCaja));
+    const suma = (!isNaN(rec) ? rec : 0) + (!isNaN(caja) ? caja : 0);
+    return formatearVisualmente(String(suma));
   };
 
   return (
@@ -447,6 +486,9 @@ function Interfaz() {
             <>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onKeyDown={handleNumericKeyDown}
                 className="modal-input"
                 placeholder="Total Recaudado"
                 value={formatearVisualmente(recaudado)}
@@ -454,6 +496,9 @@ function Interfaz() {
               />
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onKeyDown={handleNumericKeyDown}
                 className="modal-input"
                 placeholder="Dejo en Caja"
                 value={formatearVisualmente(enCaja)}
@@ -480,12 +525,36 @@ function Interfaz() {
         <ModalHeader titulo="Cierre Parcial" onClose={cerrarModal}>
           <input
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            onKeyDown={handleNumericKeyDown}
             className="modal-input"
             placeholder="Monto"
             value={formatearVisualmente(montoParcial)}
             onChange={(e) => setMontoParcial(limpiarNumero(e.target.value))}
           />
-          <button className="modal-btn" onClick={enviarCierreParcial}>
+
+          {/* 🆕 Nombre (opcional) */}
+          <input
+            type="text"
+            className="modal-input"
+            placeholder="Nombre (opcional)"
+            value={nombreParcial}
+            onChange={(e) => setNombreParcial(e.target.value)}
+            maxLength={60}
+          />
+
+          {/* 🆕 Texto (opcional) */}
+          <textarea
+            rows={3}
+            className="modal-input"
+            placeholder="Texto (opcional, máx. 300)"
+            value={textoParcial}
+            onChange={(e) => setTextoParcial(e.target.value)}
+            maxLength={300}
+          />
+
+          <button className="modal-btn" disabled={!isMontoParcialValido()} onClick={enviarCierreParcial}>
             Confirmar
           </button>
         </ModalHeader>
