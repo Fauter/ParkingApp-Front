@@ -3,6 +3,9 @@ import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import './DatosAutoAbono.css';
 
+const BASE_URL = "http://localhost:5000";
+const CATALOG_POLL_MS = 180000; // 3 min
+
 function DatosAutoAbono({ datosVehiculo, user }) {
   const [formData, setFormData] = useState({
     nombreApellido: "",
@@ -36,6 +39,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoCedulaAzul: false,
   });
 
+  // refs de inputs (compatibilidad)
   const inputRefs = {
     fotoSeguro: useRef(null),
     fotoDNI: useRef(null),
@@ -50,11 +54,150 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const [sugerencias, setSugerencias] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 👇 ModalMensaje: usa {titulo, mensaje}; se muestra solo si "mensaje" es truthy
+  // ===== Modal de mensajes genéricos =====
   const [modal, setModal] = useState({ titulo: "", mensaje: "" });
   const closeModal = () => setModal({ titulo: "", mensaje: "" });
   const showModal = (titulo, mensaje) => setModal({ titulo, mensaje });
 
+  // ======= Webcam (usa selección de Config.jsx) =======
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  const [modalCamAbierto, setModalCamAbierto] = useState(false);
+  const [videoStream, setVideoStream] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [capturingField, setCapturingField] = useState(null);
+  const videoRef = useRef(null);
+
+  // Lee selección guardada por Config.jsx -> backend y luego localStorage
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${BASE_URL}/api/webcam`);
+        if (r.ok) {
+          const data = await r.json();
+          if (data?.webcam) {
+            setSelectedDeviceId(data.webcam);
+            localStorage.setItem("webcamDeviceId", data.webcam);
+            return;
+          }
+        }
+      } catch (_) {}
+      const ls = localStorage.getItem("webcamDeviceId");
+      if (ls) setSelectedDeviceId(ls);
+    })();
+  }, []);
+
+  const humanMediaError = (err) => {
+    if (!err) return "Error desconocido de cámara";
+    if (err.name === "NotAllowedError" || err.name === "SecurityError")
+      return "Permiso denegado. Habilitá el acceso a la cámara para este sitio.";
+    if (err.name === "NotFoundError" || err.name === "OverconstrainedError")
+      return "No se encontró esa cámara. Probá actualizar la lista en Config o desconectar/volver a conectar.";
+    if (err.name === "NotReadableError")
+      return "La cámara está en uso por otra app. Cerrala y probá de nuevo.";
+    return `Fallo de cámara: ${err.name || ""} ${err.message || ""}`;
+  };
+
+  const getStream = async () => {
+    const tryList = [
+      selectedDeviceId ? { video: { deviceId: { exact: selectedDeviceId } } } : null,
+      { video: { facingMode: { ideal: "environment" } } },
+      { video: true },
+    ].filter(Boolean);
+
+    let lastErr = null;
+    for (const constraints of tryList) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("No se pudo abrir ninguna cámara");
+  };
+
+  const abrirCamParaCampo = async (campo) => {
+    setCapturingField(campo);
+    setFotoPreview(null);
+    setModalCamAbierto(true);
+    try {
+      const stream = await getStream();
+      setVideoStream(stream);
+    } catch (err) {
+      setVideoStream(null);
+      showModal("Error de cámara", humanMediaError(err));
+    }
+  };
+
+  const tomarFoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth || 1280;
+    canvas.height = videoRef.current.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    setFotoPreview(canvas.toDataURL("image/png"));
+  };
+
+  const repetirFoto = async () => {
+    setFotoPreview(null);
+    if (videoStream) {
+      videoStream.getTracks().forEach((t) => t.stop());
+      setVideoStream(null);
+    }
+    try {
+      const stream = await getStream();
+      setVideoStream(stream);
+    } catch (err) {
+      setVideoStream(null);
+      showModal("Error de cámara", humanMediaError(err));
+    }
+  };
+
+  const confirmarFoto = async () => {
+    if (!capturingField || !fotoPreview) return;
+
+    // convertir dataURL a Blob/File y guardarlo en formData
+    const dataUrl = fotoPreview;
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const patente = (formData.patente || "SINPATENTE").replace(/\s+/g, "");
+    const ts = Date.now();
+    const filename = `${patente}_${capturingField}_${ts}.png`;
+    const file = new File([blob], filename, { type: "image/png" });
+
+    setFormData((prev) => ({ ...prev, [capturingField]: file }));
+    setFileUploaded((prev) => ({ ...prev, [capturingField]: true }));
+
+    cerrarModalCam();
+  };
+
+  const cerrarModalCam = () => {
+    setModalCamAbierto(false);
+    setCapturingField(null);
+    setFotoPreview(null);
+    if (videoStream) {
+      try {
+        videoStream.getTracks().forEach((t) => t.stop());
+      } catch {}
+      setVideoStream(null);
+    }
+  };
+
+  useEffect(() => {
+    if (videoRef.current && videoStream) {
+      videoRef.current.srcObject = videoStream;
+    }
+  }, [videoStream]);
+
+  useEffect(() => {
+    return () => {
+      if (videoStream) {
+        try { videoStream.getTracks().forEach((t) => t.stop()); } catch {}
+      }
+    };
+  }, [videoStream]);
+
+  // ===== Formato ARS =====
   const formatARS = (n) => {
     if (typeof n !== "number") return null;
     try {
@@ -64,9 +207,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   };
 
+  // ===== Clientes / tipos / precios =====
   const fetchClientes = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/clientes");
+      const res = await fetch(`${BASE_URL}/api/clientes`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setClientes(Array.isArray(data) ? data : []);
@@ -89,24 +233,45 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   }, [datosVehiculo]);
 
+  // ===== Auto-refresh de tipos y precios =====
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const tiposRes = await fetch("http://localhost:5000/api/tipos-vehiculo");
-        if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
-        const tiposData = await tiposRes.json();
-        setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
+    let timer = null;
 
-        const preciosRes = await fetch("http://localhost:5000/api/precios");
+    const fetchTiposYPrecios = async () => {
+      try {
+        const [tiposRes, preciosRes] = await Promise.all([
+          fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" }),
+          fetch(`${BASE_URL}/api/precios`, { cache: "no-store" }),
+        ]);
+
+        if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
         if (!preciosRes.ok) throw new Error("No se pudo cargar precios");
+
+        const tiposData = await tiposRes.json();
         const preciosData = await preciosRes.json();
+
+        setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
         setPrecios(preciosData || {});
       } catch (err) {
         console.error("Error al cargar datos:", err);
         showModal("Error", "Error al cargar datos de vehículos y precios.");
       }
     };
-    fetchData();
+
+    fetchTiposYPrecios(); // primera
+
+    timer = setInterval(fetchTiposYPrecios, CATALOG_POLL_MS);
+
+    const onVis = () => document.visibilityState === "visible" && fetchTiposYPrecios();
+    const onOnline = () => fetchTiposYPrecios();
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("online", onOnline);
+
+    return () => {
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("online", onOnline);
+    };
   }, []);
 
   useEffect(() => { fetchClientes(); }, []);
@@ -169,7 +334,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     return formatoViejo.test(patente) || formatoNuevo.test(patente);
   };
 
-  // 🔐 ensureCliente: busca por dni/email/nombre y actualiza si existe
+  // 🔐 ensureCliente
   const ensureCliente = async () => {
     const nombre = (formData.nombreApellido || "").trim().toLowerCase();
     const dni = (formData.dniCuitCuil || "").trim();
@@ -182,7 +347,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
     if (candidato && candidato._id) {
       try {
-        const putRes = await fetch(`http://localhost:5000/api/clientes/${candidato._id}`, {
+        const putRes = await fetch(`${BASE_URL}/api/clientes/${candidato._id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -201,7 +366,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       } catch (_) { /* si falla, creamos nuevo */ }
     }
 
-    const nuevoClienteRes = await fetch('http://localhost:5000/api/clientes', {
+    const nuevoClienteRes = await fetch(`${BASE_URL}/api/clientes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -231,7 +396,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     try {
       const patente = (formData.patente || "").toUpperCase();
 
-      // Validaciones con feedback por Modal
       if (!validarPatente(patente)) throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
       if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
       if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre y apellido del cliente.");
@@ -247,7 +411,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       fd.set('cliente', clienteId);
       fd.set('operador', user?.nombre || 'Sistema');
 
-      const resp = await fetch('http://localhost:5000/api/abonos/registrar-abono', {
+      const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: 'POST',
         body: fd,
       });
@@ -257,16 +421,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.message || 'Error al registrar abono.');
       }
 
-      // refrescar sugerencias
       await fetchClientes();
+      fetch(`${BASE_URL}/api/sync/run-now`, { method: 'POST' }).catch(() => {});
 
-      // opcional: disparar sync
-      fetch('http://localhost:5000/api/sync/run-now', { method: 'POST' }).catch(() => {});
-
-      // Éxito → ModalMensaje
       showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
 
-      // Reset de formulario
       setFormData({
         nombreApellido: "",
         dniCuitCuil: "",
@@ -301,17 +460,23 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
     } catch (error) {
       console.error(error);
-      // Error → ModalMensaje
       showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
     } finally {
       setLoading(false);
     }
   };
 
+  // === Render del “selector de archivo” que abre la cámara ===
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">
       <label className="file-visible-label">{label}</label>
-      <label className="file-label" onClick={() => inputRefs[name]?.current?.click()}>
+      <label
+        className="file-label"
+        onClick={(e) => {
+          e.preventDefault();
+          abrirCamParaCampo(name);
+        }}
+      >
         <div className="icon-wrapper">
           <FaCamera className="icon" />
         </div>
@@ -444,12 +609,66 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         </button>
       </form>
 
-      {/* ModalMensaje: se muestra si "modal.mensaje" tiene contenido */}
+      {/* Modal de mensajes genéricos */}
       <ModalMensaje
         titulo={modal.titulo}
         mensaje={modal.mensaje}
         onClose={closeModal}
       />
+
+      {/* Modal de Cámara */}
+      {modalCamAbierto && (
+        <ModalMensaje
+          titulo="Webcam"
+          mensaje={
+            capturingField
+              ? `Tomar foto para: ${capturingField.replace('foto', 'Foto ')}`
+              : "Vista previa de la cámara"
+          }
+          onClose={cerrarModalCam}
+        >
+          <div style={{ textAlign: "center" }}>
+            {!fotoPreview ? (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  style={{
+                    width: "320px",
+                    height: "240px",
+                    borderRadius: "6px",
+                    background: "#222",
+                  }}
+                />
+                <button
+                  className="guardarWebcamBtn"
+                  style={{ marginTop: "1rem" }}
+                  onClick={tomarFoto}
+                >
+                  Tomar Foto
+                </button>
+              </>
+            ) : (
+              <>
+                <img
+                  src={fotoPreview}
+                  alt="Foto tomada"
+                  style={{ width: "320px", borderRadius: "6px" }}
+                />
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+                  <button className="guardarWebcamBtn" onClick={repetirFoto}>
+                    Repetir
+                  </button>
+                  <button className="guardarWebcamBtn" onClick={confirmarFoto}>
+                    Confirmar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </ModalMensaje>
+      )}
     </div>
   );
 }

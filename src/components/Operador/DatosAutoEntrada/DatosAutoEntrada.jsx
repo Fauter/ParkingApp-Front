@@ -1,8 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./DatosAutoEntrada.css";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import AutoPlaceHolder from "../../../../public/images/placeholder.png";
 import AutoPlaceHolderNoimage from "../../../../public/images/placeholderNoimage.png";
+
+const BASE_URL = "http://localhost:5000";
+const CATALOG_POLL_MS = 180000; // 3 min
+const CATALOG_VERSION_KEY = "catalogVersion";
+const BC_NAME = "catalog-updated";
+
+let bc;
+try { bc = new BroadcastChannel(BC_NAME); } catch {}
+
+const hash = (obj) => {
+  const s = JSON.stringify(obj);
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+  return (h >>> 0).toString(36);
+};
 
 function DatosAutoEntrada({
   user,
@@ -11,180 +26,186 @@ function DatosAutoEntrada({
   timestamp,
   setTicketPendiente = () => {},
 }) {
-  // Estados principales
   const [patente, setPatente] = useState("");
   const [tipoVehiculo, setTipoVehiculo] = useState("");
   const [precios, setPrecios] = useState({});
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
-  // Estados para el modal
   const [modalMensaje, setModalMensaje] = useState("");
   const [modalTitulo, setModalTitulo] = useState("Atención");
   const [mostrarModal, setMostrarModal] = useState(false);
 
-  // Foto para mostrar (preview)
   const [fotoUrl, setFotoUrl] = useState(AutoPlaceHolder);
 
-  // Carga de precios y tipos al montar componente
-  useEffect(() => {
-    const fetchPrecios = async () => {
-      try {
-        const response = await fetch("http://localhost:5000/api/precios");
-        const data = await response.json();
-        setPrecios(data);
-      } catch (error) {
-        mostrarMensaje("Error", "No se pudieron cargar los precios.");
-        console.error("Error al obtener los precios:", error);
-      }
-    };
+  const abortRef = useRef(null);
+  const lastHashesRef = useRef({ precios: "", tipos: "" });
 
-    const fetchTiposVehiculo = async () => {
-      try {
-        const response = await fetch("http://localhost:5000/api/tipos-vehiculo");
-        const data = await response.json();
-        setTiposVehiculoDisponibles(data);
-      } catch (error) {
-        mostrarMensaje("Error", "No se pudieron cargar los tipos de vehículo.");
-        console.error("Error al obtener los tipos de vehículo:", error);
-      }
-    };
-
-    fetchPrecios();
-    fetchTiposVehiculo();
-  }, []);
-
-  // Actualiza la foto cuando cambia ticketPendiente o timestamp
-  useEffect(() => {
-    const verificarFoto = async () => {
-      if (ticketPendiente) {
-        const url = ticketPendiente.fotoUrl
-          ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
-          : `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${timestamp}`;
-
-        try {
-          const res = await fetch(url, { method: "HEAD" });
-          if (res.ok) {
-            setFotoUrl(url);
-          } else {
-            setFotoUrl(AutoPlaceHolderNoimage);
-          }
-        } catch (error) {
-          console.warn("No se pudo cargar la foto del vehículo:", error);
-          setFotoUrl(AutoPlaceHolderNoimage);
-        }
-      } else {
-        setFotoUrl(AutoPlaceHolder);
-      }
-    };
-
-    verificarFoto();
-  }, [ticketPendiente, timestamp]);
-
-  // Normalizar texto a minuscula para precios
-  const normalizar = (texto) => texto.toLowerCase();
-
-  // Eliminar foto temporal en backend
-  const eliminarFotoTemporal = async () => {
-    try {
-      await fetch("http://localhost:5000/api/vehiculos/eliminar-foto-temporal", {
-        method: "DELETE",
-      });
-    } catch (error) {
-      console.error("Error al eliminar foto temporal:", error);
+  const setIfChanged = (setter, key, data) => {
+    const h = hash(data);
+    if (h !== lastHashesRef.current[key]) {
+      lastHashesRef.current[key] = h;
+      setter(data);
     }
   };
 
-  // Mostrar modal con título y mensaje
   const mostrarMensaje = (titulo, mensaje) => {
     setModalTitulo(titulo);
     setModalMensaje(mensaje);
     setMostrarModal(true);
   };
 
-  // Función para resetear todo el estado local y también el ticket pendiente vía prop
+  const fetchPrecios = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudieron cargar los precios");
+      const data = await res.json();
+      setIfChanged(setPrecios, "precios", data || {});
+    } catch (error) {
+      mostrarMensaje("Error", "No se pudieron cargar los precios.");
+      console.error("Error al obtener los precios:", error);
+    }
+  }, []);
+
+  const fetchTiposVehiculo = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudieron cargar los tipos de vehículo");
+      const data = await res.json();
+      setIfChanged(setTiposVehiculoDisponibles, "tipos", Array.isArray(data) ? data : []);
+    } catch (error) {
+      mostrarMensaje("Error", "No se pudieron cargar los tipos de vehículo.");
+      console.error("Error al obtener los tipos de vehículo:", error);
+    }
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    try {
+      abortRef.current?.abort?.();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      await Promise.all([fetchPrecios(), fetchTiposVehiculo()]);
+    } catch {}
+  }, [fetchPrecios, fetchTiposVehiculo]);
+
+  useEffect(() => {
+    let timer = null;
+    loadAll(); // primera
+
+    timer = setInterval(loadAll, CATALOG_POLL_MS);
+
+    const onVis = () => document.visibilityState === "visible" && loadAll();
+    const onFocus = () => loadAll();
+    const onOnline = () => loadAll();
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onOnline);
+
+    const onStorage = (ev) => {
+      if (ev.key === CATALOG_VERSION_KEY) loadAll();
+    };
+    window.addEventListener("storage", onStorage);
+
+    if (bc) {
+      bc.onmessage = (msg) => {
+        if (msg?.data?.type === "catalog-version") loadAll();
+      };
+    }
+
+    return () => {
+      abortRef.current?.abort?.();
+      if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("storage", onStorage);
+      if (bc) bc.onmessage = null;
+    };
+  }, [loadAll]);
+
+  useEffect(() => {
+    const verificarFoto = async () => {
+      if (ticketPendiente) {
+        const url = ticketPendiente.fotoUrl
+          ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
+          : `${BASE_URL}/camara/sacarfoto/captura.jpg?t=${timestamp}`;
+
+        try {
+          const res = await fetch(url, { method: "HEAD" });
+          if (res.ok) setFotoUrl(url);
+          else setFotoUrl(AutoPlaceHolderNoimage);
+        } catch {
+          setFotoUrl(AutoPlaceHolderNoimage);
+        }
+      } else {
+        setFotoUrl(AutoPlaceHolder);
+      }
+    };
+    verificarFoto();
+  }, [ticketPendiente, timestamp]);
+
+  const normalizar = (t) => (t || "").toLowerCase();
+
+  const eliminarFotoTemporal = async () => {
+    try {
+      await fetch(`${BASE_URL}/api/vehiculos/eliminar-foto-temporal`, { method: "DELETE" });
+    } catch (error) {
+      console.error("Error al eliminar foto temporal:", error);
+    }
+  };
+
   const resetearEstadoCompleto = () => {
     setPatente("");
     setTipoVehiculo("");
     setFotoUrl(AutoPlaceHolder);
-    setTicketPendiente(null); // Reset ticket también, para que el padre se entere
+    setTicketPendiente(null);
   };
 
-  // Función que maneja el cierre del modal y resetea estados si fue éxito
   const handleCerrarModal = () => {
     setMostrarModal(false);
     setModalMensaje("");
-
     if (modalTitulo === "Éxito") {
       resetearEstadoCompleto();
-      
-      if (typeof onClose === "function") {
-        onClose(); // Esto cerrará el modal y reseteará el ticket
-      }
-      if (typeof setTicketPendiente === "function") {
-        setTicketPendiente(null); // Reset adicional por si acaso
-      }
+      if (typeof onClose === "function") onClose();
+      if (typeof setTicketPendiente === "function") setTicketPendiente(null);
     }
   };
 
-  // Validación y proceso de registrar entrada
   const handleEntrada = async () => {
-    if (!user) {
-      mostrarMensaje("Atención", "No estás logueado.");
-      return;
-    }
-
-    if (!ticketPendiente) {
-      mostrarMensaje("Atención", "Primero debes generar un ticket presionando el botón BOT.");
-      return;
-    }
+    if (!user) return mostrarMensaje("Atención", "No estás logueado.");
+    if (!ticketPendiente) return mostrarMensaje("Atención", "Primero generá un ticket con BOT.");
 
     const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
-    if (!regexCompleto.test(patente)) {
-      mostrarMensaje("Patente inválida", "La patente ingresada no es válida.");
-      return;
-    }
+    if (!regexCompleto.test(patente)) return mostrarMensaje("Patente inválida", "Formato ABC123 o AB123CD.");
 
-    if (!patente || !tipoVehiculo) {
-      mostrarMensaje("Faltan datos", "Debe ingresar una patente y seleccionar un tipo de vehículo.");
-      return;
-    }
+    if (!patente || !tipoVehiculo) return mostrarMensaje("Faltan datos", "Patente y tipo de vehículo.");
 
     const tipoNormalizado = normalizar(tipoVehiculo);
-    if (!precios[tipoNormalizado]) {
-      mostrarMensaje("Sin precios", "No se encontraron precios para el tipo de vehículo seleccionado.");
-      return;
-    }
+    if (!precios[tipoNormalizado]) return mostrarMensaje("Sin precios", "No hay precios para ese tipo.");
 
     try {
       const fotoUrlActual = ticketPendiente.fotoUrl
         ? ticketPendiente.fotoUrl
-        : "http://localhost:5000/camara/sacarfoto/captura.jpg";
+        : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
 
-      // Asociar ticket con vehículo
       const resAsociar = await fetch(
-        `http://localhost:5000/api/tickets/${ticketPendiente._id}/asociar`,
+        `${BASE_URL}/api/tickets/${ticketPendiente._id}/asociar`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            patente,
-            tipoVehiculo,
-            operadorNombre: user.nombre,
-            fotoUrl: fotoUrlActual,
+            patente, tipoVehiculo, operadorNombre: user.nombre, fotoUrl: fotoUrlActual,
           }),
         }
       );
-
       const dataAsociar = await resAsociar.json();
       if (!resAsociar.ok) throw new Error(dataAsociar.msg || "Error al asociar ticket");
 
-      // Verificar si el vehículo ya existe
-      const checkResponse = await fetch(`http://localhost:5000/api/vehiculos/${patente}`);
+      const checkResponse = await fetch(`${BASE_URL}/api/vehiculos/${patente}`);
 
       if (checkResponse.ok) {
-        // Vehículo existe, registrar entrada
         const entradaResponse = await fetch(
-          `http://localhost:5000/api/vehiculos/${patente}/registrarEntrada`,
+          `${BASE_URL}/api/vehiculos/${patente}/registrarEntrada`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -200,8 +221,7 @@ function DatosAutoEntrada({
         );
         if (!entradaResponse.ok) throw new Error("Error al registrar entrada");
       } else {
-        // Vehículo no existe, crear nuevo
-        const vehiculoResponse = await fetch("http://localhost:5000/api/vehiculos", {
+        const vehiculoResponse = await fetch(`${BASE_URL}/api/vehiculos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -217,15 +237,10 @@ function DatosAutoEntrada({
         if (!vehiculoResponse.ok) throw new Error("Error al registrar vehículo");
       }
 
-      // Eliminar foto temporal
       await eliminarFotoTemporal();
-
-      // Reseteo local básico acá también, pero el reseteo completo se hará cuando se cierre el modal
       setPatente("");
       setTipoVehiculo("");
       setFotoUrl(AutoPlaceHolder);
-
-      // Mostrar éxito (esto abre el modal)
       mostrarMensaje("Éxito", `Entrada registrada para ${patente}.`);
     } catch (error) {
       console.error("Error:", error.message);
@@ -233,13 +248,10 @@ function DatosAutoEntrada({
     }
   };
 
-  // Control para que la patente sea mayúscula y válido parcialmente
   const handlePatenteChange = (e) => {
     const valor = e.target.value.toUpperCase();
     const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
-    if (valor === "" || regexParcial.test(valor)) {
-      setPatente(valor);
-    }
+    if (valor === "" || regexParcial.test(valor)) setPatente(valor);
   };
 
   return (

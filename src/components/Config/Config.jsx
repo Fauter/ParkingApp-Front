@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ModalMensaje from "../ModalMensaje/ModalMensaje";
 import "./Config.css";
 
 const BASE_URL = "http://localhost:5000";
+const LS_WEBCAM_KEY = "webcamDeviceId";
+const LS_IP_KEY = "ipCamara";
 
 function Config() {
   const [ipCamara, setIpCamara] = useState("");
@@ -10,7 +12,7 @@ function Config() {
   const [webcams, setWebcams] = useState([]);
   const [webcamDefault, setWebcamDefault] = useState("");
   const [videoStream, setVideoStream] = useState(null);
-  const videoRef = React.useRef(null);
+  const videoRef = useRef(null);
 
   const [mensaje, setMensaje] = useState("");
   const [fotoUrl, setFotoUrl] = useState(null);
@@ -20,6 +22,80 @@ function Config() {
   const [impresoras, setImpresoras] = useState([]);
   const [impresoraDefault, setImpresoraDefault] = useState("");
 
+  // ---------- Helpers ----------
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const humanMediaError = (err) => {
+    if (!err) return "Error desconocido de cámara";
+    if (err.name === "NotAllowedError" || err.name === "SecurityError")
+      return "Permiso denegado. Habilitá el acceso a la cámara en el navegador para 'localhost'.";
+    if (err.name === "NotFoundError" || err.name === "OverconstrainedError")
+      return "No se encontró esa cámara. Probá actualizar la lista o elegir otra.";
+    if (err.name === "NotReadableError")
+      return "La cámara está siendo usada por otra app. Cerrá 'Cámara' de Windows u otras apps.";
+    return `Fallo de cámara: ${err.name || ""} ${err.message || ""}`;
+  };
+
+  async function stopStream(stream) {
+    if (stream) {
+      stream.getTracks().forEach((t) => {
+        try { t.stop(); } catch {}
+      });
+    }
+  }
+
+  async function enumerateCams({ requestPermission = false } = {}) {
+    try {
+      // 1) Conseguir permiso primero para que los labels aparezcan y salgan todos los dispositivos
+      if (requestPermission) {
+        let tmp;
+        try {
+          tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (e) {
+          // Si falla el permiso, igual intentamos enumerar para mostrar al menos algo
+          console.warn("Permiso cámara falló, intentando enumerar igual:", e);
+        } finally {
+          await stopStream(tmp);
+        }
+      }
+
+      // 2) Enumerar
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter((d) => d.kind === "videoinput");
+
+      // 3) Limpieza de duplicados por deviceId
+      const seen = new Set();
+      const unique = [];
+      for (const c of cams) {
+        if (!seen.has(c.deviceId)) {
+          seen.add(c.deviceId);
+          unique.push(c);
+        }
+      }
+
+      // 4) Orden alfabético por label (para que no "salte")
+      unique.sort((a, b) => (a.label || "").localeCompare(b.label || ""));
+
+      setWebcams(unique);
+
+      // 5) Elegir default:
+      const saved = localStorage.getItem(LS_WEBCAM_KEY);
+      const savedExists = unique.find((c) => c.deviceId === saved);
+      if (saved && savedExists) {
+        setWebcamDefault(saved);
+      } else if (unique.length > 0) {
+        setWebcamDefault(unique[0].deviceId);
+      } else {
+        setWebcamDefault("");
+      }
+    } catch (e) {
+      console.error("No se pudo enumerar webcams:", e);
+      setMensaje("❌ No se pudieron listar webcams. " + humanMediaError(e));
+      setModalAbierto(true);
+    }
+  }
+
+  // ---------- Cargas iniciales ----------
   useEffect(() => {
     async function fetchIp() {
       try {
@@ -27,11 +103,11 @@ function Config() {
         if (!res.ok) throw new Error("No se pudo obtener IP");
         const data = await res.json();
         setIpCamara(data.ip);
-        localStorage.setItem("ipCamara", data.ip);
+        localStorage.setItem(LS_IP_KEY, data.ip);
       } catch (error) {
         console.error(error);
         setMensaje("⚠️ No se pudo cargar la IP desde backend");
-        const savedIp = localStorage.getItem("ipCamara");
+        const savedIp = localStorage.getItem(LS_IP_KEY);
         if (savedIp) setIpCamara(savedIp);
       }
     }
@@ -40,13 +116,13 @@ function Config() {
       try {
         const res = await fetch(`${BASE_URL}/api/impresoras`);
         const data = await res.json();
-        setImpresoras(data.impresoras || []);
+        const lista = Array.isArray(data.impresoras) ? data.impresoras : [];
+        setImpresoras(lista);
 
-        // Importante: asegurar que default esté dentro de las impresoras recibidas
-        if (data.default && data.impresoras.includes(data.default)) {
+        if (data.default && lista.includes(data.default)) {
           setImpresoraDefault(data.default);
-        } else if (data.impresoras.length > 0) {
-          setImpresoraDefault(data.impresoras[0]);
+        } else if (lista.length > 0) {
+          setImpresoraDefault(lista[0]);
         } else {
           setImpresoraDefault("");
         }
@@ -54,28 +130,29 @@ function Config() {
         console.error("No se pudo obtener lista de impresoras:", e);
       }
     }
-    async function fetchWebcams() {
-      try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const cams = devices.filter((d) => d.kind === "videoinput");
-        setWebcams(cams);
-        if (cams.length > 0) setWebcamDefault(cams[0].deviceId);
-      } catch (e) {
-        console.error("No se pudo obtener webcams:", e);
-      }
-    }
 
-    fetchWebcams();
+    // 🔑 Pide permiso y luego enumera (esto arregla que solo aparezca "Webcam 1")
+    enumerateCams({ requestPermission: true });
     fetchIp();
     fetchImpresoras();
   }, []);
+
+  // Vincular el stream al <video>
   useEffect(() => {
     if (videoRef.current && videoStream) {
       videoRef.current.srcObject = videoStream;
     }
   }, [videoStream]);
 
-  const handleChange = (e) => setIpCamara(e.target.value);
+  // Persistir selección de webcam
+  useEffect(() => {
+    if (webcamDefault) {
+      localStorage.setItem(LS_WEBCAM_KEY, webcamDefault);
+    }
+  }, [webcamDefault]);
+
+  // ---------- Handlers ----------
+  const handleChangeIP = (e) => setIpCamara(e.target.value);
 
   const guardarIP = async () => {
     try {
@@ -90,7 +167,7 @@ function Config() {
 
       if (!response.ok) throw new Error("Error al guardar IP");
 
-      localStorage.setItem("ipCamara", ipCamara);
+      localStorage.setItem(LS_IP_KEY, ipCamara);
       setMensaje("✅ IP guardada correctamente");
     } catch (error) {
       console.error(error);
@@ -116,8 +193,7 @@ function Config() {
 
       if (!response.ok) throw new Error("Error al sacar foto de prueba");
 
-      await new Promise((r) => setTimeout(r, 2000));
-
+      await sleep(1200);
       const timestamp = Date.now();
       setFotoUrl(`${BASE_URL}/camara/sacarfoto/capturaTest.jpg?t=${timestamp}`);
       setMensaje("✅ Foto de prueba capturada");
@@ -152,21 +228,31 @@ function Config() {
     setMensaje("📷 Mostrando cámara...");
     setFotoUrl(null);
 
+    // Si el ID es "default"/vacío, pedimos {video:true} sin 'exact'
+    const useGeneric =
+      !webcamDefault || webcamDefault === "default" || webcamDefault === "communications";
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          deviceId: webcamDefault ? { exact: webcamDefault } : undefined,
-        },
-      });
+      const constraints = useGeneric
+        ? { video: true }
+        : { video: { deviceId: { exact: webcamDefault } } };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setVideoStream(stream);
+
+      // Tras obtener stream, re-enumeramos para que aparezcan labels reales si faltaban
+      await enumerateCams({ requestPermission: false });
+      setMensaje("✅ Cámara lista");
     } catch (error) {
-      setMensaje("❌ No se pudo acceder a la webcam");
+      console.error(error);
+      setMensaje("❌ No se pudo acceder a la webcam. " + humanMediaError(error));
       setVideoStream(null);
     }
   };
 
   const guardarWebCam = async () => {
     try {
+      localStorage.setItem(LS_WEBCAM_KEY, webcamDefault);
       const res = await fetch(`${BASE_URL}/api/webcam`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,9 +273,16 @@ function Config() {
     setMensaje("");
     setFotoUrl(null);
     if (videoStream) {
-      videoStream.getTracks().forEach((track) => track.stop());
+      stopStream(videoStream);
       setVideoStream(null);
     }
+  };
+
+  const actualizarLista = async () => {
+    setMensaje("🔄 Actualizando lista de cámaras...");
+    setModalAbierto(true);
+    await enumerateCams({ requestPermission: true });
+    setMensaje("✅ Lista actualizada");
   };
 
   return (
@@ -203,34 +296,41 @@ function Config() {
           id="ip-camara"
           placeholder="Ej: 192.168.0.100"
           value={ipCamara}
-          onChange={handleChange}
+          onChange={handleChangeIP}
         />
         <button onClick={guardarIP}>Guardar IP</button>
         <button onClick={testearCamara} disabled={loading}>
-          {loading ? "Cargando..." : "Testear Cámara"}
+          {loading ? "Cargando..." : "Testear Cámara IP"}
         </button>
       </div>
 
       <div className="campo-config">
-        <label htmlFor="web-cam">modelo Cámara:</label>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <label htmlFor="web_cam">Modelo Cámara (Webcam):</label>
+        </div>
+
         <select
           id="web_cam"
           className="promoSelect"
           value={webcamDefault}
           onChange={(e) => setWebcamDefault(e.target.value)}
         >
+          {webcams.length === 0 && <option value="">(sin cámaras detectadas)</option>}
           {webcams.map((cam, i) => (
-            <option key={cam.deviceId} value={cam.deviceId}>
-              {cam.label || `Webcam ${i + 1}`}
+            <option key={`${cam.deviceId || i}-${i}`} value={cam.deviceId}>
+              {cam.label?.trim()
+                ? cam.label
+                : `Webcam ${i + 1}${cam.deviceId ? ` (${cam.deviceId.slice(0, 6)}…)` : ""}`}
             </option>
           ))}
         </select>
-        <button className="guardarWebCamBtn" onClick={guardarWebCam}>
-          Guardar Webcam
-        </button>
-        <button onClick={testearWebCam} disabled={loading}>
-          {loading ? "Cargando..." : "Testear Cámara"}
-        </button>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="guardarWebCamBtn" onClick={guardarWebCam}>
+            Guardar Webcam
+          </button>
+          <button onClick={testearWebCam}>Testear Webcam</button>
+        </div>
       </div>
 
       <div className="ticketera-config">
@@ -260,6 +360,7 @@ function Config() {
               <video
                 ref={videoRef}
                 autoPlay
+                playsInline
                 style={{
                   width: "320px",
                   height: "240px",
@@ -269,7 +370,16 @@ function Config() {
               />
             </div>
           )}
-          {/* Si quieres mostrar la foto capturada, agrega aquí fotoUrl */}
+
+          {fotoUrl && (
+            <div style={{ marginTop: "1rem", textAlign: "center" }}>
+              <img
+                src={fotoUrl}
+                alt="Foto de prueba"
+                style={{ width: "320px", height: "auto", borderRadius: "6px" }}
+              />
+            </div>
+          )}
         </ModalMensaje>
       )}
     </div>
