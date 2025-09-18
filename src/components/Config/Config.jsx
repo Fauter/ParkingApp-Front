@@ -22,7 +22,6 @@ function Config() {
   const [impresoras, setImpresoras] = useState([]);
   const [impresoraDefault, setImpresoraDefault] = useState("");
 
-  // ---------- Helpers ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const humanMediaError = (err) => {
@@ -46,24 +45,20 @@ function Config() {
 
   async function enumerateCams({ requestPermission = false } = {}) {
     try {
-      // 1) Conseguir permiso primero para que los labels aparezcan y salgan todos los dispositivos
       if (requestPermission) {
         let tmp;
         try {
           tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         } catch (e) {
-          // Si falla el permiso, igual intentamos enumerar para mostrar al menos algo
           console.warn("Permiso cámara falló, intentando enumerar igual:", e);
         } finally {
           await stopStream(tmp);
         }
       }
 
-      // 2) Enumerar
       const devices = await navigator.mediaDevices.enumerateDevices();
       const cams = devices.filter((d) => d.kind === "videoinput");
 
-      // 3) Limpieza de duplicados por deviceId
       const seen = new Set();
       const unique = [];
       for (const c of cams) {
@@ -73,12 +68,10 @@ function Config() {
         }
       }
 
-      // 4) Orden alfabético por label (para que no "salte")
       unique.sort((a, b) => (a.label || "").localeCompare(b.label || ""));
 
       setWebcams(unique);
 
-      // 5) Elegir default:
       const saved = localStorage.getItem(LS_WEBCAM_KEY);
       const savedExists = unique.find((c) => c.deviceId === saved);
       if (saved && savedExists) {
@@ -95,7 +88,6 @@ function Config() {
     }
   }
 
-  // ---------- Cargas iniciales ----------
   useEffect(() => {
     async function fetchIp() {
       try {
@@ -131,27 +123,23 @@ function Config() {
       }
     }
 
-    // 🔑 Pide permiso y luego enumera (esto arregla que solo aparezca "Webcam 1")
     enumerateCams({ requestPermission: true });
     fetchIp();
     fetchImpresoras();
   }, []);
 
-  // Vincular el stream al <video>
   useEffect(() => {
     if (videoRef.current && videoStream) {
       videoRef.current.srcObject = videoStream;
     }
   }, [videoStream]);
 
-  // Persistir selección de webcam
   useEffect(() => {
     if (webcamDefault) {
       localStorage.setItem(LS_WEBCAM_KEY, webcamDefault);
     }
   }, [webcamDefault]);
 
-  // ---------- Handlers ----------
   const handleChangeIP = (e) => setIpCamara(e.target.value);
 
   const guardarIP = async () => {
@@ -183,23 +171,44 @@ function Config() {
       setModalAbierto(true);
 
       const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Timeout al sacar foto")), 5000)
+        setTimeout(() => reject(new Error("Timeout al sacar foto")), 8000)
       );
 
-      const response = await Promise.race([
-        fetch(`${BASE_URL}/api/camara/sacarfoto-test`),
-        timeout,
-      ]);
+      const req = fetch(`${BASE_URL}/api/camara/sacarfoto-test`);
+      const response = await Promise.race([req, timeout]);
 
-      if (!response.ok) throw new Error("Error al sacar foto de prueba");
+      if (!response.ok) {
+        const text = await response.text().catch(() => null);
+        throw new Error(text || "Error al pedir la captura al servidor");
+      }
 
+      let body = {};
+      try {
+        body = await response.json();
+      } catch (e) {
+        body = { exito: false, mensaje: "Respuesta inválida del backend" };
+      }
+
+      if (!body.exito) throw new Error(body.mensaje || "No se pudo capturar la foto en el backend");
+
+      // darle un momento al filesystem para que la imagen esté disponible y bustear cache
       await sleep(1200);
       const timestamp = Date.now();
-      setFotoUrl(`${BASE_URL}/camara/sacarfoto/capturaTest.jpg?t=${timestamp}`);
+      const imageUrl = `${BASE_URL}/api/camara/capturaTest.jpg?t=${timestamp}`;
+
+      // Verificar existencia (HEAD) antes de setear la URL
+      try {
+        const head = await fetch(imageUrl, { method: "HEAD" });
+        if (!head.ok) throw new Error("La imagen no está disponible en el servidor");
+      } catch (err) {
+        throw new Error("La imagen no está disponible en el servidor (posible 404 o CORS)");
+      }
+
+      setFotoUrl(imageUrl);
       setMensaje("✅ Foto de prueba capturada");
     } catch (error) {
       console.error(error);
-      setMensaje("❌ No se pudo capturar la foto de prueba");
+      setMensaje("❌ No se pudo capturar la foto de prueba: " + (error.message || ""));
       setFotoUrl(null);
     } finally {
       setLoading(false);
@@ -228,7 +237,6 @@ function Config() {
     setMensaje("📷 Mostrando cámara...");
     setFotoUrl(null);
 
-    // Si el ID es "default"/vacío, pedimos {video:true} sin 'exact'
     const useGeneric =
       !webcamDefault || webcamDefault === "default" || webcamDefault === "communications";
 
@@ -240,7 +248,6 @@ function Config() {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       setVideoStream(stream);
 
-      // Tras obtener stream, re-enumeramos para que aparezcan labels reales si faltaban
       await enumerateCams({ requestPermission: false });
       setMensaje("✅ Cámara lista");
     } catch (error) {
