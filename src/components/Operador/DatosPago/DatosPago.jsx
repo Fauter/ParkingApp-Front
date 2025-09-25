@@ -24,7 +24,7 @@ function DatosPago({
 
   const [modalCamAbierto, setModalCamAbierto] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
-  const [fotoUrl, setFotoUrl] = useState(null);
+  const [fotoUrl, setFotoUrl] = useState(null); // dataURL de webcam (si se usa)
   const videoRef = React.useRef(null);
 
   // 🎯 Cámara elegida en Config.jsx
@@ -43,7 +43,6 @@ function DatosPago({
         if (!res.ok) throw new Error("Promos fetch failed");
         const data = await res.json();
         setPromos(Array.isArray(data) ? data : []);
-        // Si la promo seleccionada ya no existe, la limpiamos
         if (promoSeleccionada && !data.find(p => p._id === promoSeleccionada._id)) {
           setPromoSeleccionada(null);
         }
@@ -52,8 +51,7 @@ function DatosPago({
       }
     };
 
-    loadPromos(); // primera
-
+    loadPromos();
     timer = setInterval(loadPromos, PROMOS_POLL_MS);
 
     const onVis = () => document.visibilityState === "visible" && loadPromos();
@@ -178,13 +176,25 @@ function DatosPago({
   const registrarMovimiento = () => {
     if (!vehiculoLocal?.patente) return;
 
-    const operador = user?.nombre || "Operador Desconocido";
+    const token = localStorage.getItem('token') || '';
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
+    // 👇 Tomamos la MEJOR foto disponible:
+    // 1) Si hay foto de webcam tomada ahora (dataURL), usamos esa
+    // 2) Si no, usamos la foto de entrada del vehículo
+    const fotoMovimiento =
+      fotoUrl /* dataURL webcam */
+      || vehiculoLocal?.estadiaActual?.fotoUrl /* /uploads/... de la entrada */
+      || null;
+
+    // 1) Registrar salida
     fetch(`${BASE_URL}/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         salida: horaSalida || new Date().toISOString(),
         costo: totalConDescuento,
@@ -192,65 +202,63 @@ function DatosPago({
         tiempoHoras: horas,
       }),
     })
-      .then((res) => res.json())
-      .then((dataSalida) => {
-        if (!dataSalida || dataSalida.error) {
-          console.error("❌ Error al registrar salida:", dataSalida?.msg || "Error desconocido");
-          setMensajeModal({
-            tipo: "error",
-            titulo: "Error al registrar salida",
-            mensaje: "Intente nuevamente.",
-          });
-          return;
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(json?.msg || "Error al registrar salida");
         }
-
+        return json;
+      })
+      .then(() => {
+        // 2) Registrar movimiento (MANDAMOS la foto)
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
-          operador,
           tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
           metodoPago,
-          descripcion,
           factura,
+          descripcion,
           monto: totalConDescuento,
           tipoTarifa: "hora",
           ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
-          foto: fotoUrl || null,
+          // 👇 clave: el back acepta `fotoUrl` o `foto`; mando `fotoUrl`
+          fotoUrl: fotoMovimiento || undefined,
+          // opcional: incluir promo aplicada
+          ...(promoSeleccionada ? { promo: { _id: promoSeleccionada._id, nombre: promoSeleccionada.nombre, descuento: promoSeleccionada.descuento } } : {})
         };
 
         return fetch(`${BASE_URL}/api/movimientos/registrar`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify(datosMovimiento),
         });
       })
-      .then((res) => (res ? res.json() : null))
-      .then((dataMovimiento) => {
-        if (!dataMovimiento) return;
-
-        if (dataMovimiento.movimiento) {
-          setMensajeModal({
-            tipo: "exito",
-            titulo: "Movimiento registrado",
-            mensaje: `✅ Movimiento registrado para ${vehiculoLocal.patente}`,
-          });
-          limpiarVehiculo();
-          resetCamposPago();
-          if (onAbrirBarreraSalida) onAbrirBarreraSalida();
-        } else {
-          console.error("❌ Error al registrar movimiento:", dataMovimiento?.msg);
-          setMensajeModal({
-            tipo: "error",
-            titulo: "Error al registrar movimiento",
-            mensaje: "Intente nuevamente.",
-          });
+      .then(async (res) => {
+        if (!res) return null;
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json?.movimiento) {
+          throw new Error(json?.msg || "Error al registrar movimiento");
         }
+        return json;
+      })
+      .then(() => {
+        setMensajeModal({
+          tipo: "exito",
+          titulo: "Movimiento registrado",
+          mensaje: `✅ Movimiento registrado para ${vehiculoLocal.patente}`,
+        });
+        limpiarVehiculo();
+        resetCamposPago();
+        if (onAbrirBarreraSalida) onAbrirBarreraSalida();
       })
       .catch((err) => {
-        console.error("❌ Error conectando al backend:", err);
+        console.error("❌ Error en salida/movimiento:", err);
         setMensajeModal({
           tipo: "error",
-          titulo: "Error de conexión",
-          mensaje: "No se pudo conectar al servidor.",
+          titulo: "Error",
+          mensaje: err?.message || "No se pudo completar la operación.",
         });
       });
   };
@@ -358,7 +366,7 @@ function DatosPago({
         <div>
           <div className="title">Método de Pago</div>
           <div className="metodoDePago">
-            {["Efectivo", "Débito", "Crédito", "QR"].map((metodo) => (
+            {["Efectivo", "Transferencia", "Débito", "Crédito", "QR"].map((metodo) => (
               <div
                 key={metodo}
                 className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`}

@@ -19,6 +19,14 @@ const hash = (obj) => {
   return (h >>> 0).toString(36);
 };
 
+// Absolutiza una URL si es relativa a backend (p.ej. "/uploads/..." o "/camara/...")
+const makeAbsolute = (url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) return `${BASE_URL}${url}`;
+  return url;
+};
+
 function DatosAutoEntrada({
   user,
   ticketPendiente,
@@ -125,10 +133,13 @@ function DatosAutoEntrada({
 
   useEffect(() => {
     const verificarFoto = async () => {
+      // Si hay ticket, intento mostrar su foto persistida; si no, muestro la captura temporal
       if (ticketPendiente) {
-        const url = ticketPendiente.fotoUrl
-          ? `${ticketPendiente.fotoUrl}?t=${timestamp}`
-          : `${BASE_URL}/camara/sacarfoto/captura.jpg?t=${timestamp}`;
+        // ticketPendiente.fotoUrl puede ser relativo (/uploads/...) -> absolutizar
+        const candidate = ticketPendiente.fotoUrl
+          ? makeAbsolute(ticketPendiente.fotoUrl)
+          : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
+        const url = `${candidate}?t=${timestamp}`;
 
         try {
           const res = await fetch(url, { method: "HEAD" });
@@ -184,23 +195,29 @@ function DatosAutoEntrada({
     if (!precios[tipoNormalizado]) return mostrarMensaje("Sin precios", "No hay precios para ese tipo.");
 
     try {
+      // Si el ticket ya trae una foto persistida (/uploads/...), úsala. Si no, usa la temporal.
       const fotoUrlActual = ticketPendiente.fotoUrl
-        ? ticketPendiente.fotoUrl
+        ? makeAbsolute(ticketPendiente.fotoUrl) // podría venir relativa
         : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
 
+      // Asociar ticket a datos de entrada y PERSISTIR imagen (controller hace copia si es captura)
       const resAsociar = await fetch(
         `${BASE_URL}/api/tickets/${ticketPendiente._id}/asociar`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            patente, tipoVehiculo, operadorNombre: user.nombre, fotoUrl: fotoUrlActual,
+            patente,
+            tipoVehiculo,
+            operadorNombre: user.nombre,
+            fotoUrl: fotoUrlActual,
           }),
         }
       );
       const dataAsociar = await resAsociar.json();
       if (!resAsociar.ok) throw new Error(dataAsociar.msg || "Error al asociar ticket");
 
+      // Si el vehículo ya existe, registrar entrada; si no, crear y registrar con fotoUrl
       const checkResponse = await fetch(`${BASE_URL}/api/vehiculos/${patente}`);
 
       if (checkResponse.ok) {
@@ -237,7 +254,9 @@ function DatosAutoEntrada({
         if (!vehiculoResponse.ok) throw new Error("Error al registrar vehículo");
       }
 
+      // Limpieza: borrar la captura temporal
       await eliminarFotoTemporal();
+
       setPatente("");
       setTipoVehiculo("");
       setFotoUrl(AutoPlaceHolder);
@@ -263,7 +282,7 @@ function DatosAutoEntrada({
           className="foto-vehiculo"
           onError={(e) => {
             e.target.onerror = null;
-            e.target.src = AutoPlaceHolder;
+            e.target.src = AutoPlaceHolderNoimage;
           }}
         />
       </div>

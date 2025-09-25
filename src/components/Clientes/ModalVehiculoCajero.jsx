@@ -28,7 +28,7 @@ const ModalVehiculoCajero = ({
   const [mensajeModal, setMensajeModal] = useState(null);
   const navigate = useNavigate();
 
-  const metodosPago = ["Efectivo", "Débito", "Crédito", "QR"];
+  const metodosPago = ["Efectivo", "Transferencia", "Débito", "Crédito", "QR"];
   const tiposFactura = ["CC", "A", "Final"];
 
   // ---- helpers ----

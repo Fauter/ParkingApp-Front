@@ -232,7 +232,7 @@ const DatosAutoTurnos = ({ user }) => {
         <div>
           <label>Método de Pago</label>
           <div className="paymentButtons">
-            {["Efectivo", "Débito", "Crédito", "QR"].map((metodo) => (
+            {["Efectivo", "Transferencia", "Débito", "Crédito", "QR"].map((metodo) => (
               <button
                 key={metodo}
                 type="button"

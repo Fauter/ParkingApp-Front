@@ -368,11 +368,12 @@ function Interfaz() {
   };
 
   const ejecutarBot = async () => {
-    let fotoUrl = null;
+    let fotoUrlTemporal = null;
 
+    // 1) Disparar captura y esperar a que esté realmente disponible
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // ⬆️ 8s como en Config.jsx
 
       const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto', {
         signal: controller.signal,
@@ -381,7 +382,16 @@ function Interfaz() {
 
       const json = await resFoto.json();
       if (json.exito) {
-        fotoUrl = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
+        // misma carpeta que Config, servida estática desde server.js ahora
+        const bust = Date.now();
+        const staticUrl = `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${bust}`;
+
+        // pequeño delay + HEAD para asegurar que el FS terminó de escribir
+        await new Promise(r => setTimeout(r, 1200));
+        const head = await fetch(staticUrl, { method: 'HEAD' });
+        if (!head.ok) throw new Error('La imagen no está disponible (HEAD != 200)');
+
+        fotoUrlTemporal = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
       } else {
         console.warn("⚠️ No se pudo capturar foto:", json.mensaje);
       }
@@ -390,6 +400,7 @@ function Interfaz() {
       else console.error("❌ Error al sacar foto:", err);
     }
 
+    // 2) Crear ticket
     let ticketCreado = null;
     try {
       const resTicket = await fetch('http://localhost:5000/api/tickets', {
@@ -398,12 +409,23 @@ function Interfaz() {
       });
       ticketCreado = await resTicket.json();
 
-      if (fotoUrl) {
-        await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fotoUrl })
-        });
+      // 3) Si hay foto temporal disponible, persistirla y asociarla al ticket
+      if (fotoUrlTemporal && ticketCreado?.ticket?._id) {
+        try {
+          const putRes = await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fotoUrl: '/camara/sacarfoto/captura.jpg' }) // sin querystring
+          });
+          const updated = await putRes.json();
+          if (putRes.ok && updated?.ticket) {
+            ticketCreado.ticket = updated.ticket; // incluye ticket.fotoUrl permanente
+          } else {
+            console.warn('⚠️ No se pudo persistir la foto del ticket:', updated);
+          }
+        } catch (e) {
+          console.warn('⚠️ Error persistiendo foto del ticket:', e);
+        }
       }
 
       setTicketPendiente(ticketCreado.ticket);
@@ -412,12 +434,10 @@ function Interfaz() {
       return;
     }
 
+    // 4) Imprimir ticket
     try {
       const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
-
-      // CAMBIO: textoTicket minimal (solo primera línea con el número de ticket).
-      const textoTicket = `${ticketNumFormateado}`;
-
+      const textoTicket = `${ticketNumFormateado}`; // minimal
       await fetch('http://localhost:5000/api/ticket/imprimir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -427,6 +447,7 @@ function Interfaz() {
       console.error("❌ Error al imprimir ticket:", err);
     }
 
+    // 5) Abrir barrera (como estaba)
     setTimeout(() => {
       setBarreraIzqAbierta(true);
       setTimeout(() => setBarreraIzqAbierta(false), 10000);
