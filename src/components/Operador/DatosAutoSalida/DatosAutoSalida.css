@@ -77,3 +77,72 @@
 .container div {
   margin-right: 10px; /* Espaciado entre el ícono y el texto */
 }
+
+/* === NUEVOS ESTILOS: fila con tipo + acciones === */
+.tipoYAcciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;         
+  margin: 6px 15px 0px 5px;
+  max-width: 420px;       
+}
+
+/* Reutiliza tu .tipoVehiculo existente (no lo toco). 
+   Si querés asegurar altura consistente con los botones: */
+.tipoVehiculo {
+  line-height: 40px;       /* alinea vertical con botones de 40px */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Contenedor de botones a la derecha */
+.accionesInput {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Botón cuadrado base */
+.btnCuadrado {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 6px;
+  background-color: #2a2a38;      /* consistente con tus inputs */
+  color: #ffffff;
+  border: 2px solid #444a5a;      /* consistente con tus inputs */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.06s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btnCuadrado:hover {
+  background-color: #323245;
+  border-color: #4e5466;
+}
+
+.btnCuadrado:active {
+  transform: scale(0.98);
+}
+
+/* Variantes sutiles (si querés diferenciarlas visualmente) */
+.btnBorrar:hover {
+  background-color: #3a2a2a;
+  border-color: #6b4a4a;
+}
+
+.btnAceptar:hover {
+  background-color: #2a3a2a;
+  border-color: #4a6b4a;
+}
+
+/* A11y: foco accesible */
+.btnCuadrado:focus {
+  outline: 2px solid #6b8cff;
+  outline-offset: 2px;
+}

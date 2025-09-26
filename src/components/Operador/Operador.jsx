@@ -5,22 +5,22 @@ import DatosAutoSalida from './DatosAutoSalida/DatosAutoSalida';
 import DatosPago from './DatosPago/DatosPago';
 import DatosAutoEntrada from './DatosAutoEntrada/DatosAutoEntrada';
 
-function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente }) {
+function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente, autoFocusSalida = true }) {
   const [vehiculoLocal, setVehiculoLocal] = useState(null);
   const [resetInput, setResetInput] = useState(false);
   const [error, setError] = useState(null);
   const [tarifaCalculada, setTarifaCalculada] = useState(null);
   const [user, setUser] = useState(null);
-  const [timestamp, setTimestamp] = useState(Date.now()); // <- Timestamp para refrescar imagen
+  const [timestamp, setTimestamp] = useState(Date.now());
   const navigate = useNavigate();
 
+  // --- Perfil de usuario (una sola vez, sin duplicar lógica) ---
   const fetchUser = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/login');
       return null;
     }
-
     try {
       const response = await fetch('http://localhost:5000/api/auth/profile', {
         method: 'GET',
@@ -30,11 +30,8 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente })
         },
         credentials: 'include'
       });
-
       const data = await response.json();
-      if (response.ok) {
-        return data; // Devuelve el usuario directamente
-      }
+      if (response.ok) return data;
       throw new Error(data.message || 'Failed to fetch user');
     } catch (error) {
       console.error('Error:', error);
@@ -43,59 +40,18 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente })
       return null;
     }
   };
+
   useEffect(() => {
-  const loadUser = async () => {
-    const userData = await fetchUser();
-    if (userData) {
-      setUser(userData);
-    }
-  };
-  loadUser();
-}, [navigate]);
-
-  // Traer datos del usuario logueado
-  useEffect(() => {
-    const fetchUser = async () => {
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setUser(data);
-        } else {
-          if (response.status === 401) {
-            localStorage.removeItem('token');
-            setUser(null);
-            navigate('/login');
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching user:', error);
-      }
+    const loadUser = async () => {
+      const userData = await fetchUser();
+      if (userData) setUser(userData);
     };
-
-    fetchUser();
+    loadUser();
   }, [navigate]);
 
-  // Intervalo para actualizar timestamp cada 5 segundos
+  // --- Refresco de timestamp para foto de entrada en lateral ---
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimestamp(Date.now());
-    }, 5000);
+    const interval = setInterval(() => setTimestamp(Date.now()), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -109,12 +65,8 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente })
   const buscarVehiculo = async (patente) => {
     try {
       const patenteMayuscula = patente.toUpperCase();
-
       const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteMayuscula}`);
-      if (!response.ok) {
-        throw new Error("Vehículo no encontrado");
-      }
-
+      if (!response.ok) throw new Error("Vehículo no encontrado");
       const data = await response.json();
       setVehiculoLocal(data);
       setError(null);
@@ -127,14 +79,16 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente })
   return (
     <div className="contenidoCentral">
       <div className="izquierda">
-        <DatosAutoEntrada 
-          user={user} 
-          ticketPendiente={ticketPendiente} 
-          onClose={() => setTicketPendiente(null)} 
-          setTicketPendiente={setTicketPendiente} 
+        <DatosAutoEntrada
+          user={user}
+          ticketPendiente={ticketPendiente}
+          onClose={() => setTicketPendiente(null)}
+          setTicketPendiente={setTicketPendiente}
           timestamp={timestamp}
+          // ⚠️ En el panel lateral NO autoenfocamos nada
         />
       </div>
+
       <div className="derecha">
         <DatosAutoSalida
           buscarVehiculo={buscarVehiculo}
@@ -143,7 +97,8 @@ function Operador({ ticketPendiente, onAbrirBarreraSalida, setTicketPendiente })
           limpiarInputTrigger={resetInput}
           onActualizarVehiculoLocal={setVehiculoLocal}
           onTarifaCalculada={setTarifaCalculada}
-          user={user}
+          // ⬇️ autofocus controlado por Interfaz (false si hay modal)
+          autoFocusActivo={autoFocusSalida}
         />
         <DatosPago
           vehiculoLocal={vehiculoLocal}

@@ -29,14 +29,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
-    fotoCedulaAzul: null,
   });
 
   const [fileUploaded, setFileUploaded] = useState({
     fotoSeguro: false,
     fotoDNI: false,
     fotoCedulaVerde: false,
-    fotoCedulaAzul: false,
   });
 
   // refs de inputs (compatibilidad)
@@ -44,14 +42,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoSeguro: useRef(null),
     fotoDNI: useRef(null),
     fotoCedulaVerde: useRef(null),
-    fotoCedulaAzul: useRef(null),
   };
 
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
   const [precios, setPrecios] = useState({});
-  const [clientes, setClientes] = useState([]);
-  const [nombreTemporal, setNombreTemporal] = useState("");
-  const [sugerencias, setSugerencias] = useState([]);
+  const [clientes, setClientes] = useState([]); // seguimos cargando para ensureCliente, pero sin sugerencias UI
   const [loading, setLoading] = useState(false);
 
   // ===== Modal de mensajes genéricos =====
@@ -274,43 +269,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     };
   }, []);
 
+  // Cargamos clientes una vez (para ensureCliente por DNI). NO hay sugerencias por nombre.
   useEffect(() => { fetchClientes(); }, []);
-
-  useEffect(() => {
-    const q = nombreTemporal.trim().toLowerCase();
-    if (q.length >= 3) {
-      const coincidencias = clientes.filter((c) =>
-        (c.nombreApellido || "").toLowerCase().includes(q)
-      );
-      setSugerencias(coincidencias);
-    } else {
-      setSugerencias([]);
-    }
-  }, [nombreTemporal, clientes]);
-
-  const seleccionarCliente = (cliente) => {
-    setFormData(prev => ({
-      ...prev,
-      nombreApellido: cliente.nombreApellido || "",
-      domicilio: cliente.domicilio || "",
-      localidad: cliente.localidad || "",
-      telefonoParticular: cliente.telefonoParticular || "",
-      telefonoEmergencia: cliente.telefonoEmergencia || "",
-      domicilioTrabajo: cliente.domicilioTrabajo || "",
-      telefonoTrabajo: cliente.telefonoTrabajo || "",
-      email: cliente.email || "",
-      dniCuitCuil: cliente.dniCuitCuil || "",
-      marca: cliente.marca || "",
-      modelo: cliente.modelo || "",
-      color: cliente.color || "",
-      anio: cliente.anio || "",
-      companiaSeguro: cliente.companiaSeguro || "",
-      metodoPago: cliente.metodoPago || "Efectivo",
-      factura: cliente.factura || "CC"
-    }));
-    setNombreTemporal(cliente.nombreApellido || "");
-    setSugerencias([]);
-  };
 
   const handleChange = (e) => {
     const { name, value, files } = e.target;
@@ -334,20 +294,23 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     return formatoViejo.test(patente) || formatoNuevo.test(patente);
   };
 
-  // 🔐 ensureCliente
+  const validarDNI = (dni) => {
+    const s = String(dni || '').replace(/\D+/g, '');
+    return s.length >= 7 && s.length <= 11; // tolera DNI / CUIT / CUIL
+  };
+
+  // 🔐 ensureCliente: SOLO por DNI/CUIT/CUIL
   const ensureCliente = async () => {
-    const nombre = (formData.nombreApellido || "").trim().toLowerCase();
-    const dni = (formData.dniCuitCuil || "").trim();
-    const email = (formData.email || "").trim().toLowerCase();
+    const dni = (formData.dniCuitCuil || '').trim();
+    if (!validarDNI(dni)) throw new Error('DNI/CUIT/CUIL inválido');
 
-    const candidato =
-      (clientes || []).find(c => (c.dniCuitCuil || '').trim() === dni) ||
-      (clientes || []).find(c => (c.email || '').trim().toLowerCase() === email) ||
-      (clientes || []).find(c => (c.nombreApellido || '').trim().toLowerCase() === nombre);
+    // 1) Buscar en cache local (clientes)
+    const encontrado = (clientes || []).find(c => String(c.dniCuitCuil || '').trim() === dni);
 
-    if (candidato && candidato._id) {
+    if (encontrado && encontrado._id) {
+      // Actualizamos datos básicos y devolvemos _id
       try {
-        const putRes = await fetch(`${BASE_URL}/api/clientes/${candidato._id}`, {
+        const putRes = await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -362,10 +325,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             email: formData.email
           }),
         });
-        if (putRes.ok) return candidato._id;
-      } catch (_) { /* si falla, creamos nuevo */ }
+        if (putRes.ok) return encontrado._id;
+      } catch (_) { /* si falla, creamos nuevo igual */ }
     }
 
+    // 2) Crear nuevo cliente (si no existía por DNI)
     const nuevoClienteRes = await fetch(`${BASE_URL}/api/clientes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -383,7 +347,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }),
     });
 
-    if (!nuevoClienteRes.ok) throw new Error('Error al crear cliente');
+    if (!nuevoClienteRes.ok) {
+      const err = await nuevoClienteRes.json().catch(() => ({}));
+      throw new Error(err?.message || 'Error al crear cliente');
+    }
     const nuevoCliente = await nuevoClienteRes.json();
     if (!nuevoCliente._id) throw new Error('No se pudo crear cliente');
     return nuevoCliente._id;
@@ -399,6 +366,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (!validarPatente(patente)) throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
       if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
       if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre y apellido del cliente.");
+      if (!validarDNI(formData.dniCuitCuil)) throw new Error("DNI/CUIT/CUIL inválido.");
       if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
 
       const clienteId = await ensureCliente();
@@ -421,6 +389,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.message || 'Error al registrar abono.');
       }
 
+      // refrescamos cache de clientes por si se creó uno nuevo
       await fetchClientes();
       fetch(`${BASE_URL}/api/sync/run-now`, { method: 'POST' }).catch(() => {});
 
@@ -448,15 +417,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         fotoSeguro: null,
         fotoDNI: null,
         fotoCedulaVerde: null,
-        fotoCedulaAzul: null,
       });
       setFileUploaded({
         fotoSeguro: false,
         fotoDNI: false,
         fotoCedulaVerde: false,
-        fotoCedulaAzul: false,
       });
-      setNombreTemporal("");
 
     } catch (error) {
       console.error(error);
@@ -511,33 +477,32 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             <input
               type="text"
               name="nombreApellido"
-              value={nombreTemporal}
-              onChange={(e) => {
-                setNombreTemporal(e.target.value);
-                setFormData(prev => ({ ...prev, nombreApellido: e.target.value }));
-              }}
+              value={formData.nombreApellido}
+              onChange={handleChange}
               autoComplete="off"
               required
             />
-            {sugerencias.length > 0 && (
-              <ul className="sugerencias-lista">
-                {sugerencias.map((cliente) => (
-                  <li
-                    key={cliente._id}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      seleccionarCliente(cliente);
-                    }}
-                    className="sugerencia-item"
-                  >
-                    {cliente.nombreApellido}
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
-          <div><label>DNI/CUIT/CUIL</label><input type="text" name="dniCuitCuil" value={formData.dniCuitCuil} onChange={handleChange} required /></div>
-          <div><label>Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} required /></div>
+          <div>
+            <label>DNI/CUIT/CUIL</label>
+            <input
+              type="text"
+              name="dniCuitCuil"
+              value={formData.dniCuitCuil}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div>
+            <label>Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
           <div><label>Domicilio</label><input type="text" name="domicilio" value={formData.domicilio} onChange={handleChange} required /></div>
           <div><label>Localidad</label><input type="text" name="localidad" value={formData.localidad} onChange={handleChange} required /></div>
           <div><label>Domicilio Trabajo</label><input type="text" name="domicilioTrabajo" value={formData.domicilioTrabajo} onChange={handleChange} /></div>
@@ -546,11 +511,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           <div><label>Tel. Trabajo</label><input type="text" name="telefonoTrabajo" value={formData.telefonoTrabajo} onChange={handleChange} /></div>
         </div>
 
-        <div className="grid-4cols fotos-grid">
+        <div className="grid-3cols fotos-grid">
           {renderFileInput("Foto Seguro", "fotoSeguro")}
           {renderFileInput("Foto DNI", "fotoDNI")}
           {renderFileInput("Foto Céd. Verde", "fotoCedulaVerde")}
-          {renderFileInput("Foto Céd. Azul", "fotoCedulaAzul")}
         </div>
 
         <div className="grid-3cols">

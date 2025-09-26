@@ -12,6 +12,7 @@ const BC_NAME = "catalog-updated";
 let bc;
 try { bc = new BroadcastChannel(BC_NAME); } catch {}
 
+/* ---------- Utils ---------- */
 const hash = (obj) => {
   const s = JSON.stringify(obj);
   let h = 5381;
@@ -19,26 +20,49 @@ const hash = (obj) => {
   return (h >>> 0).toString(36);
 };
 
-// Absolutiza una URL si es relativa a backend (p.ej. "/uploads/..." o "/camara/...")
+const norm = (s) =>
+  (s || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
 const makeAbsolute = (url) => {
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
-  if (url.startsWith('/')) return `${BASE_URL}${url}`;
+  if (url.startsWith("/")) return `${BASE_URL}${url}`;
   return url;
 };
 
+const isPriceValid = (v) => typeof v === "number" && isFinite(v) && v > 0;
+
+/* ===========================================================
+   Componente
+=========================================================== */
 function DatosAutoEntrada({
   user,
   ticketPendiente,
   onClose,
   timestamp,
   setTicketPendiente = () => {},
+  // ⬇️ NUEVO: solo en modal queremos autoenfocar
+  autoFocusOnMount = false,
 }) {
   const [patente, setPatente] = useState("");
   const [tipoVehiculo, setTipoVehiculo] = useState("");
+
+  // Catálogos crudos
   const [precios, setPrecios] = useState({});
+  const [tiposVehiculoApi, setTiposVehiculoApi] = useState([]);
+
+  // Nombres de tarifas que son de tipo "hora" (normalizados)
+  const [tarifasHoraKeys, setTarifasHoraKeys] = useState([]);
+
+  // Derivado: opciones filtradas para el select
   const [tiposVehiculoDisponibles, setTiposVehiculoDisponibles] = useState([]);
 
+  // Modal de mensajes
   const [modalMensaje, setModalMensaje] = useState("");
   const [modalTitulo, setModalTitulo] = useState("Atención");
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -46,7 +70,16 @@ function DatosAutoEntrada({
   const [fotoUrl, setFotoUrl] = useState(AutoPlaceHolder);
 
   const abortRef = useRef(null);
-  const lastHashesRef = useRef({ precios: "", tipos: "" });
+  const lastHashesRef = useRef({ precios: "", tipos: "", tarifasHora: "" });
+  const patenteRef = useRef(null);
+
+  // ✅ Autoenfoque SOLO si el componente está en modal
+  useEffect(() => {
+    if (autoFocusOnMount) {
+      const t = setTimeout(() => patenteRef.current?.focus({ preventScroll: true }), 0);
+      return () => clearTimeout(t);
+    }
+  }, [autoFocusOnMount]);
 
   const setIfChanged = (setter, key, data) => {
     const h = hash(data);
@@ -62,6 +95,7 @@ function DatosAutoEntrada({
     setMostrarModal(true);
   };
 
+  /* ---------- Fetchers ---------- */
   const fetchPrecios = useCallback(async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
@@ -79,10 +113,26 @@ function DatosAutoEntrada({
       const res = await fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" });
       if (!res.ok) throw new Error("No se pudieron cargar los tipos de vehículo");
       const data = await res.json();
-      setIfChanged(setTiposVehiculoDisponibles, "tipos", Array.isArray(data) ? data : []);
+      setIfChanged(setTiposVehiculoApi, "tipos", Array.isArray(data) ? data : []);
     } catch (error) {
       mostrarMensaje("Error", "No se pudieron cargar los tipos de vehículo.");
       console.error("Error al obtener los tipos de vehículo:", error);
+    }
+  }, []);
+
+  const fetchTarifasHora = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/tarifas`, { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudieron cargar las tarifas");
+      const all = await res.json();
+      const keys = (Array.isArray(all) ? all : [])
+        .filter(t => norm(t.tipo) === "hora")
+        .map(t => norm(t.nombre))
+        .filter((v, i, a) => a.indexOf(v) === i);
+      setIfChanged(setTarifasHoraKeys, "tarifasHora", keys);
+    } catch (error) {
+      mostrarMensaje("Error", "No se pudieron cargar las tarifas.");
+      console.error("Error al obtener las tarifas:", error);
     }
   }, []);
 
@@ -91,13 +141,14 @@ function DatosAutoEntrada({
       abortRef.current?.abort?.();
       const controller = new AbortController();
       abortRef.current = controller;
-      await Promise.all([fetchPrecios(), fetchTiposVehiculo()]);
+      await Promise.all([fetchPrecios(), fetchTiposVehiculo(), fetchTarifasHora()]);
     } catch {}
-  }, [fetchPrecios, fetchTiposVehiculo]);
+  }, [fetchPrecios, fetchTiposVehiculo, fetchTarifasHora]);
 
+  /* ---------- Ciclo de vida: carga y refresco ---------- */
   useEffect(() => {
     let timer = null;
-    loadAll(); // primera
+    loadAll();
 
     timer = setInterval(loadAll, CATALOG_POLL_MS);
 
@@ -131,16 +182,14 @@ function DatosAutoEntrada({
     };
   }, [loadAll]);
 
+  /* ---------- Foto del ticket/captura ---------- */
   useEffect(() => {
     const verificarFoto = async () => {
-      // Si hay ticket, intento mostrar su foto persistida; si no, muestro la captura temporal
       if (ticketPendiente) {
-        // ticketPendiente.fotoUrl puede ser relativo (/uploads/...) -> absolutizar
         const candidate = ticketPendiente.fotoUrl
           ? makeAbsolute(ticketPendiente.fotoUrl)
           : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
         const url = `${candidate}?t=${timestamp}`;
-
         try {
           const res = await fetch(url, { method: "HEAD" });
           if (res.ok) setFotoUrl(url);
@@ -155,8 +204,46 @@ function DatosAutoEntrada({
     verificarFoto();
   }, [ticketPendiente, timestamp]);
 
-  const normalizar = (t) => (t || "").toLowerCase();
+  /* ---------- Filtrado: tipos con TODAS las tarifas "hora" válidas ---------- */
+  useEffect(() => {
+    if (!Array.isArray(tiposVehiculoApi) || tiposVehiculoApi.length === 0) {
+      setTiposVehiculoDisponibles([]);
+      return;
+    }
+    if (!precios || typeof precios !== "object") {
+      setTiposVehiculoDisponibles([]);
+      return;
+    }
+    if (!Array.isArray(tarifasHoraKeys) || tarifasHoraKeys.length === 0) {
+      setTiposVehiculoDisponibles([]);
+      return;
+    }
 
+    const preciosNormPorTipo = {};
+    for (const [tipo, mapa] of Object.entries(precios)) {
+      const inner = {};
+      if (mapa && typeof mapa === "object") {
+        for (const [k, v] of Object.entries(mapa)) inner[norm(k)] = v;
+      }
+      preciosNormPorTipo[norm(tipo)] = inner;
+    }
+
+    const filtrados = tiposVehiculoApi.filter(({ nombre }) => {
+      const tipoN = norm(nombre);
+      const mapa = preciosNormPorTipo[tipoN];
+      if (!mapa) return false;
+
+      for (const tarifaKey of tarifasHoraKeys) {
+        const val = mapa[tarifaKey];
+        if (!isPriceValid(val)) return false;
+      }
+      return true;
+    });
+
+    setTiposVehiculoDisponibles(filtrados);
+  }, [tiposVehiculoApi, precios, tarifasHoraKeys]);
+
+  /* ---------- Acciones ---------- */
   const eliminarFotoTemporal = async () => {
     try {
       await fetch(`${BASE_URL}/api/vehiculos/eliminar-foto-temporal`, { method: "DELETE" });
@@ -191,16 +278,16 @@ function DatosAutoEntrada({
 
     if (!patente || !tipoVehiculo) return mostrarMensaje("Faltan datos", "Patente y tipo de vehículo.");
 
-    const tipoNormalizado = normalizar(tipoVehiculo);
-    if (!precios[tipoNormalizado]) return mostrarMensaje("Sin precios", "No hay precios para ese tipo.");
+    const sigueSiendoValido = tiposVehiculoDisponibles.some(t => norm(t.nombre) === norm(tipoVehiculo));
+    if (!sigueSiendoValido) return mostrarMensaje("Sin precios válidos", "El tipo de vehículo seleccionado ya no es válido.");
 
     try {
-      // Si el ticket ya trae una foto persistida (/uploads/...), úsala. Si no, usa la temporal.
+      const tipoN = norm(tipoVehiculo);
+
       const fotoUrlActual = ticketPendiente.fotoUrl
-        ? makeAbsolute(ticketPendiente.fotoUrl) // podría venir relativa
+        ? makeAbsolute(ticketPendiente.fotoUrl)
         : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
 
-      // Asociar ticket a datos de entrada y PERSISTIR imagen (controller hace copia si es captura)
       const resAsociar = await fetch(
         `${BASE_URL}/api/tickets/${ticketPendiente._id}/asociar`,
         {
@@ -217,9 +304,8 @@ function DatosAutoEntrada({
       const dataAsociar = await resAsociar.json();
       if (!resAsociar.ok) throw new Error(dataAsociar.msg || "Error al asociar ticket");
 
-      // Si el vehículo ya existe, registrar entrada; si no, crear y registrar con fotoUrl
+      // Registrar entrada
       const checkResponse = await fetch(`${BASE_URL}/api/vehiculos/${patente}`);
-
       if (checkResponse.ok) {
         const entradaResponse = await fetch(
           `${BASE_URL}/api/vehiculos/${patente}/registrarEntrada`,
@@ -229,7 +315,7 @@ function DatosAutoEntrada({
             body: JSON.stringify({
               operador: user.nombre,
               metodoPago: "Efectivo",
-              monto: precios[tipoNormalizado].hora,
+              monto: precios[norm(tipoVehiculo)]?.hora ?? precios[norm(tipoVehiculo)]?.["hora"],
               ticket: ticketPendiente.ticket,
               entrada: ticketPendiente.creadoEn,
               fotoUrl: fotoUrlActual,
@@ -254,7 +340,6 @@ function DatosAutoEntrada({
         if (!vehiculoResponse.ok) throw new Error("Error al registrar vehículo");
       }
 
-      // Limpieza: borrar la captura temporal
       await eliminarFotoTemporal();
 
       setPatente("");
@@ -273,6 +358,7 @@ function DatosAutoEntrada({
     if (valor === "" || regexParcial.test(valor)) setPatente(valor);
   };
 
+  /* ---------- Render ---------- */
   return (
     <div className="datosAutoEntrada">
       <div className="fotoAutoEntrada">
@@ -291,6 +377,7 @@ function DatosAutoEntrada({
         <label htmlFor="patente">Patente</label>
         <input
           id="patente"
+          ref={patenteRef}
           type="text"
           placeholder="Ingrese la patente"
           value={patente}

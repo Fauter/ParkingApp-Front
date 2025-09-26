@@ -1,5 +1,5 @@
 import './Interfaz.css';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header/Header';
 import PanelDerecho from './PanelDerecho/PanelDerecho';
@@ -29,13 +29,9 @@ const limpiarNumero = (valor) => (valor || '').replace(/[^\d]/g, '');
 
 // Bloquea teclas no numéricas (permite navegación/edición)
 const handleNumericKeyDown = (e) => {
-  const permitidas = [
-    'Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'
-  ];
-  // Permitir combos Ctrl/Cmd (copiar, pegar, etc.)
+  const permitidas = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
   if (e.ctrlKey || e.metaKey) return;
   if (permitidas.includes(e.key)) return;
-  // Permitir solo dígitos
   if (!/^\d$/.test(e.key)) e.preventDefault();
 };
 
@@ -46,14 +42,14 @@ function Interfaz() {
   const [ticketPendiente, setTicketPendiente] = useState(null);
 
   // Cierre de Caja
-  const [recaudado, setRecaudado] = useState('');  // solo dígitos
-  const [enCaja, setEnCaja] = useState('');        // solo dígitos
+  const [recaudado, setRecaudado] = useState('');
+  const [enCaja, setEnCaja] = useState('');
   const [confirmandoCaja, setConfirmandoCaja] = useState(false);
 
   // Cierre Parcial
-  const [montoParcial, setMontoParcial] = useState(''); // solo dígitos
-  const [nombreParcial, setNombreParcial] = useState(''); // texto
-  const [textoParcial, setTextoParcial] = useState('');   // texto
+  const [montoParcial, setMontoParcial] = useState('');
+  const [nombreParcial, setNombreParcial] = useState('');
+  const [textoParcial, setTextoParcial] = useState('');
 
   // Incidente
   const [incidente, setIncidente] = useState('');
@@ -65,9 +61,42 @@ function Interfaz() {
   const [mensajeModal, setMensajeModal] = useState(null);
   const [timestamp, setTimestamp] = useState(Date.now());
 
+  // ⬇️ Estado levantado desde Header: modal de Registrar Entrada
+  const [modalEntradaAbierto, setModalEntradaAbierto] = useState(false);
+
   const navigate = useNavigate();
 
-  // ✅ Cargar operador local inmediatamente
+  // -------------------- AUTOFOCUS Refs para MODALES --------------------
+  const recaudadoRef = useRef(null);     // cierre de caja - Total Recaudado
+  const enCajaRef = useRef(null);        // (opcional) cierre de caja - Efectivo en Caja
+  const montoParcialRef = useRef(null);  // cierre parcial - Monto
+  const incidenteRef = useRef(null);     // incidente - textarea
+
+  // Autofocus: Cierre de Caja (solo en etapa de carga de datos, no en confirmación)
+  useEffect(() => {
+    if (modalActivo === 'cierredecaja' && !confirmandoCaja) {
+      const t = setTimeout(() => recaudadoRef.current?.focus({ preventScroll: true }), 0);
+      return () => clearTimeout(t);
+    }
+  }, [modalActivo, confirmandoCaja]);
+
+  // Autofocus: Cierre Parcial
+  useEffect(() => {
+    if (modalActivo === 'cierreparcial') {
+      const t = setTimeout(() => montoParcialRef.current?.focus({ preventScroll: true }), 0);
+      return () => clearTimeout(t);
+    }
+  }, [modalActivo]);
+
+  // Autofocus: Incidente
+  useEffect(() => {
+    if (modalActivo === 'incidente') {
+      const t = setTimeout(() => incidenteRef.current?.focus({ preventScroll: true }), 0);
+      return () => clearTimeout(t);
+    }
+  }, [modalActivo]);
+  // --------------------------------------------------------------------
+
   useEffect(() => {
     const operadorStr = localStorage.getItem(OPERADOR_KEY);
     if (operadorStr) {
@@ -78,7 +107,6 @@ function Interfaz() {
     }
   }, []);
 
-  // ✅ Refrescar con /profile (JWT) — requiere middleware en back
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem(TOKEN_KEY);
@@ -99,7 +127,6 @@ function Interfaz() {
         const data = await response.json();
         if (data && data.username) {
           setUser(data);
-          // mantener en localStorage sincronizado
           localStorage.setItem(OPERADOR_KEY, JSON.stringify(data));
         }
       } catch (error) {
@@ -161,7 +188,6 @@ function Interfaz() {
     setTimeout(() => setBarreraDerAbierta(false), 10000);
   };
 
-  // 🔴 Helper: arma objeto operador estable para payloads
   const operadorPayload = () => {
     if (!user) return null;
     const { _id, username, nombre, apellido, role } = user;
@@ -174,16 +200,16 @@ function Interfaz() {
 
     const { fecha, hora } = getFechaHora();
     const totalRecaudado = parseFloat(limpiarNumero(recaudado));
-    const dejoEnCaja = parseFloat(limpiarNumero(enCaja));
-    const totalRendido = totalRecaudado + dejoEnCaja;
+    const efectivoEnCaja = parseFloat(limpiarNumero(enCaja));
+    const totalRendido = totalRecaudado - efectivoEnCaja;
 
     const data = {
       fecha,
       hora,
       totalRecaudado,
-      dejoEnCaja,
+      dejoEnCaja: efectivoEnCaja,
       totalRendido,
-      operador: op, // ✅ objeto, no string
+      operador: op,
     };
 
     try {
@@ -251,7 +277,7 @@ function Interfaz() {
       monto,
       nombre: nombreParcial || '',
       texto: textoParcial || '',
-      operador: op, // ✅ objeto
+      operador: op,
     };
 
     try {
@@ -277,7 +303,7 @@ function Interfaz() {
         fecha,
         hora,
         tipoDeAlerta: `Cierre Parcial ($${monto.toLocaleString('es-AR')})`,
-        operador: op, // ✅ objeto
+        operador: op,
       };
 
       const resAlerta = await fetch('http://localhost:5000/api/alertas/', {
@@ -326,7 +352,7 @@ function Interfaz() {
       fecha,
       hora,
       texto: incidente,
-      operador: op, // ✅ objeto
+      operador: op,
     };
 
     try {
@@ -369,11 +395,9 @@ function Interfaz() {
 
   const ejecutarBot = async () => {
     let fotoUrlTemporal = null;
-
-    // 1) Disparar captura y esperar a que esté realmente disponible
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // ⬆️ 8s como en Config.jsx
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto', {
         signal: controller.signal,
@@ -382,15 +406,11 @@ function Interfaz() {
 
       const json = await resFoto.json();
       if (json.exito) {
-        // misma carpeta que Config, servida estática desde server.js ahora
         const bust = Date.now();
         const staticUrl = `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${bust}`;
-
-        // pequeño delay + HEAD para asegurar que el FS terminó de escribir
         await new Promise(r => setTimeout(r, 1200));
         const head = await fetch(staticUrl, { method: 'HEAD' });
         if (!head.ok) throw new Error('La imagen no está disponible (HEAD != 200)');
-
         fotoUrlTemporal = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
       } else {
         console.warn("⚠️ No se pudo capturar foto:", json.mensaje);
@@ -400,7 +420,6 @@ function Interfaz() {
       else console.error("❌ Error al sacar foto:", err);
     }
 
-    // 2) Crear ticket
     let ticketCreado = null;
     try {
       const resTicket = await fetch('http://localhost:5000/api/tickets', {
@@ -409,17 +428,16 @@ function Interfaz() {
       });
       ticketCreado = await resTicket.json();
 
-      // 3) Si hay foto temporal disponible, persistirla y asociarla al ticket
       if (fotoUrlTemporal && ticketCreado?.ticket?._id) {
         try {
           const putRes = await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fotoUrl: '/camara/sacarfoto/captura.jpg' }) // sin querystring
+            body: JSON.stringify({ fotoUrl: '/camara/sacarfoto/captura.jpg' })
           });
           const updated = await putRes.json();
           if (putRes.ok && updated?.ticket) {
-            ticketCreado.ticket = updated.ticket; // incluye ticket.fotoUrl permanente
+            ticketCreado.ticket = updated.ticket;
           } else {
             console.warn('⚠️ No se pudo persistir la foto del ticket:', updated);
           }
@@ -434,10 +452,9 @@ function Interfaz() {
       return;
     }
 
-    // 4) Imprimir ticket
     try {
       const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
-      const textoTicket = `${ticketNumFormateado}`; // minimal
+      const textoTicket = `${ticketNumFormateado}`;
       await fetch('http://localhost:5000/api/ticket/imprimir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -447,7 +464,6 @@ function Interfaz() {
       console.error("❌ Error al imprimir ticket:", err);
     }
 
-    // 5) Abrir barrera (como estaba)
     setTimeout(() => {
       setBarreraIzqAbierta(true);
       setTimeout(() => setBarreraIzqAbierta(false), 10000);
@@ -457,9 +473,13 @@ function Interfaz() {
   const totalRendidoPreview = () => {
     const rec = parseFloat(limpiarNumero(recaudado));
     const caja = parseFloat(limpiarNumero(enCaja));
-    const suma = (!isNaN(rec) ? rec : 0) + (!isNaN(caja) ? caja : 0);
-    return formatearVisualmente(String(suma));
+    const resta = (!isNaN(rec) ? rec : 0) - (!isNaN(caja) ? caja : 0);
+    return formatearVisualmente(String(resta));
   };
+
+  // ⬇️ Cualquier modal/overlay activo? (bloquea autofocus de salida)
+  const hayModalBloqueante =
+    Boolean(modalActivo) || Boolean(mensajeModal) || Boolean(modalEntradaAbierto);
 
   return (
     <div className="interfaz">
@@ -474,6 +494,9 @@ function Interfaz() {
         user={user}
         ticketPendiente={ticketPendiente}
         setTicketPendiente={setTicketPendiente}
+        // ⬇️ estado levantado del modal de entrada
+        mostrarModalEntrada={modalEntradaAbierto}
+        setMostrarModalEntrada={setModalEntradaAbierto}
       />
       <div className="content">
         {vistaActual === 'operador' && (
@@ -481,6 +504,8 @@ function Interfaz() {
             ticketPendiente={ticketPendiente} 
             onAbrirBarreraSalida={abrirBarreraSalida}
             setTicketPendiente={forzarLimpiarTicket}
+            // ⬇️ controla el autofocus del input de salida
+            autoFocusSalida={!hayModalBloqueante}
           />
         )}
         {vistaActual === 'vehiculos' && <VehiculosDentro />}
@@ -505,7 +530,9 @@ function Interfaz() {
         <ModalHeader titulo="Cierre de Caja" onClose={cerrarModal}>
           {!confirmandoCaja ? (
             <>
+              <label>Total Recaudado</label>
               <input
+                ref={recaudadoRef}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -515,16 +542,20 @@ function Interfaz() {
                 value={formatearVisualmente(recaudado)}
                 onChange={(e) => setRecaudado(limpiarNumero(e.target.value))}
               />
+
+              <label>Efectivo en Caja</label>
               <input
+                ref={enCajaRef}
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 onKeyDown={handleNumericKeyDown}
                 className="modal-input"
-                placeholder="Dejo en Caja"
+                placeholder="Efectivo en Caja"
                 value={formatearVisualmente(enCaja)}
                 onChange={(e) => setEnCaja(limpiarNumero(e.target.value))}
               />
+
               <button className="modal-btn" disabled={!isCajaValida()} onClick={() => setConfirmandoCaja(true)}>
                 Confirmar
               </button>
@@ -532,8 +563,8 @@ function Interfaz() {
           ) : (
             <>
               <p>Total Recaudado: ${formatearVisualmente(recaudado)}</p>
-              <p>Dejo en Caja: ${formatearVisualmente(enCaja)}</p>
-              <p>Total Rendido: ${formatearVisualmente(String(parseFloat(limpiarNumero(recaudado)) + parseFloat(limpiarNumero(enCaja))))}</p>
+              <p>Efectivo en Caja: ${formatearVisualmente(enCaja)}</p>
+              <p>Total Rendido: ${totalRendidoPreview()}</p>
               <button className="modal-btn" onClick={() => setConfirmandoCaja(false)}>Modificar</button>
               <button className="modal-btn" onClick={enviarCierreDeCaja}>Confirmar</button>
             </>
@@ -544,7 +575,9 @@ function Interfaz() {
       {/* Modal: Cierre Parcial */}
       {modalActivo === 'cierreparcial' && (
         <ModalHeader titulo="Cierre Parcial" onClose={cerrarModal}>
+          <label>Monto</label>
           <input
+            ref={montoParcialRef}
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
@@ -555,7 +588,7 @@ function Interfaz() {
             onChange={(e) => setMontoParcial(limpiarNumero(e.target.value))}
           />
 
-          {/* 🆕 Nombre (opcional) */}
+          <label>Nombre (opcional)</label>
           <input
             type="text"
             className="modal-input"
@@ -565,7 +598,7 @@ function Interfaz() {
             maxLength={60}
           />
 
-          {/* 🆕 Texto (opcional) */}
+          <label>Texto (opcional)</label>
           <textarea
             rows={3}
             className="modal-input"
@@ -584,7 +617,9 @@ function Interfaz() {
       {/* Modal: Incidente */}
       {modalActivo === 'incidente' && (
         <ModalHeader titulo="Incidente" onClose={cerrarModal}>
+          <label>Descripción del Incidente</label>
           <textarea
+            ref={incidenteRef}
             maxLength={300}
             rows={4}
             className="modal-input"

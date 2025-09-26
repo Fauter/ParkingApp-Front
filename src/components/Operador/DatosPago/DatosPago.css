@@ -12,7 +12,7 @@
   font-size: 50px;
   font-weight: bold;
   color: white;
-  width: 100%; 
+  width: 100%;
   max-width: 600px;
   padding-bottom: 10px;
 }
@@ -52,7 +52,7 @@
   left: 0%;
   width: 80%;
   height: 2px;
-  background-color: rgba(90, 153, 215, 0.53); 
+  background-color: rgba(90, 153, 215, 0.53);
   border-radius: 2px;
 }
 
@@ -80,6 +80,19 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 37px;
+  height: 37px;
+}
+
+.iconContainer.withPhoto {
+  background-color: #2e7d32; /* verde */
+  border-color: #2e7d32;
+}
+
+.promoCheck {
+  font-size: 20px;
+  color: #fff;
+  line-height: 1;
 }
 
 .camIcon {
@@ -131,8 +144,6 @@
   border-color: rgba(109, 109, 109, 0.21);
 }
 
-
-
 .guardarWebcamBtn {
   background-color: #444a5a;
   color: white;
@@ -147,4 +158,12 @@
 .guardarWebcamBtn:hover {
   background-color: #5a6175;
   transform: scale(1.05);
+}
+
+.guardarWebcamBtn.aceptarBtn {
+  background-color: #2e7d32;
+}
+
+.guardarWebcamBtn.aceptarBtn:hover {
+  background-color: #1b5e20;
 }

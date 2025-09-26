@@ -7,7 +7,7 @@ const PROMOS_POLL_MS = 180000; // 3 min
 
 function DatosPago({
   vehiculoLocal,
-  limpiarVehiculo,
+  limpiarVehiculo,          // (lo seguís usando tras registrar movimiento)
   tarifaCalculada,
   user,
   onAbrirBarreraSalida,
@@ -22,9 +22,11 @@ function DatosPago({
   const [tarifaAplicada, setTarifaAplicada] = useState(null);
   const [horaSalida, setHoraSalida] = useState(null);
 
+  // ====== Webcam (para FOTO DE PROMO) ======
   const [modalCamAbierto, setModalCamAbierto] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
-  const [fotoUrl, setFotoUrl] = useState(null); // dataURL de webcam (si se usa)
+  const [capturaTemporal, setCapturaTemporal] = useState(null); // preview
+  const [promoFoto, setPromoFoto] = useState(null); // ✅ dataURL final aceptada para la PROMO
   const videoRef = React.useRef(null);
 
   // 🎯 Cámara elegida en Config.jsx
@@ -80,6 +82,8 @@ function DatosPago({
     const idSeleccionado = e.target.value;
     const promo = promos.find((p) => p._id === idSeleccionado);
     setPromoSeleccionada(promo || null);
+    // Si cambio de promo, mantengo la foto previa (si ya fue tomada) — si querés limpiarla al cambiar promo, descomentá:
+    // setPromoFoto(null);
   };
 
   // ====== Actualiza totales por tarifa ======
@@ -119,6 +123,18 @@ function DatosPago({
 
   useEffect(() => {
     console.log("🚗 vehiculoLocal en DatosPago:", vehiculoLocal);
+  }, [vehiculoLocal]);
+
+  // ✅ Resetear todo cuando desde DatosAutoSalida limpian el vehiculo (vehiculoLocal → null)
+  useEffect(() => {
+    if (!vehiculoLocal) {
+      resetCamposPago();
+      setPromoFoto(null);
+      setCapturaTemporal(null);
+      setMensajeModal(null);
+      if (modalCamAbierto) cerrarModalCam();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehiculoLocal]);
 
   const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
@@ -180,13 +196,10 @@ function DatosPago({
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
-    // 👇 Tomamos la MEJOR foto disponible:
-    // 1) Si hay foto de webcam tomada ahora (dataURL), usamos esa
-    // 2) Si no, usamos la foto de entrada del vehículo
+    // ⛔ Foto del movimiento: mantenemos la de ENTRADA (o la que ya tenga el vehículo)
     const fotoMovimiento =
-      fotoUrl /* dataURL webcam */
-      || vehiculoLocal?.estadiaActual?.fotoUrl /* /uploads/... de la entrada */
-      || null;
+      vehiculoLocal?.estadiaActual?.fotoUrl /* /uploads/... de la entrada */ ||
+      null;
 
     // 1) Registrar salida
     fetch(`${BASE_URL}/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
@@ -210,7 +223,7 @@ function DatosPago({
         return json;
       })
       .then(() => {
-        // 2) Registrar movimiento (MANDAMOS la foto)
+        // 2) Registrar movimiento
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
           tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
@@ -220,10 +233,16 @@ function DatosPago({
           monto: totalConDescuento,
           tipoTarifa: "hora",
           ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
-          // 👇 clave: el back acepta `fotoUrl` o `foto`; mando `fotoUrl`
           fotoUrl: fotoMovimiento || undefined,
-          // opcional: incluir promo aplicada
-          ...(promoSeleccionada ? { promo: { _id: promoSeleccionada._id, nombre: promoSeleccionada.nombre, descuento: promoSeleccionada.descuento } } : {})
+          ...(promoSeleccionada ? {
+            promo: {
+              _id: promoSeleccionada._id,
+              nombre: promoSeleccionada.nombre,
+              descuento: promoSeleccionada.descuento,
+              // ⬇️ Enviamos la foto de la PROMO como dataURL; el back la persiste en /uploads/fotos/webcamPromos/
+              ...(promoFoto ? { fotoUrl: promoFoto } : {})
+            }
+          } : {})
         };
 
         return fetch(`${BASE_URL}/api/movimientos/registrar`, {
@@ -249,8 +268,10 @@ function DatosPago({
           titulo: "Movimiento registrado",
           mensaje: `✅ Movimiento registrado para ${vehiculoLocal.patente}`,
         });
-        limpiarVehiculo();
+        limpiarVehiculo?.();
         resetCamposPago();
+        setPromoFoto(null);
+        setCapturaTemporal(null);
         if (onAbrirBarreraSalida) onAbrirBarreraSalida();
       })
       .catch((err) => {
@@ -263,13 +284,13 @@ function DatosPago({
       });
   };
 
-  // ====== Cámara (modal) ======
+  // ====== Cámara (modal) – SOLO para FOTO DE PROMO ======
   const abrirModalCam = async () => {
-    setFotoUrl(null);
-    setModalCamAbierto(true);
+    setCapturaTemporal(null);
     try {
       const stream = await getStream();
       setVideoStream(stream);
+      setModalCamAbierto(true);
     } catch (err) {
       setVideoStream(null);
       setMensajeModal({
@@ -287,16 +308,17 @@ function DatosPago({
     canvas.height = videoRef.current.videoHeight;
     const ctx = canvas.getContext("2d");
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    setFotoUrl(canvas.toDataURL("image/png"));
+    setCapturaTemporal(canvas.toDataURL("image/png"));
   };
 
-  const volverACamara = async () => {
-    setFotoUrl(null);
-    if (videoStream) {
-      videoStream.getTracks().forEach((track) => track.stop());
-      setVideoStream(null);
-    }
+  const reintentarFoto = async () => {
+    setCapturaTemporal(null);
+    // reabrimos stream por si se cortó
     try {
+      if (videoStream) {
+        // si ya hay stream vivo, solo volvemos a mostrar vista
+        return;
+      }
       const stream = await getStream();
       setVideoStream(stream);
     } catch (err) {
@@ -307,6 +329,12 @@ function DatosPago({
         mensaje: "No se pudo acceder a la webcam.",
       });
     }
+  };
+
+  const aceptarFotoPromo = () => {
+    if (!capturaTemporal) return;
+    setPromoFoto(capturaTemporal);
+    cerrarModalCam();
   };
 
   useEffect(() => {
@@ -321,7 +349,7 @@ function DatosPago({
       videoStream.getTracks().forEach((track) => track.stop());
       setVideoStream(null);
     }
-    setFotoUrl(null);
+    setCapturaTemporal(null);
   };
 
   // Limpia cámara al desmontar
@@ -352,12 +380,22 @@ function DatosPago({
               </option>
             ))}
           </select>
-          <button type="button" className="iconContainer" onClick={abrirModalCam}>
-            <img
-              src="https://www.svgrepo.com/show/904/photo-camera.svg"
-              alt=""
-              className="camIcon"
-            />
+
+          <button
+            type="button"
+            className={`iconContainer ${promoFoto ? "withPhoto" : ""}`}
+            onClick={abrirModalCam}
+            title={promoFoto ? "Foto de promo cargada" : "Tomar foto para promo"}
+          >
+            {!promoFoto ? (
+              <img
+                src="https://www.svgrepo.com/show/904/photo-camera.svg"
+                alt=""
+                className="camIcon"
+              />
+            ) : (
+              <span className="promoCheck">✔</span>
+            )}
           </button>
         </div>
       </div>
@@ -408,11 +446,11 @@ function DatosPago({
         />
       )}
 
-      {/* Modal de Cámara */}
+      {/* Modal de Cámara (FOTO PROMO) */}
       {modalCamAbierto && (
-        <ModalMensaje titulo="Webcam" mensaje="Vista previa de la cámara" onClose={cerrarModalCam}>
+        <ModalMensaje titulo="Webcam" mensaje="Foto para Promo" onClose={cerrarModalCam}>
           <div style={{ textAlign: "center" }}>
-            {!fotoUrl ? (
+            {!capturaTemporal ? (
               <>
                 <video
                   ref={videoRef}
@@ -430,10 +468,15 @@ function DatosPago({
               </>
             ) : (
               <>
-                <img src={fotoUrl} alt="Foto tomada" style={{ width: "320px", borderRadius: "6px" }} />
-                <button className="guardarWebcamBtn" style={{ marginTop: "1rem" }} onClick={volverACamara}>
-                  Volver a cámara
-                </button>
+                <img src={capturaTemporal} alt="Foto tomada" style={{ width: "320px", borderRadius: "6px" }} />
+                <div style={{ marginTop: "1rem", display: "flex", gap: "10px", justifyContent: "center" }}>
+                  <button className="guardarWebcamBtn" onClick={reintentarFoto}>
+                    Reintentar
+                  </button>
+                  <button className="guardarWebcamBtn aceptarBtn" onClick={aceptarFotoPromo}>
+                    Aceptar
+                  </button>
+                </div>
               </>
             )}
           </div>

@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import "./DatosAutoSalida.css";
 import { useTarifasData, calcularTarifaAPI } from "../../../hooks/tarifasService";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
-
 import AutoPlaceHolder from "../../../../public/images/placeholder.png";
 import AutoPlaceHolderNoimage from "../../../../public/images/placeholderNoimage.png";
+import { HiArrowRight, HiX } from "react-icons/hi";
 
 function DatosAutoSalida({
   buscarVehiculo,
@@ -14,6 +14,8 @@ function DatosAutoSalida({
   onActualizarVehiculoLocal,
   onTarifaCalculada,
   onSalidaCalculada,
+  // Control de enfoque desde arriba: true = enfocar input patente
+  autoFocusActivo = true,
 }) {
   const [inputPatente, setInputPatente] = useState("");
   const [tarifaCalculada, setTarifaCalculada] = useState(null);
@@ -24,47 +26,37 @@ function DatosAutoSalida({
   const inputTimer = useRef(null);
   const isScanning = useRef(false);
 
-  // Estado para modal de mensajes
   const [modalMensaje, setModalMensaje] = useState("");
   const [modalTitulo, setModalTitulo] = useState("Atención");
-
-  // *** NUEVO estado para controlar la imagen mostrada ***
   const [imgSrc, setImgSrc] = useState(AutoPlaceHolder);
 
-  // Limpiar input cuando se recibe el trigger
+  // Enfoque condicionado (evita robar foco cuando haya modales)
   useEffect(() => {
-    if (limpiarInputTrigger) {
-      setInputPatente("");
+    if (autoFocusActivo) {
+      const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
+      return () => clearTimeout(t);
     }
+  }, [autoFocusActivo]);
+
+  useEffect(() => {
+    if (limpiarInputTrigger) setInputPatente("");
   }, [limpiarInputTrigger]);
 
-  // Limpiar input cuando no hay vehículo
   useEffect(() => {
-    if (!vehiculoLocal) {
-      setInputPatente("");
-    }
+    if (!vehiculoLocal) setInputPatente("");
   }, [vehiculoLocal]);
 
-  // *** NUEVO efecto para actualizar imgSrc cuando cambia vehiculoLocal ***
   useEffect(() => {
     if (!vehiculoLocal) {
-      // Sin vehículo: imagen por defecto
       setImgSrc(AutoPlaceHolder);
       return;
     }
-
     const fotoUrl = vehiculoLocal.estadiaActual?.fotoUrl;
-
-    if (fotoUrl) {
-      // Intentamos mostrar la foto real
-      setImgSrc(`http://localhost:5000${fotoUrl}`);
-    } else {
-      // Si no hay foto, mostramos imagen "noimage"
-      setImgSrc(AutoPlaceHolderNoimage);
-    }
+    if (fotoUrl) setImgSrc(`http://localhost:5000${fotoUrl}`);
+    else setImgSrc(AutoPlaceHolderNoimage);
   }, [vehiculoLocal]);
 
-  // Efecto para detectar lectura rápida (lector de tickets)
+  // Detector de lectura rápida (lector de tickets)
   useEffect(() => {
     const handleInput = (e) => {
       const currentTime = Date.now();
@@ -81,26 +73,21 @@ function DatosAutoSalida({
       if (value.length === 10 && /^\d+$/.test(value)) {
         clearTimeout(inputTimer.current);
         isScanning.current = true;
-        inputTimer.current = setTimeout(() => {
-          handleTicketScan(value);
-        }, 200);
+        inputTimer.current = setTimeout(() => handleTicketScan(value), 200);
       }
     };
 
     const inputElement = inputRef.current;
-    inputElement.addEventListener("input", handleInput);
-
+    inputElement?.addEventListener("input", handleInput);
     return () => {
-      inputElement.removeEventListener("input", handleInput);
+      inputElement?.removeEventListener("input", handleInput);
       clearTimeout(inputTimer.current);
     };
   }, []);
 
-  // Función para procesar ticket escaneado
   const handleTicketScan = async (ticketNumber) => {
     try {
       const ticketNum = parseInt(ticketNumber, 10);
-
       if (isNaN(ticketNum)) {
         setModalTitulo("Error");
         setModalMensaje("Ticket inválido");
@@ -109,7 +96,6 @@ function DatosAutoSalida({
       }
 
       const response = await fetch(`http://localhost:5000/api/vehiculos/ticket/${ticketNum}`);
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error("Error:", errorData.msg);
@@ -124,7 +110,6 @@ function DatosAutoSalida({
 
       if (data.patente) {
         setInputPatente(data.patente);
-
         setTimeout(() => {
           const enterEvent = new KeyboardEvent("keydown", {
             key: "Enter",
@@ -133,7 +118,7 @@ function DatosAutoSalida({
             which: 13,
             bubbles: true,
           });
-          inputRef.current.dispatchEvent(enterEvent);
+          inputRef.current?.dispatchEvent(enterEvent);
           isScanning.current = false;
         }, 100);
       }
@@ -145,7 +130,6 @@ function DatosAutoSalida({
     }
   };
 
-  // Función común para procesar vehículos encontrados (por patente o ticket)
   const procesarVehiculoEncontrado = async (data) => {
     if (!data.estadiaActual || !data.estadiaActual.entrada) {
       setModalTitulo("Error");
@@ -175,25 +159,17 @@ function DatosAutoSalida({
       },
     };
 
-    if (onSalidaCalculada && !yaTieneSalida) {
-      onSalidaCalculada(salidaTemporal);
-    }
-
+    if (onSalidaCalculada && !yaTieneSalida) onSalidaCalculada(salidaTemporal);
     onActualizarVehiculoLocal(actualizado);
   };
 
-  // Función para procesar salida de vehículo abonado
   const procesarSalidaAbonado = async (vehiculo, salida) => {
     const resSalida = await fetch(
       `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          salida,
-          costo: 0,
-          tarifa: null,
-        }),
+        body: JSON.stringify({ salida, costo: 0, tarifa: null }),
       }
     );
 
@@ -209,21 +185,15 @@ function DatosAutoSalida({
     setInputPatente("");
   };
 
-  // Función para procesar salida de vehículo con turno
   const procesarSalidaTurno = async (vehiculo, salida) => {
     const resSalida = await fetch(
       `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          salida,
-          costo: 0,
-          tarifa: null,
-        }),
+        body: JSON.stringify({ salida, costo: 0, tarifa: null }),
       }
     );
-
     if (!resSalida.ok) {
       setModalTitulo("Error");
       setModalMensaje("Error al registrar salida automática");
@@ -232,12 +202,8 @@ function DatosAutoSalida({
 
     const resDesactivarTurno = await fetch(
       `http://localhost:5000/api/turnos/desactivar-por-patente/${vehiculo.patente}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      }
+      { method: "PATCH", headers: { "Content-Type": "application/json" } }
     );
-
     if (!resDesactivarTurno.ok) {
       setModalTitulo("Error");
       setModalMensaje("Error al desactivar turno");
@@ -249,53 +215,45 @@ function DatosAutoSalida({
     setInputPatente("");
   };
 
-  // Manejar entrada manual de patente
-  const handleKeyDown = async (e) => {
-    if (e.key === "Enter" && !isScanning.current) {
-      const patenteBuscada = inputPatente.trim().toUpperCase();
-      if (!patenteBuscada) return;
+  const submitPatente = async () => {
+    if (isScanning.current) return;
+    const patenteBuscada = inputPatente.trim().toUpperCase();
+    if (!patenteBuscada) return;
 
-      try {
-        const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteBuscada}`);
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.msg || "Vehículo no encontrado");
-        }
-
-        const data = await response.json();
-        await procesarVehiculoEncontrado(data);
-      } catch (err) {
-        console.error("Error en la operación:", err);
-        setModalTitulo("Error");
-        setModalMensaje(err.message || "Error al procesar la salida.");
+    try {
+      const response = await fetch(`http://localhost:5000/api/vehiculos/${patenteBuscada}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.msg || "Vehículo no encontrado");
       }
+      const data = await response.json();
+      await procesarVehiculoEncontrado(data);
+    } catch (err) {
+      console.error("Error en la operación:", err);
+      setModalTitulo("Error");
+      setModalMensaje(err.message || "Error al procesar la salida.");
     }
   };
 
-  // Cálculo de tarifa cuando hay salida
+  const handleKeyDown = async (e) => {
+    if (e.key === "Enter" && !isScanning.current) submitPatente();
+  };
+
+  // Cálculo de tarifa cuando hay salida ya seteada
   useEffect(() => {
     const entrada = vehiculoLocal?.estadiaActual?.entrada;
     const salida = vehiculoLocal?.estadiaActual?.salida;
     const costoTotal = vehiculoLocal?.estadiaActual?.costoTotal;
 
-    if (!salida) {
-      return;
-    }
+    if (!salida) return;
 
     const calcularTarifa = async () => {
-      if (
-        entrada &&
-        salida &&
-        (costoTotal === 0 || costoTotal === undefined || !yaActualizado.current)
-      ) {
+      if (entrada && salida && (costoTotal === 0 || costoTotal === undefined || !yaActualizado.current)) {
         const fechaEntrada = new Date(entrada);
         const fechaSalida = new Date(salida);
         const diferenciaMs = fechaSalida - fechaEntrada;
         const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
-        const horas = Math.ceil(
-          (diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-        );
+        const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const horasFormateadas = `${String(horas).padStart(2, "0")}:00`;
 
         try {
@@ -316,26 +274,19 @@ function DatosAutoSalida({
 
           if (costo !== null) {
             setTarifaCalculada(costo);
-
-            if (
-              vehiculoLocal?.patente &&
-              vehiculoLocal?.estadiaActual?.costoTotal !== costo
-            ) {
-              const bodyData = { costoTotal: costo };
-
+            if (vehiculoLocal?.patente && vehiculoLocal?.estadiaActual?.costoTotal !== costo) {
               const resActualizar = await fetch(
                 `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
                 {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(bodyData),
+                  body: JSON.stringify({ costoTotal: costo }),
                 }
               );
 
               if (resActualizar.ok) {
                 const actualizado = await resActualizar.json();
                 yaActualizado.current = true;
-
                 onActualizarVehiculoLocal({
                   ...actualizado.vehiculo,
                   costoTotal: costo,
@@ -353,15 +304,13 @@ function DatosAutoSalida({
         } catch (error) {
           console.error("Error al calcular tarifa:", error.message);
         }
-      } else {
-        console.log("❌ No se cumplen condiciones para calcular tarifa");
       }
     };
 
     calcularTarifa();
   }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal]);
 
-  // Cálculo de tarifa temporal (previsualización)
+  // Cálculo temporal (previsualización) cuando aún no hay salida seteada
   useEffect(() => {
     const calcularTarifaTemporal = async () => {
       if (vehiculoLocal?.estadiaActual?.entrada && !vehiculoLocal?.estadiaActual?.salida) {
@@ -389,11 +338,7 @@ function DatosAutoSalida({
           const costo = match ? parseFloat(match[1].replace(",", "")) : null;
 
           if (costo !== null) {
-            onTarifaCalculada({
-              costo,
-              salida: salida.toISOString(),
-            });
-
+            onTarifaCalculada?.({ costo, salida: salida.toISOString() });
             onActualizarVehiculoLocal({
               ...vehiculoLocal,
               estadiaActual: {
@@ -420,6 +365,19 @@ function DatosAutoSalida({
     ? new Date(vehiculoLocal.estadiaActual.salida)
     : null;
 
+  const handleBorrar = () => {
+    setInputPatente("");
+    setTarifaCalculada(null);
+    yaActualizado.current = false;
+    setImgSrc(AutoPlaceHolder);
+    onActualizarVehiculoLocal?.(null);
+    onTarifaCalculada?.(null);
+    onSalidaCalculada?.(null);
+    inputRef.current?.focus();
+  };
+
+  const handleAceptar = () => submitPatente();
+
   return (
     <>
       <div className="datosAutoSalida">
@@ -428,10 +386,7 @@ function DatosAutoSalida({
             src={imgSrc}
             alt="Auto"
             className="foto-vehiculo"
-            onError={(e) => {
-              e.target.onerror = null; // evita loop infinito
-              setImgSrc(AutoPlaceHolderNoimage);
-            }}
+            onError={() => setImgSrc(AutoPlaceHolderNoimage)}
           />
         </div>
 
@@ -446,14 +401,36 @@ function DatosAutoSalida({
                 value={inputPatente}
                 onChange={(e) => setInputPatente(e.target.value.toUpperCase())}
                 onKeyDown={handleKeyDown}
-                autoFocus
               />
             </div>
-            <div className="tipoVehiculo">
-              {vehiculoLocal?.tipoVehiculo
-                ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() +
-                  vehiculoLocal.tipoVehiculo.slice(1)
-                : "Sin datos"}
+
+            <div className="tipoYAcciones">
+              <div className="tipoVehiculo">
+                {vehiculoLocal?.tipoVehiculo
+                  ? vehiculoLocal.tipoVehiculo.charAt(0).toUpperCase() + vehiculoLocal.tipoVehiculo.slice(1)
+                  : "Sin datos"}
+              </div>
+
+              <div className="accionesInput">
+                <button
+                  type="button"
+                  className="btnCuadrado btnBorrar"
+                  title="Borrar"
+                  aria-label="Borrar"
+                  onClick={handleBorrar}
+                >
+                  <HiX size={22} />
+                </button>
+                <button
+                  type="button"
+                  className="btnCuadrado btnAceptar"
+                  title="Aceptar"
+                  aria-label="Aceptar"
+                  onClick={handleAceptar}
+                >
+                  <HiArrowRight size={22} />
+                </button>
+              </div>
             </div>
           </div>
 

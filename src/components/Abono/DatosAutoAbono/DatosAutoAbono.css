@@ -1,207 +1,215 @@
-  .abono-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: #2a2a38;
-    height: 600px;
-    padding: 10px;
-  }
-  .abono-container h2 {
-    color: rgb(255, 255, 255);
-    font-size: 2rem;
-    margin: 0;
-    text-align: center;
-  }
+.abono-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #2a2a38;
+  height: 600px;
+  padding: 10px;
+}
+.abono-container h2 {
+  color: rgb(255, 255, 255);
+  font-size: 2rem;
+  margin: 0;
+  text-align: center;
+}
 
-  .abono-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    height: 100%;
-    justify-content: center;
-  }
-  .abono-form label {
-    font-size: 0.8rem;
-    color: #ccc;
-    margin-bottom: 0rem;
-    min-width: 104px;
-  }
-  .abono-form input[type="text"],
-  .abono-form input[type="email"],
-  .abono-form input[type="number"] {
-    background-color: #1f1f28;
-    border: 1px solid #444a5a;
-    border-radius: 4px;
-    padding: 0.4rem 0.5rem;
-    color: white;
-    width: 90%;
-    outline: none;
-    transition: border-color 0.3s;
-  }
-  .abono-form input:focus {
-    border-color: rgb(100, 108, 133);
-  }
-  .abono-form input[type="number"] {
-    background-color: #1f1f28;
-    border: 1px solid #444a5a;
-    border-radius: 4px;
-    padding: 0.4rem 0.5rem;
-    color: white;
-    width: 90%;
-    outline: none;
-    transition: border-color 0.3s;
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
-  .abono-form input[type="number"]::-webkit-outer-spin-button,
-  .abono-form input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none; 
-    margin: 0;
-  }
-  .abono-form button {
-    background-color: #4caf50;
-    border: none;
-    border-radius: 4px;
-    padding: 0.6rem;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-    align-self: center;
-    width: 50%;
-    transition: background-color 0.3s;
-  }
-  .abono-form button:hover {
-    background-color: #43a047;
-  }
-  
-  .grid-3cols {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.4rem 1rem;
-  }
-  
-  .grid-4cols {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-  }
-  
-  .file-label {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.2rem 0.7rem;
-    background-color: #1f1f28;
-    color: white;
-    border: 1px solid #444a5a;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: border-color 0.3s;
-    width: fit-content;
-    min-height: 2.5rem;
-  }
-  
-  .file-label:hover {
-    border-color: #888;
-  }
-  
-  .file-label input[type="file"] {
-    display: none;
-  }
-  
-  .icon-wrapper {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .icon {
-    font-size: 1.3rem;
-    color: #ccc;
-  }
-  
-  .file-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1;
-    justify-content: center;
-  }
-  
-  .file-input-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-  }
-  
-  .file-visible-label {
-    font-size: 0.8rem;
-    color: #ccc;
-    margin-bottom: 0.1rem;
-  }
-  
-  .file-uploaded {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: #4caf50;
-  }
-  
-  .file-name {
-    font-size: 0.75rem;
-    margin-top: 0.3rem;
-  }
-  
-  .fotos-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-  }
+.abono-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  height: 100%;
+  justify-content: center;
+}
+.abono-form label {
+  font-size: 0.8rem;
+  color: #ccc;
+  margin-bottom: 0rem;
+  min-width: 104px;
+}
+.abono-form input[type="text"],
+.abono-form input[type="email"],
+.abono-form input[type="number"] {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  color: white;
+  width: 90%;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.abono-form input:focus {
+  border-color: rgb(100, 108, 133);
+}
+.abono-form input[type="number"] {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  color: white;
+  width: 90%;
+  outline: none;
+  transition: border-color 0.3s;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.abono-form input[type="number"]::-webkit-outer-spin-button,
+.abono-form input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none; 
+  margin: 0;
+}
+.abono-form button {
+  background-color: #4caf50;
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  align-self: center;
+  width: 50%;
+  transition: background-color 0.3s;
+}
+.abono-form button:hover {
+  background-color: #43a047;
+}
 
-  .select-style {
-    background-color: #1f1f28;
-    border: 1px solid #444a5a;
-    border-radius: 4px;
-    padding: 0.4rem 0.5rem;
-    color: white;
-    width: 90%;
-    outline: none;
-    appearance: none;
-    font-size: 0.9rem;
-  }
-  .select-style:focus {
-    border-color: rgb(100, 108, 133);
-  }
-  .selectorTarifa{
-    display: flex;
-    justify-content: center;
-  }
-  .select-style-tarifa {
-    background-color: #1f1f28;
-    border: 1px solid #444a5a;
-    border-radius: 4px;
-    padding: 0.4rem 2.5rem 0.4rem 0.5rem; /* Más padding right para la flecha */
-    color: white;
-    width: 90%;
-    outline: none;
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    font-size: 1rem;
-    font-weight: 600;
-    text-align: center;
-    text-align-last: center;
+.grid-3cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem 1rem;
+}
 
-    background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 1.5rem;
-  }
-  .select-style-tarifa:focus {
-    border-color: rgb(100, 108, 133);
-  }
-  
-  .sugerencias-lista {
+.grid-4cols {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+/* ---------- Subida de archivos / Cámara ---------- */
+.file-label {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.2rem 0.7rem;
+  background-color: #1f1f28;
+  color: white;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: border-color 0.3s;
+  width: fit-content;
+  min-height: 2.5rem;
+}
+
+.file-label:hover {
+  border-color: #888;
+}
+
+.file-label input[type="file"] {
+  display: none;
+}
+
+.icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon {
+  font-size: 1.3rem;
+  color: #ccc;
+}
+
+.file-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+  justify-content: center;
+}
+
+.file-input-wrapper {
+  display: flex;              /* ⬅ centra el contenido */
+  align-items: center;        /* ⬅ vertical */
+  justify-content: center;    /* ⬅ horizontal */
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;                /* ocupa toda la celda del grid */
+}
+
+.file-visible-label {
+  font-size: 0.8rem;
+  color: #ccc;
+  margin-bottom: 0.1rem;
+  text-align: center;         /* etiqueta centrada */
+}
+
+.file-uploaded {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4caf50;
+}
+
+.file-name {
+  font-size: 0.75rem;
+  margin-top: 0.3rem;
+}
+
+/* ---------- Grid específico de fotos centradas ---------- */
+.fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)); /* eran 4, ahora 3 */
+  gap: 1rem;
+  justify-items: center;  /* ⬅ centra horizontalmente el contenido de cada celda */
+  align-items: center;    /* ⬅ centra verticalmente el contenido de cada celda */
+}
+
+.select-style {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  color: white;
+  width: 90%;
+  outline: none;
+  appearance: none;
+  font-size: 0.9rem;
+}
+.select-style:focus {
+  border-color: rgb(100, 108, 133);
+}
+.selectorTarifa{
+  display: flex;
+  justify-content: center;
+}
+.select-style-tarifa {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 2.5rem 0.4rem 0.5rem;
+  color: white;
+  width: 90%;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  text-align-last: center;
+
+  background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1.5rem;
+}
+.select-style-tarifa:focus {
+  border-color: rgb(100, 108, 133);
+}
+
+.sugerencias-lista {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -221,10 +229,6 @@
   background-color:rgb(81, 87, 105);
 }
 
-
-  @media (max-height: 642px) {
-  /* Si la altura del viewport es menor (menos espacio vertical), bajamos el gap */
-  .abono-form {
-    gap: 0.5rem;
-  }
+@media (max-height: 642px) {
+  .abono-form { gap: 0.5rem; }
 }
