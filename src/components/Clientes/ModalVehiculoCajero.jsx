@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import "./ModalVehiculoCajero.css";
 import ModalMensaje from "../ModalMensaje/ModalMensaje";
 
+const API = "http://localhost:5000";
+
 const ModalVehiculoCajero = ({
   visible,
   onClose,
@@ -18,68 +20,84 @@ const ModalVehiculoCajero = ({
   const [tiposLoading, setTiposLoading] = useState(false);
   const [tiposError, setTiposError] = useState(null);
   const [user, setUser] = useState(null);
+
+  // ⚠️ Reemplazo de preview del back: calculamos local
   const [showDiferenciaModal, setShowDiferenciaModal] = useState(false);
-  const [diferenciaAPagar, setDiferenciaAPagar] = useState(0);
-  const [pagoDiferenciaData, setPagoDiferenciaData] = useState({
-    metodoPago: "",
-    factura: "",
-  });
+  const [pagoDiferenciaData, setPagoDiferenciaData] = useState({ metodoPago: "", factura: "" });
   const [errorMessage, setErrorMessage] = useState("");
   const [mensajeModal, setMensajeModal] = useState(null);
+
   const navigate = useNavigate();
 
   const metodosPago = ["Efectivo", "Transferencia", "Débito", "Crédito", "QR"];
   const tiposFactura = ["CC", "A", "Final"];
 
-  // ---- helpers ----
   const formatARS = (n) => {
-    if (typeof n !== "number") return null;
+    if (typeof n !== "number" || Number.isNaN(n)) return "—";
     try {
       return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
     } catch {
-      return n?.toString() ?? "";
+      return String(n);
     }
   };
-
-  const precioMensualDe = (tipoStr) => {
-    const k = (tipoStr || "").toLowerCase();
-    return precios?.[k]?.mensual || 0;
-  };
-
   const capitalizar = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
-  // Obtener usuario autenticado
+  // ====== Helpers cálculo local (idéntico a back) ======
+  const getBaseMensualFront = (tipo) => {
+    const key = String(tipo || "").toLowerCase();
+    const cfg = precios?.[key];
+    if (cfg && typeof cfg.mensual === "number") return cfg.mensual;
+    // fallback de seguridad (no debería usarse porque cargamos /api/precios)
+    const FALLBACK = { auto: 100000, camioneta: 160000, moto: 50000 };
+    return FALLBACK[key] ?? 100000;
+  };
+  const getUltimoDiaMesFront = (hoy = new Date()) => {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  };
+  const prorratearMontoFront = (base, hoy = new Date()) => {
+    const ultimo = getUltimoDiaMesFront(hoy);
+    const total = ultimo.getDate();
+    const dia = hoy.getDate();
+    const diasRestantes = dia === 1 ? total : total - dia + 1;
+    const factor = diasRestantes / total;
+    const proporcional = Math.round(base * factor);
+    return { proporcional, diasRestantes: diasRestantes, totalDiasMes: total, factor };
+  };
+
+  // ====== Usuario (token/profile) ======
   useEffect(() => {
     const fetchUser = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        navigate('/login');
+        navigate("/login");
         return;
       }
       try {
-        const response = await fetch('http://localhost:5000/api/auth/profile', {
-          method: 'GET',
+        const response = await fetch(`${API}/api/auth/profile`, {
+          method: "GET",
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
         const data = await response.json();
         if (response.ok) {
           setUser(data);
         } else if (response.status === 401) {
-          localStorage.removeItem('token');
-          navigate('/login');
+          localStorage.removeItem("token");
+          navigate("/login");
         }
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error("Error fetching user:", error);
         setErrorMessage("Error al verificar usuario. Intente nuevamente.");
       }
     };
     if (visible) fetchUser();
   }, [visible, navigate]);
 
-  // Obtener tipos de vehículo y precios
+  // ====== Cargar tipos y precios ======
   useEffect(() => {
     if (!visible) return;
     const fetchData = async () => {
@@ -87,15 +105,15 @@ const ModalVehiculoCajero = ({
       setTiposError(null);
       try {
         const [tiposRes, preciosRes] = await Promise.all([
-          fetch("http://localhost:5000/api/tipos-vehiculo"),
-          fetch("http://localhost:5000/api/precios")
+          fetch(`${API}/api/tipos-vehiculo`),
+          fetch(`${API}/api/precios`),
         ]);
         if (!tiposRes.ok) throw new Error("Error al obtener tipos de vehículo");
         if (!preciosRes.ok) throw new Error("Error al obtener precios");
 
         const [tiposData, preciosData] = await Promise.all([
           tiposRes.json(),
-          preciosRes.json()
+          preciosRes.json(),
         ]);
 
         setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
@@ -110,64 +128,61 @@ const ModalVehiculoCajero = ({
     fetchData();
   }, [visible]);
 
-  const calcularDiferencia = (nuevoTipo, tipoActual) => {
-    if (!tipoActual || !cliente?.finAbono) return 0;
+  // ====== Cálculo local de diferencia cuando cambian inputs ======
+  const checkUpgradeAndMaybeAsk = (nuevoTipo) => {
+    if (!cliente || !cliente._id) return; // sin cliente, no corresponde aviso
+    const tierActual = String(cliente?.precioAbono || "").toLowerCase();
+    if (!tierActual) return; // sin tier actual => alta inicial (sin aviso)
 
-    const hoy = new Date();
-    const finAbono = new Date(cliente.finAbono);
-    const diffTime = Math.max(0, finAbono - hoy);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays <= 0) return 0;
+    const baseActual = getBaseMensualFront(tierActual);
+    const baseNuevo = getBaseMensualFront(nuevoTipo);
+    if (baseNuevo > baseActual) {
+      // hay upgrade
+      const diffBase = baseNuevo - baseActual;
+      const { proporcional } = prorratearMontoFront(diffBase);
 
-    const precioNuevo = precioMensualDe(nuevoTipo);
-    const precioActual = precioMensualDe(tipoActual);
-    const diferenciaDiaria = (precioNuevo - precioActual) / 30;
-
-    return Math.round(diferenciaDiaria * diffDays);
-  };
-
-  const verificarDiferencia = (nuevoTipo) => {
-    const tipoActual = cliente?.precioAbono;
-    if (!tipoActual || !nuevoTipo) return false;
-
-    const precioNuevo = precioMensualDe(nuevoTipo);
-    const precioActual = precioMensualDe(tipoActual);
-
-    if (precioNuevo > precioActual) {
-      const diferencia = calcularDiferencia(nuevoTipo, tipoActual);
-      if (diferencia > 0) {
-        setDiferenciaAPagar(diferencia);
+      // abrimos modal de diferencia si método/factura no están listos
+      if (!formData.metodoPago || !formData.factura) {
+        setPagoDiferenciaData((prev) => ({
+          metodoPago: prev.metodoPago || "",
+          factura: prev.factura || "",
+        }));
         setShowDiferenciaModal(true);
-        return true;
       }
+
+      // guardamos valores de diferencia en formData temporalmente, por si querés usarlos
+      setFormData((prev) => ({
+        ...prev,
+        __diffBase__: diffBase,
+        __proporcional__: proporcional,
+      }));
+    } else {
+      // no hay upgrade
+      setShowDiferenciaModal(false);
+      setFormData((prev) => {
+        const clone = { ...prev };
+        delete clone.__diffBase__;
+        delete clone.__proporcional__;
+        return clone;
+      });
     }
-    return false;
   };
 
   const onInputChange = (e) => {
     const { name, type, files, value } = e.target;
     if (type === "file") {
-      setFormData(prev => ({
-        ...prev,
-        [name]: files[0] || null,
-      }));
+      setFormData((prev) => ({ ...prev, [name]: files[0] || null }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
+      setFormData((prev) => ({ ...prev, [name]: value }));
       if (name === "tipoVehiculo") {
-        verificarDiferencia(value);
+        checkUpgradeAndMaybeAsk(value);
       }
     }
   };
 
   const onPagoDiferenciaChange = (e) => {
     const { name, value } = e.target;
-    setPagoDiferenciaData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setPagoDiferenciaData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleConfirmarPagoDiferencia = () => {
@@ -179,7 +194,7 @@ const ModalVehiculoCajero = ({
       setErrorMessage("Debe seleccionar un tipo de factura");
       return;
     }
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       metodoPago: pagoDiferenciaData.metodoPago,
       factura: pagoDiferenciaData.factura,
@@ -190,62 +205,10 @@ const ModalVehiculoCajero = ({
 
   const handleCancelarPagoDiferencia = () => {
     setShowDiferenciaModal(false);
-    setFormData(prev => ({
-      ...prev,
-      tipoVehiculo: cliente?.precioAbono || "",
-    }));
     setErrorMessage("");
   };
 
-  const registrarMovimientosDiferencia = async (patente, diferencia) => {
-    try {
-      const movimientoData = {
-        patente,
-        operador: user.nombre,
-        tipoVehiculo: formData.tipoVehiculo,
-        metodoPago: formData.metodoPago,
-        factura: formData.factura || 'Sin factura',
-        monto: diferencia,
-        descripcion: `Diferencia por cambio a abono más caro (${formData.tipoVehiculo})`,
-        tipoTarifa: 'abono'
-      };
-
-      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(movimientoData),
-      });
-
-      if (!movimientoRes.ok) throw new Error('Error al registrar movimiento');
-
-      const movimientoClienteData = {
-        nombreApellido: cliente.nombreApellido,
-        email: cliente.email || '',
-        descripcion: `Diferencia por cambio a abono más caro (${formData.tipoVehiculo})`,
-        monto: diferencia,
-        tipoVehiculo: formData.tipoVehiculo,
-        operador: user.nombre,
-        patente: patente,
-      };
-      
-      await fetch('http://localhost:5000/api/movimientosclientes', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(movimientoClienteData),
-      });
-
-    } catch (error) {
-      console.error("Error al registrar movimientos:", error);
-      throw error;
-    }
-  };
-
+  // ====== Submit ======
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -261,46 +224,55 @@ const ModalVehiculoCajero = ({
       setErrorMessage("Patente inválida. Formato aceptado: ABC123 o AB123CD");
       return;
     }
-
     if (!formData.tipoVehiculo) {
       setErrorMessage("Debe seleccionar un tipo de vehículo");
       return;
     }
-
     if (!cliente || !cliente._id) {
       setErrorMessage("No se pudo identificar al cliente");
       return;
+    }
+
+    // Rechequear upgrade en el momento del submit
+    const tierActual = String(cliente?.precioAbono || "").toLowerCase();
+    if (tierActual) {
+      const baseActual = getBaseMensualFront(tierActual);
+      const baseNuevo = getBaseMensualFront(formData.tipoVehiculo);
+      if (baseNuevo > baseActual && (!formData.metodoPago || !formData.factura)) {
+        // falta completar medio/factura para la diferencia -> abrimos modal
+        setShowDiferenciaModal(true);
+        return;
+      }
     }
 
     setIsSubmitting(true);
     setErrorMessage("");
 
     try {
-      const vehiculosRes = await fetch("http://localhost:5000/api/vehiculos");
+      // Asegurar existencia del vehículo
+      const vehiculosRes = await fetch(`${API}/api/vehiculos`);
       if (!vehiculosRes.ok) throw new Error("No se pudieron obtener los vehículos");
       const vehiculos = await vehiculosRes.json();
-
-      const vehiculoExistente = vehiculos.find(v => v.patente.toUpperCase() === patente);
+      const vehiculoExistente = vehiculos.find(
+        (v) => (v.patente || "").toUpperCase() === patente
+      );
 
       if (!vehiculoExistente) {
-        const crearRes = await fetch("http://localhost:5000/api/vehiculos/sin-entrada", {
+        const crearRes = await fetch(`${API}/api/vehiculos/sin-entrada`, {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
-          body: JSON.stringify({ 
-            patente, 
-            tipoVehiculo: formData.tipoVehiculo 
-          }),
+          body: JSON.stringify({ patente, tipoVehiculo: formData.tipoVehiculo }),
         });
-
         if (!crearRes.ok) {
           const errorData = await crearRes.json().catch(() => ({}));
           throw new Error(errorData.message || "Error al crear vehículo");
         }
       }
 
+      // Armamos FormData para alta
       const abonoFormData = new FormData();
       abonoFormData.append("clienteId", cliente._id);
       abonoFormData.append("nombreApellido", cliente?.nombreApellido || "");
@@ -319,54 +291,22 @@ const ModalVehiculoCajero = ({
       abonoFormData.append("anio", formData.anio || "");
       abonoFormData.append("companiaSeguro", formData.companiaSeguro || "");
       abonoFormData.append("tipoVehiculo", formData.tipoVehiculo || "");
-      abonoFormData.append("metodoPago", formData.metodoPago || "");
-      abonoFormData.append("factura", formData.factura || "Sin factura");
+      abonoFormData.append("metodoPago", formData.metodoPago || "Efectivo");
+      abonoFormData.append("factura", formData.factura || "CC");
       if (formData.fotoSeguro) abonoFormData.append("fotoSeguro", formData.fotoSeguro);
       if (formData.fotoDNI) abonoFormData.append("fotoDNI", formData.fotoDNI);
       if (formData.fotoCedulaVerde) abonoFormData.append("fotoCedulaVerde", formData.fotoCedulaVerde);
-      if (formData.fotoCedulaAzul) abonoFormData.append("fotoCedulaAzul", formData.fotoCedulaAzul);
 
-      const abonoRes = await fetch("http://localhost:5000/api/abonos/agregar-abono", {
+      const abonoRes = await fetch(`${API}/api/abonos/agregar-abono`, {
         method: "POST",
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         body: abonoFormData,
       });
 
-      if (!abonoRes.ok) {
-        const errorData = await abonoRes.json().catch(() => ({}));
-        throw new Error(errorData.message || "Error al registrar abono");
-      }
+      const abonoData = await abonoRes.json().catch(() => ({}));
+      if (!abonoRes.ok) throw new Error(abonoData.message || "Error al registrar abono");
 
-      if (cliente?.abonado && formData.tipoVehiculo) {
-        const precioMensual = precioMensualDe(formData.tipoVehiculo);
-        await fetch(`http://localhost:5000/api/clientes/${cliente._id}/actualizar-precio-abono`, {
-          method: "PUT",
-          headers: { 
-            "Content-Type": "application/json",
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          },
-          body: JSON.stringify({ 
-            tipoVehiculo: formData.tipoVehiculo,
-            precioMensual: precioMensual
-          }),
-        });
-      }
-
-      const tipoActual = cliente?.precioAbono;
-      const nuevoTipo = formData.tipoVehiculo;
-      if (tipoActual && nuevoTipo) {
-        const precioNuevo = precioMensualDe(nuevoTipo);
-        const precioActual = precioMensualDe(tipoActual);
-        if (precioNuevo > precioActual) {
-          const diferencia = calcularDiferencia(nuevoTipo, tipoActual);
-          if (diferencia > 0 && formData.metodoPago && formData.factura) {
-            await registrarMovimientosDiferencia(patente, diferencia);
-          }
-        }
-      }
-
+      // Reset
       setFormData({
         patente: "",
         marca: "",
@@ -380,30 +320,29 @@ const ModalVehiculoCajero = ({
         fotoSeguro: null,
         fotoDNI: null,
         fotoCedulaVerde: null,
-        fotoCedulaAzul: null,
       });
-
-      setPagoDiferenciaData({
-        metodoPago: "",
-        factura: "",
-      });
+      setPagoDiferenciaData({ metodoPago: "", factura: "" });
 
       setMensajeModal({
         titulo: "Éxito",
-        mensaje: "¡Abono registrado correctamente!",
+        mensaje: abonoData?.message || "¡Abono registrado correctamente!",
         onClose: () => {
           setMensajeModal(null);
           if (onGuardarExitoso) onGuardarExitoso();
           onClose();
-        }
+        },
       });
     } catch (err) {
       console.error("Error en handleSubmit:", err);
-      setErrorMessage(err.message || "Error al registrar el abono. Por favor, intente nuevamente.");
+      setErrorMessage(
+        err.message || "Error al registrar el abono. Por favor, intente nuevamente."
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (!visible) return null;
 
   const renderFileInput = (label, name) => {
     const archivoCargado = formData[name] != null;
@@ -432,24 +371,20 @@ const ModalVehiculoCajero = ({
     );
   };
 
-  if (!visible) return null;
-
+  // ====== UI ======
   return (
     <>
       <div className="modal-vehiculo-overlay" onClick={onClose}>
         <div className="modal-vehiculo-content" onClick={(e) => e.stopPropagation()}>
           <form className="modal-vehiculo-form" onSubmit={handleSubmit}>
-            {errorMessage && (
-              <div className="modal-error-message">
-                {errorMessage}
-              </div>
-            )}
+            {errorMessage && <div className="modal-error-message">{errorMessage}</div>}
+
+            {/* Se removió el bannerPreview que mezclaba mensajes del back */}
 
             <div className="modal-vehiculo-image-row">
               {renderFileInput("Foto Seguro", "fotoSeguro")}
               {renderFileInput("Foto DNI", "fotoDNI")}
               {renderFileInput("Foto Céd. Verde", "fotoCedulaVerde")}
-              {renderFileInput("Foto Céd. Azul", "fotoCedulaAzul")}
             </div>
 
             <div className="modal-vehiculo-form-group grid-2">
@@ -459,10 +394,7 @@ const ModalVehiculoCajero = ({
                 placeholder="Patente"
                 value={formData.patente || ""}
                 onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    patente: e.target.value.toUpperCase(),
-                  })
+                  setFormData({ ...formData, patente: e.target.value.toUpperCase() })
                 }
                 maxLength={8}
                 required
@@ -520,14 +452,14 @@ const ModalVehiculoCajero = ({
                     ? "Error cargando tipos"
                     : "Seleccioná un tipo"}
                 </option>
-
                 {!tiposLoading &&
                   !tiposError &&
                   tiposVehiculo.map((tipo) => {
                     const nombre = tipo?.nombre || "";
                     const key = nombre.toLowerCase?.() ?? "";
                     const mensual = precios?.[key]?.mensual;
-                    const labelPrecio = typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
+                    const labelPrecio =
+                      typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
                     return (
                       <option key={nombre} value={nombre}>
                         {capitalizar(nombre)} - {labelPrecio}
@@ -549,74 +481,75 @@ const ModalVehiculoCajero = ({
         </div>
       </div>
 
-      {/* Modal para pagar diferencia */}
-      {showDiferenciaModal && (
-        <div className="modal-diferencia-overlay">
-          <div className="modal-diferencia-content">
-            <h3>Cambio a abono más caro</h3>
-            <p>El vehículo seleccionado tiene un abono más caro que el actual.</p>
-            <p className="diferencia-monto">
-              Diferencia a pagar: <strong>${formatARS(diferenciaAPagar)}</strong>
-            </p>
-            <p className="diferencia-info">
-              Esta diferencia cubre los días restantes del abono actual.
-            </p>
-            
-            <div className="modal-diferencia-form">
-              <select
-                name="metodoPago"
-                value={pagoDiferenciaData.metodoPago}
-                onChange={onPagoDiferenciaChange}
-                required
-                className="modal-diferencia-input"
-              >
-                <option value="" disabled>Método de pago</option>
-                {metodosPago.map((metodo) => (
-                  <option key={metodo} value={metodo}>{metodo}</option>
-                ))}
-              </select>
-              
-              <select
-                name="factura"
-                value={pagoDiferenciaData.factura}
-                onChange={onPagoDiferenciaChange}
-                required
-                className="modal-diferencia-input"
-              >
-                <option value="" disabled>Tipo de factura</option>
-                {tiposFactura.map((tipo) => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
-                ))}
-              </select>
-            </div>
-            
-            {errorMessage && (
-              <div className="modal-diferencia-error">
-                {errorMessage}
+      {/* Modal de diferencia (sólo si upgrade) */}
+      {showDiferenciaModal && (() => {
+        const tierActual = String(cliente?.precioAbono || "").toLowerCase();
+        const baseActual = getBaseMensualFront(tierActual);
+        const baseNuevo = getBaseMensualFront(formData.tipoVehiculo);
+        const diffBase = Math.max(0, baseNuevo - baseActual);
+        const { proporcional } = prorratearMontoFront(diffBase);
+
+        return (
+          <div className="modal-diferencia-overlay">
+            <div className="modal-diferencia-content">
+              <h3>Vas a meter un vehículo más caro</h3>
+
+              <div style={{ lineHeight: 1.4, marginBottom: 10 }}>
+                <div>• Diferencia mensual: ${formatARS(diffBase)}</div>
+                <div>• A pagar HOY: ${formatARS(proporcional)}</div>
+                <div style={{ marginTop: 8 }}>Esta diferencia cubre los días restantes del mes.</div>
               </div>
-            )}
-            
-            <div className="modal-diferencia-buttons">
-              <button 
-                type="button" 
-                onClick={handleConfirmarPagoDiferencia}
-                className="confirmar-btn"
-              >
-                Confirmar Pago
-              </button>
-              <button 
-                type="button" 
-                onClick={handleCancelarPagoDiferencia}
-                className="cancelar-btn"
-              >
-                Cancelar
-              </button>
+
+              <div className="modal-diferencia-form">
+                <select
+                  name="metodoPago"
+                  value={pagoDiferenciaData.metodoPago}
+                  onChange={onPagoDiferenciaChange}
+                  required
+                  className="modal-diferencia-input"
+                >
+                  <option value="" disabled>Método de pago</option>
+                  {metodosPago.map((metodo) => (
+                    <option key={metodo} value={metodo}>{metodo}</option>
+                  ))}
+                </select>
+                <select
+                  name="factura"
+                  value={pagoDiferenciaData.factura}
+                  onChange={onPagoDiferenciaChange}
+                  required
+                  className="modal-diferencia-input"
+                >
+                  <option value="" disabled>Tipo de factura</option>
+                  {tiposFactura.map((tipo) => (
+                    <option key={tipo} value={tipo}>{tipo}</option>
+                  ))}
+                </select>
+              </div>
+
+              {errorMessage && <div className="modal-diferencia-error">{errorMessage}</div>}
+
+              <div className="modal-diferencia-buttons">
+                <button
+                  type="button"
+                  onClick={handleConfirmarPagoDiferencia}
+                  className="confirmar-btn"
+                >
+                  Aceptar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelarPagoDiferencia}
+                  className="cancelar-btn"
+                >
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Modal de Mensaje */}
       {mensajeModal && (
         <ModalMensaje
           titulo={mensajeModal.titulo}

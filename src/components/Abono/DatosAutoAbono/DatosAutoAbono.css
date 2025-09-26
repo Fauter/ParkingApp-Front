@@ -130,19 +130,19 @@
 }
 
 .file-input-wrapper {
-  display: flex;              /* ⬅ centra el contenido */
-  align-items: center;        /* ⬅ vertical */
-  justify-content: center;    /* ⬅ horizontal */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-direction: column;
   gap: 0.3rem;
-  width: 100%;                /* ocupa toda la celda del grid */
+  width: 100%;
 }
 
 .file-visible-label {
   font-size: 0.8rem;
   color: #ccc;
   margin-bottom: 0.1rem;
-  text-align: center;         /* etiqueta centrada */
+  text-align: center;
 }
 
 .file-uploaded {
@@ -162,8 +162,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)); /* eran 4, ahora 3 */
   gap: 1rem;
-  justify-items: center;  /* ⬅ centra horizontalmente el contenido de cada celda */
-  align-items: center;    /* ⬅ centra verticalmente el contenido de cada celda */
+  justify-items: center;
+  align-items: center;
 }
 
 .select-style {
@@ -199,7 +199,6 @@
   font-weight: 600;
   text-align: center;
   text-align-last: center;
-
   background-image: url("data:image/svg+xml;utf8,<svg fill='white' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
   background-repeat: no-repeat;
   background-position: right 0.75rem center;
@@ -231,4 +230,85 @@
 
 @media (max-height: 642px) {
   .abono-form { gap: 0.5rem; }
+}
+
+/* ============================= */
+/* NUEVO: barra superior cochera */
+/* ============================= */
+
+.cochera-row {
+  display: grid;
+  grid-template-columns: 1fr 0.6fr auto;
+  gap: 1rem;
+  width: 100%;
+  align-items: center;
+}
+
+.cochera-row .fullwidth select,
+.cochera-row .fullwidth input {
+  width: 100%; /* ancho completo en esta fila */
+}
+
+/* Reutiliza tu estética */
+.select-style-wide {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  color: white;
+  width: 100%;
+  outline: none;
+  appearance: none;
+  font-size: 0.9rem;
+}
+.select-style-wide:focus {
+  border-color: rgb(100, 108, 133);
+}
+
+.input-style-wide {
+  background-color: #1f1f28;
+  border: 1px solid #444a5a;
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  color: white;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.input-style-wide:focus {
+  border-color: rgb(100, 108, 133);
+}
+
+/* Toggle "Exclusiva" a la derecha, misma altura que inputs */
+.exclusiva-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  user-select: none;
+  min-height: 2.1rem; /* ~altura de los inputs */
+}
+.exclusiva-toggle input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #4caf50; /* modern browsers */
+}
+.exclusiva-toggle label {
+  margin: 0; /* sin margen extra */
+}
+
+/* Responsive suave */
+@media (max-width: 900px) {
+  .cochera-row {
+    grid-template-columns: 1fr 0.8fr 0.6fr;
+    gap: 0.6rem;
+  }
+}
+@media (max-width: 640px) {
+  .cochera-row {
+    grid-template-columns: 1fr;
+  }
+  .exclusiva-toggle {
+    justify-content: flex-start;
+  }
 }

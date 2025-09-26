@@ -19,6 +19,22 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const [diasRestantes, setDiasRestantes] = useState(0);
   const [mensajeModal, setMensajeModal] = useState(null);
 
+  // === Estado y lógica del modal de edición ===
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editForm, setEditForm] = useState({
+    nombreApellido: '',
+    dniCuitCuil: '',
+    email: '',
+    domicilio: '',
+    localidad: '',
+    domicilioTrabajo: '',
+    telefonoParticular: '',
+    telefonoEmergencia: '',
+    telefonoTrabajo: '',
+  });
+
   const [formData, setFormData] = useState({
     patente: '',
     marca: '',
@@ -131,8 +147,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
       }
 
       const precios = await response.json();
-
-      // 🔧 Normalizo el tipo a minúsculas para leer el mapa de precios
       const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '').toLowerCase();
       const precioMensual = precios?.[tipo]?.mensual || 0;
 
@@ -151,61 +165,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
-  // ⚠️ Ya no se usa en la renovación (el back ya registra los movimientos).
-  const registrarMovimientos = async (patente, monto, descripcion) => {
-    try {
-      const token = localStorage.getItem('token');
-      const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
-      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '');
-
-      const movimientoData = {
-        patente,
-        operador,
-        tipoVehiculo: tipo,
-        metodoPago,
-        factura,
-        monto,
-        descripcion,
-        tipoTarifa: 'abono'
-      };
-
-      const movimientoRes = await fetch('http://localhost:5000/api/movimientos/registrar', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(movimientoData),
-      });
-
-      if (!movimientoRes.ok) throw new Error('Error al registrar movimiento');
-
-      const movimientoClienteData = {
-        nombreApellido: cliente.nombreApellido,
-        email: cliente.email || '',
-        descripcion,
-        monto,
-        tipoVehiculo: tipo,
-        operador,
-        patente,
-      };
-
-      // Ruta correcta con C en mayúscula (por si lo reutilizás)
-      await fetch('http://localhost:5000/api/movimientosClientes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(movimientoClienteData),
-      });
-
-    } catch (error) {
-      console.error("Error al registrar movimientos:", error);
-      throw error;
-    }
-  };
-
   const handleRenovarAbono = async () => {
     try {
       setLoading(true);
@@ -213,7 +172,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
       const patente = cliente.abonos?.[0]?.patente || 'N/A';
       const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '');
-      // const descripcion = `Renovación abono ${tipo}`; // el back ya registra esto
 
       const response = await fetch(`http://localhost:5000/api/clientes/${clienteId}/renovar-abono`, {
         method: 'POST',
@@ -237,7 +195,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
         throw new Error(errorData.message || 'Error al renovar abono');
       }
 
-      // ✅ NO registramos nada extra acá: el back ya creó Movimiento y MovimientoCliente
       await cargarCliente();
 
       setModalRenovarVisible(false);
@@ -315,16 +272,12 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
     let rutaFoto;
     if (/^https?:\/\//i.test(raw)) {
-      // URL completa
       rutaFoto = raw;
     } else if (raw.startsWith('/uploads/')) {
-      // Ya viene con /uploads/...
       rutaFoto = `http://localhost:5000${raw}`;
     } else if (raw.startsWith('/fotos/')) {
-      // Caso viejo: /fotos/... (colgado de /uploads)
       rutaFoto = `http://localhost:5000/uploads${raw}`;
     } else {
-      // Nombre pelado
       rutaFoto = `http://localhost:5000/uploads/fotos/${raw}`;
     }
 
@@ -356,6 +309,85 @@ function DetalleClienteCajero({ clienteId, volver }) {
         fotoCedulaVerde: null,
         fotoCedulaAzul: null,
       });
+    }
+  };
+
+  // ===== Modal Edición: helpers =====
+  const openEditModal = () => {
+    if (!cliente) return;
+    setEditError('');
+    setEditForm({
+      nombreApellido: cliente.nombreApellido || '',
+      dniCuitCuil: cliente.dniCuitCuil || '',
+      email: cliente.email || '',
+      domicilio: cliente.domicilio || '',
+      localidad: cliente.localidad || '',
+      domicilioTrabajo: cliente.domicilioTrabajo || '',
+      telefonoParticular: cliente.telefonoParticular || '',
+      telefonoEmergencia: cliente.telefonoEmergencia || '',
+      telefonoTrabajo: cliente.telefonoTrabajo || '',
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const validateEdit = () => {
+    if (!editForm.nombreApellido.trim()) return 'El nombre y apellido es obligatorio.';
+    if (!editForm.dniCuitCuil.trim()) return 'El DNI/CUIT/CUIL es obligatorio.';
+    if (editForm.email && !/^\S+@\S+\.\S+$/.test(editForm.email)) return 'Email inválido.';
+    if (
+      editForm.telefonoParticular &&
+      !/^[0-9+\s()-]{6,}$/.test(editForm.telefonoParticular)
+    ) return 'Teléfono particular inválido.';
+    if (
+      editForm.telefonoEmergencia &&
+      !/^[0-9+\s()-]{6,}$/.test(editForm.telefonoEmergencia)
+    ) return 'Teléfono de emergencia inválido.';
+    if (
+      editForm.telefonoTrabajo &&
+      !/^[0-9+\s()-]{6,}$/.test(editForm.telefonoTrabajo)
+    ) return 'Teléfono de trabajo inválido.';
+    return '';
+  };
+
+  const saveEdit = async () => {
+    const v = validateEdit();
+    if (v) {
+      setEditError(v);
+      return;
+    }
+    try {
+      setEditSaving(true);
+      setEditError('');
+      const res = await fetch(`http://localhost:5000/api/clientes/${clienteId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(editForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || 'No se pudo actualizar el cliente');
+
+      setEditOpen(false);
+      setMensajeModal({
+        titulo: 'Guardado',
+        mensaje: 'Cliente actualizado correctamente.',
+        onClose: async () => {
+          setMensajeModal(null);
+          await cargarCliente();
+        }
+      });
+    } catch (err) {
+      console.error(err);
+      setEditError(err.message || 'Error inesperado al actualizar');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -393,9 +425,16 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   return (
     <div className="detalle-cliente-cajero">
-      <div className="header-detalle">
-        <button onClick={volver} className="btn-volver"><FaArrowLeft /></button>
-        <h2>{cliente.nombreApellido}</h2>
+      <div className="header-detalle header-detalle--space">
+        <div className="header-left">
+          <button onClick={volver} className="btn-volver"><FaArrowLeft /></button>
+          <h2>{cliente.nombreApellido}</h2>
+        </div>
+        <div className="header-actions">
+          <button className="btn-editar" onClick={openEditModal} title="Editar datos del cliente">
+            Editar
+          </button>
+        </div>
       </div>
 
       <div className="status-abono-container">
@@ -557,6 +596,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         </div>
       )}
 
+      {/* Modal para ver fotos */}
       {modalFotoUrl && (
         <div className="modal-foto-overlay" onClick={cerrarModal}>
           <div className="modal-foto-content" onClick={(e) => e.stopPropagation()}>
@@ -581,12 +621,120 @@ function DetalleClienteCajero({ clienteId, volver }) {
         </div>
       )}
 
+      {/* Modal de mensajes generales */}
       {mensajeModal && (
         <ModalMensaje
           titulo={mensajeModal.titulo}
           mensaje={mensajeModal.mensaje}
           onClose={mensajeModal.onClose}
         />
+      )}
+
+      {/* Modal de Edición (usando ModalMensaje con children) */}
+      {editOpen && (
+        <ModalMensaje
+          titulo="Editar Cliente"
+          mensaje="Modificá los datos y guardá."
+          onClose={() => setEditOpen(false)}
+        >
+          <div className="edit-form">
+            <div className="grid-2">
+              <div className="form-item">
+                <label>Nombre y Apellido</label>
+                <input
+                  name="nombreApellido"
+                  type="text"
+                  value={editForm.nombreApellido}
+                  onChange={handleEditChange}
+                  autoFocus
+                />
+              </div>
+              <div className="form-item">
+                <label>DNI / CUIT / CUIL</label>
+                <input
+                  name="dniCuitCuil"
+                  type="text"
+                  value={editForm.dniCuitCuil}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Email</label>
+                <input
+                  name="email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Localidad</label>
+                <input
+                  name="localidad"
+                  type="text"
+                  value={editForm.localidad}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Domicilio</label>
+                <input
+                  name="domicilio"
+                  type="text"
+                  value={editForm.domicilio}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Domicilio de Trabajo</label>
+                <input
+                  name="domicilioTrabajo"
+                  type="text"
+                  value={editForm.domicilioTrabajo}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Tel. Particular</label>
+                <input
+                  name="telefonoParticular"
+                  type="text"
+                  value={editForm.telefonoParticular}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Tel. Emergencia</label>
+                <input
+                  name="telefonoEmergencia"
+                  type="text"
+                  value={editForm.telefonoEmergencia}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="form-item">
+                <label>Tel. Trabajo</label>
+                <input
+                  name="telefonoTrabajo"
+                  type="text"
+                  value={editForm.telefonoTrabajo}
+                  onChange={handleEditChange}
+                />
+              </div>
+            </div>
+
+            {editError && <div className="form-error">{editError}</div>}
+
+            <div className="edit-actions">
+              <button className="btn-secundario" onClick={() => setEditOpen(false)} disabled={editSaving}>
+                Cancelar
+              </button>
+              <button className="btn-primario" onClick={saveEdit} disabled={editSaving}>
+                {editSaving ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </div>
+        </ModalMensaje>
       )}
     </div>
   );

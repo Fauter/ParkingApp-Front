@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
-import './DatosAutoAbono.css';
+import "./DatosAutoAbono.css";
 
 const BASE_URL = "http://localhost:5000";
 const CATALOG_POLL_MS = 180000; // 3 min
+
+// === Fallbacks iguales al back ===
+const FALLBACK_PRECIOS = { auto: 100000, camioneta: 160000, moto: 50000 };
 
 function DatosAutoAbono({ datosVehiculo, user }) {
   const [formData, setFormData] = useState({
@@ -29,6 +32,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
+    // === NUEVO ===
+    cochera: "",            // 'Fija' | 'Móvil'
+    piso: "",               // string libre (1° Piso, Subsuelo, etc.)
+    exclusiva: false        // boolean
   });
 
   const [fileUploaded, setFileUploaded] = useState({
@@ -37,7 +44,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoCedulaVerde: false,
   });
 
-  // refs de inputs (compatibilidad)
   const inputRefs = {
     fotoSeguro: useRef(null),
     fotoDNI: useRef(null),
@@ -46,15 +52,24 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
   const [precios, setPrecios] = useState({});
-  const [clientes, setClientes] = useState([]); // seguimos cargando para ensureCliente, pero sin sugerencias UI
+  const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // ===== Modal de mensajes genéricos =====
+  // Modal informativo
   const [modal, setModal] = useState({ titulo: "", mensaje: "" });
   const closeModal = () => setModal({ titulo: "", mensaje: "" });
   const showModal = (titulo, mensaje) => setModal({ titulo, mensaje });
 
-  // ======= Webcam (usa selección de Config.jsx) =======
+  // Modal de confirmación “más caro”
+  const [confirmModal, setConfirmModal] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    onConfirm: null,
+    onCancel: null,
+  });
+
+  // ===== Webcam =====
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   const [modalCamAbierto, setModalCamAbierto] = useState(false);
   const [videoStream, setVideoStream] = useState(null);
@@ -62,7 +77,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const [capturingField, setCapturingField] = useState(null);
   const videoRef = useRef(null);
 
-  // Lee selección guardada por Config.jsx -> backend y luego localStorage
   useEffect(() => {
     (async () => {
       try {
@@ -86,7 +100,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     if (err.name === "NotAllowedError" || err.name === "SecurityError")
       return "Permiso denegado. Habilitá el acceso a la cámara para este sitio.";
     if (err.name === "NotFoundError" || err.name === "OverconstrainedError")
-      return "No se encontró esa cámara. Probá actualizar la lista en Config o desconectar/volver a conectar.";
+      return "No se encontró esa cámara. Actualizá la lista en Config o reconectá.";
     if (err.name === "NotReadableError")
       return "La cámara está en uso por otra app. Cerrala y probá de nuevo.";
     return `Fallo de cámara: ${err.name || ""} ${err.message || ""}`;
@@ -150,10 +164,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const confirmarFoto = async () => {
     if (!capturingField || !fotoPreview) return;
-
-    // convertir dataURL a Blob/File y guardarlo en formData
-    const dataUrl = fotoPreview;
-    const res = await fetch(dataUrl);
+    const res = await fetch(fotoPreview);
     const blob = await res.blob();
     const patente = (formData.patente || "SINPATENTE").replace(/\s+/g, "");
     const ts = Date.now();
@@ -162,7 +173,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
     setFormData((prev) => ({ ...prev, [capturingField]: file }));
     setFileUploaded((prev) => ({ ...prev, [capturingField]: true }));
-
     cerrarModalCam();
   };
 
@@ -179,30 +189,28 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   };
 
   useEffect(() => {
-    if (videoRef.current && videoStream) {
-      videoRef.current.srcObject = videoStream;
-    }
+    if (videoRef.current && videoStream) videoRef.current.srcObject = videoStream;
   }, [videoStream]);
 
   useEffect(() => {
     return () => {
       if (videoStream) {
-        try { videoStream.getTracks().forEach((t) => t.stop()); } catch {}
+        try {
+          videoStream.getTracks().forEach((t) => t.stop());
+        } catch {}
       }
     };
   }, [videoStream]);
 
-  // ===== Formato ARS =====
   const formatARS = (n) => {
-    if (typeof n !== "number") return null;
+    if (typeof n !== "number") return "—";
     try {
       return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
     } catch {
-      return n?.toString() ?? "";
+      return String(n);
     }
   };
 
-  // ===== Clientes / tipos / precios =====
   const fetchClientes = async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/clientes`, { cache: "no-store" });
@@ -220,15 +228,14 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   useEffect(() => {
     if (datosVehiculo) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
         patente: datosVehiculo.patente || "",
-        tipoVehiculo: datosVehiculo.tipoVehiculo || ""
+        tipoVehiculo: datosVehiculo.tipoVehiculo || "",
       }));
     }
   }, [datosVehiculo]);
 
-  // ===== Auto-refresh de tipos y precios =====
   useEffect(() => {
     let timer = null;
 
@@ -238,7 +245,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" }),
           fetch(`${BASE_URL}/api/precios`, { cache: "no-store" }),
         ]);
-
         if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
         if (!preciosRes.ok) throw new Error("No se pudo cargar precios");
 
@@ -253,8 +259,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }
     };
 
-    fetchTiposYPrecios(); // primera
-
+    fetchTiposYPrecios();
     timer = setInterval(fetchTiposYPrecios, CATALOG_POLL_MS);
 
     const onVis = () => document.visibilityState === "visible" && fetchTiposYPrecios();
@@ -269,48 +274,92 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     };
   }, []);
 
-  // Cargamos clientes una vez (para ensureCliente por DNI). NO hay sugerencias por nombre.
-  useEffect(() => { fetchClientes(); }, []);
+  useEffect(() => {
+    fetchClientes();
+  }, []);
 
-  const handleChange = (e) => {
-    const { name, value, files } = e.target;
+  const handleChange = async (e) => {
+    const { name, value, files, type, checked } = e.target;
+
+    // Nuevos campos
+    if (name === "cochera") {
+      setFormData(prev => {
+        const next = { ...prev, cochera: value };
+        if (value !== "Fija") {
+          // si no es Fija, deshabilitamos exclusiva
+          next.exclusiva = false;
+        }
+        return next;
+      });
+      return;
+    }
+    if (name === "exclusiva" && type === "checkbox") {
+      // sólo permitimos checkear si cochera === 'Fija'
+      if (formData.cochera === "Fija") {
+        setFormData(prev => ({ ...prev, exclusiva: Boolean(checked) }));
+      }
+      return;
+    }
 
     if (name === "patente") {
-      const patenteUpper = (value || "").toUpperCase();
-      setFormData(prev => ({ ...prev, [name]: patenteUpper }));
+      setFormData((prev) => ({ ...prev, patente: (value || "").toUpperCase() }));
       return;
     }
     if (files && files.length > 0) {
-      setFormData(prev => ({ ...prev, [name]: files[0] }));
-      setFileUploaded(prev => ({ ...prev, [name]: true }));
+      setFormData((prev) => ({ ...prev, [name]: files[0] }));
+      setFileUploaded((prev) => ({ ...prev, [name]: true }));
       return;
     }
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const validarPatente = (patente) => {
-    const formatoViejo = /^[A-Z]{3}\d{3}$/;       // ABC123
-    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/; // AB123CD
+    const formatoViejo = /^[A-Z]{3}\d{3}$/;
+    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
     return formatoViejo.test(patente) || formatoNuevo.test(patente);
   };
 
   const validarDNI = (dni) => {
-    const s = String(dni || '').replace(/\D+/g, '');
-    return s.length >= 7 && s.length <= 11; // tolera DNI / CUIT / CUIL
+    const s = String(dni || "").replace(/\D+/g, "");
+    return s.length >= 7 && s.length <= 11;
   };
 
-  // 🔐 ensureCliente: SOLO por DNI/CUIT/CUIL
+  // ===== Helpers FRONT: base mensual + prorrateo idéntico al back =====
+  const getBaseMensualFront = (tipo) => {
+    const key = String(tipo || "").toLowerCase();
+    const cfg = precios?.[key];
+    if (cfg && typeof cfg.mensual === "number") return cfg.mensual;
+    return FALLBACK_PRECIOS[key] ?? 100000;
+  };
+
+  const getUltimoDiaMesFront = (hoy = new Date()) => {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  };
+
+  const prorratearMontoFront = (base, hoy = new Date()) => {
+    const ultimo = getUltimoDiaMesFront(hoy);
+    const total = ultimo.getDate();
+    const dia = hoy.getDate();
+    const diasRestantes = dia === 1 ? total : (total - dia + 1);
+    const factor = diasRestantes / total;
+    const proporcional = Math.round(base * factor);
+    return { proporcional, diasRestantes, totalDiasMes: total, factor };
+  };
+
+  // 🔐 ensureCliente por DNI (solo crea si no existe)
   const ensureCliente = async () => {
-    const dni = (formData.dniCuitCuil || '').trim();
-    if (!validarDNI(dni)) throw new Error('DNI/CUIT/CUIL inválido');
+    const dni = (formData.dniCuitCuil || "").trim();
+    if (!validarDNI(dni)) throw new Error("DNI/CUIT/CUIL inválido");
 
-    // 1) Buscar en cache local (clientes)
-    const encontrado = (clientes || []).find(c => String(c.dniCuitCuil || '').trim() === dni);
-
+    const encontrado = (clientes || []).find(
+      (c) => String(c.dniCuitCuil || "").trim() === dni
+    );
     if (encontrado && encontrado._id) {
-      // Actualizamos datos básicos y devolvemos _id
       try {
-        const putRes = await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
+        await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -322,17 +371,17 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             telefonoEmergencia: formData.telefonoEmergencia,
             domicilioTrabajo: formData.domicilioTrabajo,
             telefonoTrabajo: formData.telefonoTrabajo,
-            email: formData.email
+            email: formData.email,
           }),
-        });
-        if (putRes.ok) return encontrado._id;
-      } catch (_) { /* si falla, creamos nuevo igual */ }
+        }).catch(() => {});
+      } catch {}
+      return encontrado._id;
     }
 
-    // 2) Crear nuevo cliente (si no existía por DNI)
+    // Crear
     const nuevoClienteRes = await fetch(`${BASE_URL}/api/clientes`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         nombreApellido: formData.nombreApellido,
         dniCuitCuil: formData.dniCuitCuil,
@@ -343,55 +392,46 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         domicilioTrabajo: formData.domicilioTrabajo,
         telefonoTrabajo: formData.telefonoTrabajo,
         email: formData.email,
-        precioAbono: formData.tipoVehiculo || ""
+        precioAbono: formData.tipoVehiculo || "",
       }),
     });
 
     if (!nuevoClienteRes.ok) {
       const err = await nuevoClienteRes.json().catch(() => ({}));
-      throw new Error(err?.message || 'Error al crear cliente');
+      throw new Error(err?.message || "Error al crear cliente");
     }
     const nuevoCliente = await nuevoClienteRes.json();
-    if (!nuevoCliente._id) throw new Error('No se pudo crear cliente');
+    if (!nuevoCliente._id) throw new Error("No se pudo crear cliente");
     return nuevoCliente._id;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
+  const finalizarSubmit = async () => {
     try {
       const patente = (formData.patente || "").toUpperCase();
-
-      if (!validarPatente(patente)) throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
-      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
-      if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre y apellido del cliente.");
-      if (!validarDNI(formData.dniCuitCuil)) throw new Error("DNI/CUIT/CUIL inválido.");
-      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
-
       const clienteId = await ensureCliente();
 
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
         if (v !== null && v !== undefined) fd.append(k, v);
       });
-      fd.set('patente', patente);
-      fd.set('cliente', clienteId);
-      fd.set('operador', user?.nombre || 'Sistema');
+      fd.set("patente", patente);
+      fd.set("cliente", clienteId);
+      fd.set("operador", user?.nombre || "Sistema");
+
+      // Normalizar exclusiva -> "true"/"false" para multipart
+      fd.set("exclusiva", formData.exclusiva ? "true" : "false");
 
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
-        method: 'POST',
+        method: "POST",
         body: fd,
       });
-
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.message || 'Error al registrar abono.');
+        throw new Error(err?.message || "Error al registrar abono.");
       }
 
-      // refrescamos cache de clientes por si se creó uno nuevo
-      await fetchClientes();
-      fetch(`${BASE_URL}/api/sync/run-now`, { method: 'POST' }).catch(() => {});
+      await fetchClientes(); // refresco local
+      fetch(`${BASE_URL}/api/sync/run-now`, { method: "POST" }).catch(() => {});
 
       showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
 
@@ -417,13 +457,93 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         fotoSeguro: null,
         fotoDNI: null,
         fotoCedulaVerde: null,
+        cochera: "",
+        piso: "",
+        exclusiva: false
       });
       setFileUploaded({
         fotoSeguro: false,
         fotoDNI: false,
         fotoCedulaVerde: false,
       });
+    } catch (error) {
+      console.error(error);
+      showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
+    }
+  };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validaciones locales
+    try {
+      const patente = (formData.patente || "").toUpperCase();
+      if (!validarPatente(patente))
+        throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
+      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
+      if (!formData.nombreApellido?.trim())
+        throw new Error("Debe ingresar el nombre y apellido del cliente.");
+      if (!validarDNI(formData.dniCuitCuil))
+        throw new Error("DNI/CUIT/CUIL inválido.");
+      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
+
+      // NUEVO: exigir cochera seleccionada
+      if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
+      // piso es opcional (lo dejé libre)
+      // exclusiva sólo aplica si cochera === 'Fija' (ya está controlado en UI)
+    } catch (err) {
+      return showModal("Error", err.message);
+    }
+
+    setLoading(true);
+
+    try {
+      const dni = (formData.dniCuitCuil || "").trim();
+      const clienteExistente = (clientes || []).find(
+        (c) => String(c.dniCuitCuil || "").trim() === dni
+      );
+
+      // Si NO existe cliente -> alta inicial sin aviso
+      if (!clienteExistente) {
+        await finalizarSubmit();
+        return;
+      }
+
+      // Si existe cliente: comparar tier actual vs seleccionado en FRONT
+      const tierActual = String(clienteExistente.precioAbono || "").toLowerCase();
+      const tierNuevo = String(formData.tipoVehiculo || "").toLowerCase();
+
+      const baseActual = tierActual ? getBaseMensualFront(tierActual) : 0;
+      const baseNuevo  = getBaseMensualFront(tierNuevo);
+
+      if (tierActual && baseNuevo > baseActual) {
+        const diffBase = baseNuevo - baseActual;
+        const { proporcional } = prorratearMontoFront(diffBase);
+
+        setConfirmModal({
+          open: true,
+          titulo: "Vehículo más caro",
+          mensaje:
+            `Estás pasando de ${tierActual} a ${tierNuevo}.\n\n` +
+            `• Diferencia mensual: $${formatARS(diffBase)}\n` +
+            `• A cobrar HOY: $${formatARS(proporcional)}\n\n` +
+            `¿Deseás continuar?`,
+          onConfirm: async () => {
+            setConfirmModal((s) => ({ ...s, open: false }));
+            setLoading(true);
+            await finalizarSubmit();
+            setLoading(false);
+          },
+          onCancel: () => {
+            setConfirmModal((s) => ({ ...s, open: false }));
+            setLoading(false);
+          },
+        });
+        return;
+      }
+
+      // Misma banda o más barato -> sin aviso
+      await finalizarSubmit();
     } catch (error) {
       console.error(error);
       showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
@@ -432,7 +552,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   };
 
-  // === Render del “selector de archivo” que abre la cámara ===
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">
       <label className="file-visible-label">{label}</label>
@@ -471,6 +590,51 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   return (
     <div className="abono-container">
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
+
+        {/* ===== NUEVA FILA SUPERIOR DE PUNTA A PUNTA ===== */}
+        <div className="cochera-row">
+          <div className="fullwidth">
+            <label>Cochera</label>
+            <select
+              name="cochera"
+              value={formData.cochera}
+              onChange={handleChange}
+              className="select-style-wide"
+              required
+            >
+              <option value="">Seleccione</option>
+              <option value="Fija">Cochera Fija</option>
+              <option value="Móvil">Cochera Móvil</option>
+            </select>
+          </div>
+
+          <div className="fullwidth">
+            <label>Piso</label>
+            <input
+              type="text"
+              name="piso"
+              value={formData.piso}
+              onChange={handleChange}
+              placeholder="1° Piso, Subsuelo, etc."
+              className="input-style-wide"
+            />
+          </div>
+
+          <div className="exclusiva-toggle">
+            <input
+              type="checkbox"
+              id="exclusiva"
+              name="exclusiva"
+              checked={Boolean(formData.exclusiva)}
+              onChange={handleChange}
+              disabled={formData.cochera !== "Fija"}
+              title={formData.cochera === "Fija" ? "Marcar como exclusiva" : "Disponible sólo para Cochera Fija"}
+            />
+            <label htmlFor="exclusiva">Exclusiva</label>
+          </div>
+        </div>
+        {/* ===== FIN NUEVA FILA ===== */}
+
         <div className="grid-3cols">
           <div>
             <label>Nombre y Apellido</label>
@@ -503,12 +667,62 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               required
             />
           </div>
-          <div><label>Domicilio</label><input type="text" name="domicilio" value={formData.domicilio} onChange={handleChange} required /></div>
-          <div><label>Localidad</label><input type="text" name="localidad" value={formData.localidad} onChange={handleChange} required /></div>
-          <div><label>Domicilio Trabajo</label><input type="text" name="domicilioTrabajo" value={formData.domicilioTrabajo} onChange={handleChange} /></div>
-          <div><label>Tel. Particular</label><input type="text" name="telefonoParticular" value={formData.telefonoParticular} onChange={handleChange} /></div>
-          <div><label>Tel. Emergencia</label><input type="text" name="telefonoEmergencia" value={formData.telefonoEmergencia} onChange={handleChange} /></div>
-          <div><label>Tel. Trabajo</label><input type="text" name="telefonoTrabajo" value={formData.telefonoTrabajo} onChange={handleChange} /></div>
+          <div>
+            <label>Domicilio</label>
+            <input
+              type="text"
+              name="domicilio"
+              value={formData.domicilio}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div>
+            <label>Localidad</label>
+            <input
+              type="text"
+              name="localidad"
+              value={formData.localidad}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div>
+            <label>Domicilio Trabajo</label>
+            <input
+              type="text"
+              name="domicilioTrabajo"
+              value={formData.domicilioTrabajo}
+              onChange={handleChange}
+            />
+          </div>
+          <div>
+            <label>Tel. Particular</label>
+            <input
+              type="text"
+              name="telefonoParticular"
+              value={formData.telefonoParticular}
+              onChange={handleChange}
+            />
+          </div>
+          <div>
+            <label>Tel. Emergencia</label>
+            <input
+              type="text"
+              name="telefonoEmergencia"
+              value={formData.telefonoEmergencia}
+              onChange={handleChange}
+            />
+          </div>
+          <div>
+            <label>Tel. Trabajo</label>
+            <input
+              type="text"
+              name="telefonoTrabajo"
+              value={formData.telefonoTrabajo}
+              onChange={handleChange}
+            />
+          </div>
         </div>
 
         <div className="grid-3cols fotos-grid">
@@ -518,18 +732,54 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         </div>
 
         <div className="grid-3cols">
-          <div><label>Patente</label><input type="text" name="patente" value={formData.patente} onChange={handleChange} maxLength={8} required /></div>
-          <div><label>Marca</label><input type="text" name="marca" value={formData.marca} onChange={handleChange} /></div>
-          <div><label>Modelo</label><input type="text" name="modelo" value={formData.modelo} onChange={handleChange} /></div>
-          <div><label>Color</label><input type="text" name="color" value={formData.color} onChange={handleChange} /></div>
-          <div><label>Año</label><input type="number" name="anio" value={formData.anio} onChange={handleChange} /></div>
-          <div><label>Compañía Seguro</label><input type="text" name="companiaSeguro" value={formData.companiaSeguro} onChange={handleChange} /></div>
+          <div>
+            <label>Patente</label>
+            <input
+              type="text"
+              name="patente"
+              value={formData.patente}
+              onChange={handleChange}
+              maxLength={8}
+              required
+            />
+          </div>
+          <div>
+            <label>Marca</label>
+            <input type="text" name="marca" value={formData.marca} onChange={handleChange} />
+          </div>
+          <div>
+            <label>Modelo</label>
+            <input type="text" name="modelo" value={formData.modelo} onChange={handleChange} />
+          </div>
+          <div>
+            <label>Color</label>
+            <input type="text" name="color" value={formData.color} onChange={handleChange} />
+          </div>
+          <div>
+            <label>Año</label>
+            <input type="number" name="anio" value={formData.anio} onChange={handleChange} />
+          </div>
+          <div>
+            <label>Compañía Seguro</label>
+            <input
+              type="text"
+              name="companiaSeguro"
+              value={formData.companiaSeguro}
+              onChange={handleChange}
+            />
+          </div>
         </div>
 
         <div className="grid-3cols">
           <div>
             <label>Método de Pago</label>
-            <select name="metodoPago" value={formData.metodoPago} onChange={handleChange} className="select-style" required>
+            <select
+              name="metodoPago"
+              value={formData.metodoPago}
+              onChange={handleChange}
+              className="select-style"
+              required
+            >
               <option value="Efectivo">Efectivo</option>
               <option value="Transferencia">Transferencia</option>
               <option value="Débito">Débito</option>
@@ -539,7 +789,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
           <div>
             <label>Factura</label>
-            <select name="factura" value={formData.factura} onChange={handleChange} className="select-style">
+            <select
+              name="factura"
+              value={formData.factura}
+              onChange={handleChange}
+              className="select-style"
+            >
               <option value="CC">CC</option>
               <option value="A">A</option>
               <option value="Final">Final</option>
@@ -547,18 +802,21 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
           <div>
             <label>Tipo de Vehículo</label>
-            <select 
-              name="tipoVehiculo" 
-              value={formData.tipoVehiculo} 
-              onChange={handleChange} 
-              className="select-style" 
+            <select
+              name="tipoVehiculo"
+              value={formData.tipoVehiculo}
+              onChange={handleChange}
+              className="select-style"
               required
             >
               <option value="">Seleccione</option>
               {tiposVehiculo.map((tipo) => {
                 const mensual = precios?.[tipo.nombre?.toLowerCase?.() ?? ""]?.mensual;
-                const labelPrecio = typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
-                const capitalized = tipo.nombre ? (tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)) : "";
+                const labelPrecio =
+                  typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
+                const capitalized = tipo.nombre
+                  ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
+                  : "";
                 return (
                   <option key={tipo.nombre} value={tipo.nombre}>
                     {capitalized} - {labelPrecio}
@@ -570,16 +828,30 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         </div>
 
         <button type="submit" disabled={loading}>
-          {loading ? 'Guardando...' : 'Guardar Abono'}
+          {loading ? "Guardando..." : "Guardar Abono"}
         </button>
       </form>
 
-      {/* Modal de mensajes genéricos */}
-      <ModalMensaje
-        titulo={modal.titulo}
-        mensaje={modal.mensaje}
-        onClose={closeModal}
-      />
+      {/* Modal informativo */}
+      <ModalMensaje titulo={modal.titulo} mensaje={modal.mensaje} onClose={closeModal} />
+
+      {/* Modal confirmación “más caro” */}
+      {confirmModal.open && (
+        <ModalMensaje
+          titulo={confirmModal.titulo}
+          mensaje={confirmModal.mensaje}
+          onClose={confirmModal.onCancel}
+        >
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+            <button className="guardarWebcamBtn" onClick={confirmModal.onCancel}>
+              Cancelar
+            </button>
+            <button className="guardarWebcamBtn" onClick={confirmModal.onConfirm}>
+              Aceptar y continuar
+            </button>
+          </div>
+        </ModalMensaje>
+      )}
 
       {/* Modal de Cámara */}
       {modalCamAbierto && (
@@ -587,7 +859,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           titulo="Webcam"
           mensaje={
             capturingField
-              ? `Tomar foto para: ${capturingField.replace('foto', 'Foto ')}`
+              ? `Tomar foto para: ${capturingField.replace("foto", "Foto ")}`
               : "Vista previa de la cámara"
           }
           onClose={cerrarModalCam}
@@ -599,28 +871,15 @@ function DatosAutoAbono({ datosVehiculo, user }) {
                   ref={videoRef}
                   autoPlay
                   playsInline
-                  style={{
-                    width: "320px",
-                    height: "240px",
-                    borderRadius: "6px",
-                    background: "#222",
-                  }}
+                  style={{ width: "320px", height: "240px", borderRadius: "6px", background: "#222" }}
                 />
-                <button
-                  className="guardarWebcamBtn"
-                  style={{ marginTop: "1rem" }}
-                  onClick={tomarFoto}
-                >
+                <button className="guardarWebcamBtn" style={{ marginTop: "1rem" }} onClick={tomarFoto}>
                   Tomar Foto
                 </button>
               </>
             ) : (
               <>
-                <img
-                  src={fotoPreview}
-                  alt="Foto tomada"
-                  style={{ width: "320px", borderRadius: "6px" }}
-                />
+                <img src={fotoPreview} alt="Foto tomada" style={{ width: "320px", borderRadius: "6px" }} />
                 <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
                   <button className="guardarWebcamBtn" onClick={repetirFoto}>
                     Repetir
