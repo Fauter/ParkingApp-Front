@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./DatosAutoSalida.css";
-import { useTarifasData, calcularTarifaAPI } from "../../../hooks/tarifasService";
+import {
+  useTarifasData,
+  calcularAmbosPrecios,
+  armarParametrosTiempo,
+} from "../../../hooks/tarifasService";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import AutoPlaceHolder from "../../../../public/images/placeholder.png";
 import AutoPlaceHolderNoimage from "../../../../public/images/placeholderNoimage.png";
 import { HiArrowRight, HiX } from "react-icons/hi";
+
+// ===== DEBUG helpers =====
+const DBG = true;
+const log = (...a) => DBG && console.log("[Salida]", ...a);
+const group = (t) => DBG && console.group("[Salida]", t);
+const groupEnd = () => DBG && console.groupEnd();
 
 function DatosAutoSalida({
   buscarVehiculo,
@@ -14,12 +24,13 @@ function DatosAutoSalida({
   onActualizarVehiculoLocal,
   onTarifaCalculada,
   onSalidaCalculada,
-  // Control de enfoque desde arriba: true = enfocar input patente
   autoFocusActivo = true,
 }) {
   const [inputPatente, setInputPatente] = useState("");
-  const [tarifaCalculada, setTarifaCalculada] = useState(null);
-  const { tarifas, precios, tiposVehiculo, parametros } = useTarifasData();
+
+  // Catálogo completo (efectivo + otros)
+  const { tarifas, preciosEfectivo, preciosOtros, parametros } = useTarifasData();
+
   const yaActualizado = useRef(false);
   const inputRef = useRef(null);
   const lastInputTime = useRef(0);
@@ -30,7 +41,6 @@ function DatosAutoSalida({
   const [modalTitulo, setModalTitulo] = useState("Atención");
   const [imgSrc, setImgSrc] = useState(AutoPlaceHolder);
 
-  // Enfoque condicionado (evita robar foco cuando haya modales)
   useEffect(() => {
     if (autoFocusActivo) {
       const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
@@ -56,7 +66,7 @@ function DatosAutoSalida({
     else setImgSrc(AutoPlaceHolderNoimage);
   }, [vehiculoLocal]);
 
-  // Detector de lectura rápida (lector de tickets)
+  // ---- lector rápido de tickets (igual que antes) ----
   useEffect(() => {
     const handleInput = (e) => {
       const currentTime = Date.now();
@@ -111,13 +121,7 @@ function DatosAutoSalida({
       if (data.patente) {
         setInputPatente(data.patente);
         setTimeout(() => {
-          const enterEvent = new KeyboardEvent("keydown", {
-            key: "Enter",
-            code: "Enter",
-            keyCode: 13,
-            which: 13,
-            bubbles: true,
-          });
+          const enterEvent = new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true });
           inputRef.current?.dispatchEvent(enterEvent);
           isScanning.current = false;
         }, 100);
@@ -142,21 +146,13 @@ function DatosAutoSalida({
     const salidaTemporal = new Date().toISOString();
 
     if (tieneEntrada && !yaTieneSalida) {
-      if (data.abonado) {
-        await procesarSalidaAbonado(data, salidaTemporal);
-        return;
-      } else if (data.turno) {
-        await procesarSalidaTurno(data, salidaTemporal);
-        return;
-      }
+      if (data.abonado) return await procesarSalidaAbonado(data, salidaTemporal);
+      if (data.turno)   return await procesarSalidaTurno(data, salidaTemporal);
     }
 
     const actualizado = {
       ...data,
-      estadiaActual: {
-        ...data.estadiaActual,
-        salida: salidaTemporal,
-      },
+      estadiaActual: { ...data.estadiaActual, salida: salidaTemporal },
     };
 
     if (onSalidaCalculada && !yaTieneSalida) onSalidaCalculada(salidaTemporal);
@@ -166,20 +162,14 @@ function DatosAutoSalida({
   const procesarSalidaAbonado = async (vehiculo, salida) => {
     const resSalida = await fetch(
       `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ salida, costo: 0, tarifa: null }),
-      }
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ salida, costo: 0, tarifa: null }) }
     );
-
     if (!resSalida.ok) {
       const errorData = await resSalida.json();
       setModalTitulo("Error");
       setModalMensaje(errorData.msg || "Error al registrar salida automática");
       return;
     }
-
     setModalTitulo("Éxito");
     setModalMensaje(`✅ Vehículo ${vehiculo.patente} (abonado) salió automáticamente.`);
     setInputPatente("");
@@ -188,11 +178,7 @@ function DatosAutoSalida({
   const procesarSalidaTurno = async (vehiculo, salida) => {
     const resSalida = await fetch(
       `http://localhost:5000/api/vehiculos/${vehiculo.patente}/registrarSalida`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ salida, costo: 0, tarifa: null }),
-      }
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ salida, costo: 0, tarifa: null }) }
     );
     if (!resSalida.ok) {
       setModalTitulo("Error");
@@ -239,135 +225,129 @@ function DatosAutoSalida({
     if (e.key === "Enter" && !isScanning.current) submitPatente();
   };
 
-  // Cálculo de tarifa cuando hay salida ya seteada
+  /** ========= CÁLCULO CENTRAL ========= */
   useEffect(() => {
     const entrada = vehiculoLocal?.estadiaActual?.entrada;
     const salida = vehiculoLocal?.estadiaActual?.salida;
     const costoTotal = vehiculoLocal?.estadiaActual?.costoTotal;
 
-    if (!salida) return;
+    if (!entrada || !salida) return;
 
-    const calcularTarifa = async () => {
-      if (entrada && salida && (costoTotal === 0 || costoTotal === undefined || !yaActualizado.current)) {
-        const fechaEntrada = new Date(entrada);
-        const fechaSalida = new Date(salida);
-        const diferenciaMs = fechaSalida - fechaEntrada;
-        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
-        const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const horasFormateadas = `${String(horas).padStart(2, "0")}:00`;
+    const calc = async () => {
+      group("CALC con salida seteada");
+      log("entrada:", entrada, "salida:", salida, "costoTotal actual:", costoTotal);
 
-        try {
-          const result = await calcularTarifaAPI({
-            tipoVehiculo: vehiculoLocal.tipoVehiculo,
-            inicio: fechaEntrada.toISOString(),
-            dias,
-            hora: horasFormateadas,
-            tarifaAbono: null,
-            tipoTarifa: "estadia",
-            tarifas,
-            precios,
-            parametros,
-          });
+      try {
+        const { dias, horasFormateadas } = armarParametrosTiempo(entrada, salida);
+        log("→ params:", { dias, horasFormateadas });
 
-          const match = result?.detalle?.match(/Total:\s*\$?([0-9,.]+)/i);
-          const costo = match ? parseFloat(match[1].replace(",", "")) : null;
+        const { costoEfectivo, costoOtros } = await calcularAmbosPrecios({
+          tipoVehiculo: vehiculoLocal.tipoVehiculo,
+          inicio: new Date(entrada).toISOString(),
+          dias,
+          hora: horasFormateadas,
+          tarifas,
+          preciosEfectivo,
+          preciosOtros,
+          parametros,
+        });
 
-          if (costo !== null) {
-            setTarifaCalculada(costo);
-            if (vehiculoLocal?.patente && vehiculoLocal?.estadiaActual?.costoTotal !== costo) {
-              const resActualizar = await fetch(
-                `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
-                {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ costoTotal: costo }),
-                }
-              );
+        log("totales calculados → efectivo:", costoEfectivo, "otros:", costoOtros);
 
-              if (resActualizar.ok) {
-                const actualizado = await resActualizar.json();
-                yaActualizado.current = true;
-                onActualizarVehiculoLocal({
-                  ...actualizado.vehiculo,
-                  costoTotal: costo,
-                  estadiaActual: {
-                    ...actualizado.vehiculo.estadiaActual,
-                    costoTotal: costo,
-                  },
-                });
-              } else {
-                const errorJson = await resActualizar.json();
-                console.error("Error al actualizar costoTotal:", errorJson.msg);
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error al calcular tarifa:", error.message);
-        }
-      }
-    };
+        // ⬅️ COMPAT: mando también `costo` = costoEfectivo
+        onTarifaCalculada?.({ salida, costo: costoEfectivo, costoEfectivo, costoOtros, tarifa: null });
 
-    calcularTarifa();
-  }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal]);
+        // persistimos al back SOLO si costoTotal no existe/0
+        const necesitaPersistir = (costoTotal === 0 || costoTotal === undefined) && typeof costoEfectivo === "number";
+        log("necesitaPersistir:", necesitaPersistir);
 
-  // Cálculo temporal (previsualización) cuando aún no hay salida seteada
-  useEffect(() => {
-    const calcularTarifaTemporal = async () => {
-      if (vehiculoLocal?.estadiaActual?.entrada && !vehiculoLocal?.estadiaActual?.salida) {
-        const entrada = new Date(vehiculoLocal.estadiaActual.entrada);
-        const salida = new Date();
-        const diferenciaMs = salida - entrada;
-        const dias = Math.floor(diferenciaMs / (1000 * 60 * 60 * 24));
-        const horas = Math.ceil((diferenciaMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const horasFormateadas = `${String(horas).padStart(2, '0')}:00`;
+        if (necesitaPersistir && vehiculoLocal?.patente) {
+          const resActualizar = await fetch(
+            `http://localhost:5000/api/vehiculos/${vehiculoLocal.patente}/costoTotal`,
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ costoTotal: costoEfectivo }) }
+          );
 
-        try {
-          const result = await calcularTarifaAPI({
-            tipoVehiculo: vehiculoLocal.tipoVehiculo,
-            inicio: entrada.toISOString(),
-            dias,
-            hora: horasFormateadas,
-            tarifaAbono: null,
-            tipoTarifa: "estadia",
-            tarifas,
-            precios,
-            parametros,
-          });
-
-          const match = result?.detalle?.match(/Total:\s*\$?([0-9,.]+)/i);
-          const costo = match ? parseFloat(match[1].replace(",", "")) : null;
-
-          if (costo !== null) {
-            onTarifaCalculada?.({ costo, salida: salida.toISOString() });
+          if (resActualizar.ok) {
+            const actualizado = await resActualizar.json();
+            yaActualizado.current = true;
             onActualizarVehiculoLocal({
-              ...vehiculoLocal,
-              estadiaActual: {
-                ...vehiculoLocal.estadiaActual,
-                salida: salida.toISOString(),
-                costoTotal: costo,
-              },
+              ...actualizado.vehiculo,
+              costoTotal: costoEfectivo,
+              estadiaActual: { ...actualizado.vehiculo.estadiaActual, costoTotal: costoEfectivo },
             });
+            log("persistido costoTotal en back:", costoEfectivo);
+          } else {
+            const errorJson = await resActualizar.json();
+            console.error("Error al actualizar costoTotal:", errorJson.msg);
           }
-        } catch (error) {
-          console.error("Error al calcular tarifa:", error.message);
         }
+      } catch (error) {
+        console.error("Error al calcular tarifa:", error.message);
+      } finally {
+        groupEnd();
       }
     };
 
-    calcularTarifaTemporal();
-  }, [vehiculoLocal, tarifas, precios, parametros, onActualizarVehiculoLocal, onTarifaCalculada]);
+    calc();
+  }, [vehiculoLocal, tarifas, preciosEfectivo, preciosOtros, parametros, onActualizarVehiculoLocal, onTarifaCalculada]);
 
-  const entradaDate = vehiculoLocal?.estadiaActual?.entrada
-    ? new Date(vehiculoLocal.estadiaActual.entrada)
-    : null;
+  /** Cálculo temporal si NO hay salida aún (preview) */
+  useEffect(() => {
+    const entrada = vehiculoLocal?.estadiaActual?.entrada;
+    if (!entrada || vehiculoLocal?.estadiaActual?.salida) return;
 
-  const salidaDate = vehiculoLocal?.estadiaActual?.salida
-    ? new Date(vehiculoLocal.estadiaActual.salida)
-    : null;
+    const calcTemp = async () => {
+      group("CALC temporal (sin salida)");
+      try {
+        const salida = new Date();
+        const { dias, horasFormateadas } = armarParametrosTiempo(entrada, salida.toISOString());
+        log("→ params:", { dias, horasFormateadas });
+
+        const { costoEfectivo, costoOtros } = await calcularAmbosPrecios({
+          tipoVehiculo: vehiculoLocal.tipoVehiculo,
+          inicio: new Date(entrada).toISOString(),
+          dias,
+          hora: horasFormateadas,
+          tarifas,
+          preciosEfectivo,
+          preciosOtros,
+          parametros,
+        });
+
+        log("PREVIEW → efectivo:", costoEfectivo, "otros:", costoOtros);
+
+        // ⬅️ COMPAT: mando `costo` = costoEfectivo
+        onTarifaCalculada?.({
+          costo: costoEfectivo,
+          salida: salida.toISOString(),
+          tarifa: null,
+          costoEfectivo,
+          costoOtros,
+        });
+
+        onActualizarVehiculoLocal({
+          ...vehiculoLocal,
+          estadiaActual: {
+            ...vehiculoLocal.estadiaActual,
+            salida: salida.toISOString(),
+            costoTotal: costoEfectivo, // preview con efectivo
+          },
+        });
+      } catch (e) {
+        console.error("Error preview cálculo:", e.message);
+      } finally {
+        groupEnd();
+      }
+    };
+
+    calcTemp();
+  }, [vehiculoLocal, tarifas, preciosEfectivo, preciosOtros, parametros, onActualizarVehiculoLocal, onTarifaCalculada]);
+
+  const entradaDate = vehiculoLocal?.estadiaActual?.entrada ? new Date(vehiculoLocal.estadiaActual.entrada) : null;
+  const salidaDate  = vehiculoLocal?.estadiaActual?.salida  ? new Date(vehiculoLocal.estadiaActual.salida)  : null;
 
   const handleBorrar = () => {
     setInputPatente("");
-    setTarifaCalculada(null);
     yaActualizado.current = false;
     setImgSrc(AutoPlaceHolder);
     onActualizarVehiculoLocal?.(null);
@@ -412,22 +392,10 @@ function DatosAutoSalida({
               </div>
 
               <div className="accionesInput">
-                <button
-                  type="button"
-                  className="btnCuadrado btnBorrar"
-                  title="Borrar"
-                  aria-label="Borrar"
-                  onClick={handleBorrar}
-                >
+                <button type="button" className="btnCuadrado btnBorrar" title="Borrar" aria-label="Borrar" onClick={handleBorrar}>
                   <HiX size={22} />
                 </button>
-                <button
-                  type="button"
-                  className="btnCuadrado btnAceptar"
-                  title="Aceptar"
-                  aria-label="Aceptar"
-                  onClick={handleAceptar}
-                >
+                <button type="button" className="btnCuadrado btnAceptar" title="Aceptar" aria-label="Aceptar" onClick={handleAceptar}>
                   <HiArrowRight size={22} />
                 </button>
               </div>
@@ -435,25 +403,15 @@ function DatosAutoSalida({
           </div>
 
           <div className="horarios">
-            <div className="container">
-              <div>⬆</div>
-              <div>{entradaDate ? entradaDate.toLocaleString() : "Sin Datos"}</div>
-            </div>
-            <div className="container">
-              <div>⬇</div>
-              <div>{salidaDate ? salidaDate.toLocaleString() : "Sin Datos"}</div>
-            </div>
+            <div className="container"><div>⬆</div><div>{entradaDate ? entradaDate.toLocaleString() : "Sin Datos"}</div></div>
+            <div className="container"><div>⬇</div><div>{salidaDate  ? salidaDate.toLocaleString()  : "Sin Datos"}</div></div>
           </div>
 
           {error && <div className="error">{error}</div>}
         </div>
       </div>
 
-      <ModalMensaje
-        titulo={modalTitulo}
-        mensaje={modalMensaje}
-        onClose={() => setModalMensaje("")}
-      />
+      <ModalMensaje titulo={modalTitulo} mensaje={modalMensaje} onClose={() => setModalMensaje("")} />
     </>
   );
 }

@@ -46,7 +46,6 @@ function DatosAutoEntrada({
   onClose,
   timestamp,
   setTicketPendiente = () => {},
-  // ⬇️ NUEVO: solo en modal queremos autoenfocar
   autoFocusOnMount = false,
 }) {
   const [patente, setPatente] = useState("");
@@ -98,15 +97,32 @@ function DatosAutoEntrada({
   /* ---------- Fetchers ---------- */
   const fetchPrecios = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
-      if (!res.ok) throw new Error("No se pudieron cargar los precios");
-      const data = await res.json();
+      let data = null;
+
+      // 1) intento estándar
+      try {
+        const res = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`GET /api/precios -> ${res.status}`);
+        data = await res.json();
+        console.log("[Entrada] precios OK via /api/precios");
+      } catch (e1) {
+        console.warn("[Entrada] /api/precios falló, probando fallback /api/precios?metodo=efectivo", e1?.message);
+        // 2) fallback efectivo
+        const res2 = await fetch(`${BASE_URL}/api/precios?metodo=efectivo`, { cache: "no-store" });
+        if (!res2.ok) throw new Error(`GET /api/precios?metodo=efectivo -> ${res2.status}`);
+        data = await res2.json();
+        console.log("[Entrada] precios OK via /api/precios?metodo=efectivo");
+      }
+
       setIfChanged(setPrecios, "precios", data || {});
     } catch (error) {
-      mostrarMensaje("Error", "No se pudieron cargar los precios.");
-      console.error("Error al obtener los precios:", error);
+      console.error("Error al obtener los precios (ambos intentos):", error);
+      // Sólo muestro modal si NO tengo nada actualmente
+      if (!precios || Object.keys(precios).length === 0) {
+        mostrarMensaje("Error", "No se pudieron cargar los precios.");
+      }
     }
-  }, []);
+  }, [precios]);
 
   const fetchTiposVehiculo = useCallback(async () => {
     try {
@@ -204,7 +220,7 @@ function DatosAutoEntrada({
     verificarFoto();
   }, [ticketPendiente, timestamp]);
 
-  /* ---------- Filtrado: tipos con TODAS las tarifas "hora" válidas ---------- */
+  /* ---------- Filtrado: SOLO tipos con hora === true y precio 'hora' > 0 ---------- */
   useEffect(() => {
     if (!Array.isArray(tiposVehiculoApi) || tiposVehiculoApi.length === 0) {
       setTiposVehiculoDisponibles([]);
@@ -214,11 +230,8 @@ function DatosAutoEntrada({
       setTiposVehiculoDisponibles([]);
       return;
     }
-    if (!Array.isArray(tarifasHoraKeys) || tarifasHoraKeys.length === 0) {
-      setTiposVehiculoDisponibles([]);
-      return;
-    }
 
+    // Normalizo el mapa de precios por tipo y sus claves
     const preciosNormPorTipo = {};
     for (const [tipo, mapa] of Object.entries(precios)) {
       const inner = {};
@@ -228,20 +241,18 @@ function DatosAutoEntrada({
       preciosNormPorTipo[norm(tipo)] = inner;
     }
 
-    const filtrados = tiposVehiculoApi.filter(({ nombre }) => {
+    // Criterio: tipos con hora === true y precio 'hora' válido (> 0)
+    const filtrados = tiposVehiculoApi.filter(({ nombre, hora }) => {
+      if (!hora) return false;
       const tipoN = norm(nombre);
       const mapa = preciosNormPorTipo[tipoN];
       if (!mapa) return false;
-
-      for (const tarifaKey of tarifasHoraKeys) {
-        const val = mapa[tarifaKey];
-        if (!isPriceValid(val)) return false;
-      }
-      return true;
+      const precioHora = mapa["hora"]; // ya normalizado arriba
+      return isPriceValid(precioHora);
     });
 
     setTiposVehiculoDisponibles(filtrados);
-  }, [tiposVehiculoApi, precios, tarifasHoraKeys]);
+  }, [tiposVehiculoApi, precios]);
 
   /* ---------- Acciones ---------- */
   const eliminarFotoTemporal = async () => {
@@ -282,8 +293,6 @@ function DatosAutoEntrada({
     if (!sigueSiendoValido) return mostrarMensaje("Sin precios válidos", "El tipo de vehículo seleccionado ya no es válido.");
 
     try {
-      const tipoN = norm(tipoVehiculo);
-
       const fotoUrlActual = ticketPendiente.fotoUrl
         ? makeAbsolute(ticketPendiente.fotoUrl)
         : `${BASE_URL}/camara/sacarfoto/captura.jpg`;

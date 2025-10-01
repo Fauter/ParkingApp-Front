@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "./DatosPago.css";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
+import { useTarifasData, calcularAmbosPrecios, armarParametrosTiempo } from "../../../hooks/tarifasService";
 
 const BASE_URL = "http://localhost:5000";
 const PROMOS_POLL_MS = 180000; // 3 min
 
+// ===== DEBUG helpers =====
+const DBG = true;
+const log = (...args) => DBG && console.log("[DatosPago]", ...args);
+const group = (title) => DBG && console.group("[DatosPago]", title);
+const groupEnd = () => DBG && console.groupEnd();
+
 function DatosPago({
   vehiculoLocal,
-  limpiarVehiculo,          // (lo seguís usando tras registrar movimiento)
+  limpiarVehiculo,
   tarifaCalculada,
   user,
   onAbrirBarreraSalida,
@@ -17,23 +24,56 @@ function DatosPago({
   const [promos, setPromos] = useState([]);
   const [promoSeleccionada, setPromoSeleccionada] = useState(null);
   const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
+
   const [costoTotal, setCostoTotal] = useState(0);
   const [totalConDescuento, setTotalConDescuento] = useState(0);
   const [tarifaAplicada, setTarifaAplicada] = useState(null);
   const [horaSalida, setHoraSalida] = useState(null);
 
-  // ====== Webcam (para FOTO DE PROMO) ======
-  const [modalCamAbierto, setModalCamAbierto] = useState(false);
-  const [videoStream, setVideoStream] = useState(null);
-  const [capturaTemporal, setCapturaTemporal] = useState(null); // preview
-  const [promoFoto, setPromoFoto] = useState(null); // ✅ dataURL final aceptada para la PROMO
-  const videoRef = React.useRef(null);
+  // catálogo para fallback
+  const { tarifas, preciosEfectivo, preciosOtros, parametros } = useTarifasData();
 
-  // 🎯 Cámara elegida en Config.jsx
-  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  // ⬅️ para que el fallback corra una sola vez como “parche”
+  const didFallbackCalcRef = useRef(false);
 
-  // 🔔 Modal de mensaje
-  const [mensajeModal, setMensajeModal] = useState(null);
+  // ---- DEBUG: montaje/desmontaje
+  useEffect(() => {
+    group("MOUNT");
+    log("montado");
+    groupEnd();
+    return () => {
+      group("UNMOUNT");
+      log("desmontado");
+      groupEnd();
+    };
+  }, []);
+
+  // ---- DEBUG: props
+  useEffect(() => {
+    group("PROP change: tarifaCalculada");
+    log("tarifaCalculada recibida:", JSON.stringify(tarifaCalculada));
+    groupEnd();
+
+    if (tarifaCalculada?.salida) setHoraSalida(tarifaCalculada.salida);
+    if (tarifaCalculada?.tarifa) setTarifaAplicada(tarifaCalculada.tarifa);
+
+    // si llegó algo usable, no correr más el fallback
+    if (tarifaCalculada && (
+      tarifaCalculada.costo != null ||
+      tarifaCalculada.costoEfectivo != null ||
+      tarifaCalculada.costoOtros != null
+    )) {
+      didFallbackCalcRef.current = true;
+    }
+  }, [tarifaCalculada]);
+
+  useEffect(() => {
+    group("PROP change: vehiculoLocal");
+    log("vehiculoLocal:", vehiculoLocal);
+    log("estadiaActual:", vehiculoLocal?.estadiaActual);
+    log("estadiaActual.costoTotal:", vehiculoLocal?.estadiaActual?.costoTotal);
+    groupEnd();
+  }, [vehiculoLocal]);
 
   // ====== Carga y auto-refresh de promos ======
   useEffect(() => {
@@ -68,38 +108,109 @@ function DatosPago({
     };
   }, [promoSeleccionada]);
 
+  // ✅ al cambiar la promo recalculamos el total con descuento
   useEffect(() => {
+    group("RECALC por promo/costoTotal");
+    log("promoSeleccionada:", promoSeleccionada);
+    log("costoTotal base:", costoTotal);
     if (promoSeleccionada) {
       const descuento = promoSeleccionada.descuento || 0;
-      const nuevoTotal = costoTotal * (1 - descuento / 100);
+      const nuevoTotal = (costoTotal || 0) * (1 - descuento / 100);
+      log("→ descuento %:", descuento, "→ totalConDescuento:", nuevoTotal);
       setTotalConDescuento(nuevoTotal);
     } else {
-      setTotalConDescuento(costoTotal);
+      log("→ sin promo, totalConDescuento = costoTotal");
+      setTotalConDescuento(costoTotal || 0);
     }
+    groupEnd();
   }, [promoSeleccionada, costoTotal]);
 
   const handleSeleccionPromo = (e) => {
     const idSeleccionado = e.target.value;
     const promo = promos.find((p) => p._id === idSeleccionado);
+    log("Seleccion promo:", idSeleccionado, "→", promo);
     setPromoSeleccionada(promo || null);
-    // Si cambio de promo, mantengo la foto previa (si ya fue tomada) — si querés limpiarla al cambiar promo, descomentá:
-    // setPromoFoto(null);
   };
 
-  // ====== Actualiza totales por tarifa ======
+  // 🔁 Fallback: si NO llega tarifaCalculada usable, calculo yo (SOLO UNA VEZ)
   useEffect(() => {
-    if (tarifaCalculada?.costo != null) setCostoTotal(tarifaCalculada.costo);
-    if (tarifaCalculada?.salida) setHoraSalida(tarifaCalculada.salida);
-    if (tarifaCalculada?.tarifa) setTarifaAplicada(tarifaCalculada.tarifa);
-  }, [tarifaCalculada]);
+    const entrada = vehiculoLocal?.estadiaActual?.entrada;
+    const salida = vehiculoLocal?.estadiaActual?.salida;
+    if (!vehiculoLocal || !entrada || !salida) return;
 
-  // ====== Tiempo de estadía y totales ======
+    const noHayTarifa =
+      !tarifaCalculada ||
+      (
+        tarifaCalculada.costo == null &&
+        tarifaCalculada.costoEfectivo == null &&
+        tarifaCalculada.costoOtros == null
+      );
+
+    if (!noHayTarifa) return;            // ya hay algo
+    if (didFallbackCalcRef.current) return; // ya lo hicimos
+
+    (async () => {
+      group("FALLBACK CALC en DatosPago (no llegó tarifaCalculada)");
+      try {
+        const { dias, horasFormateadas } = armarParametrosTiempo(entrada, salida);
+        log("params:", { dias, horasFormateadas });
+
+        const { costoEfectivo, costoOtros } = await calcularAmbosPrecios({
+          tipoVehiculo: vehiculoLocal.tipoVehiculo,
+          inicio: new Date(entrada).toISOString(),
+          dias,
+          hora: horasFormateadas,
+          tarifas,
+          preciosEfectivo,
+          preciosOtros,
+          parametros,
+        });
+
+        didFallbackCalcRef.current = true;
+
+        const elegido = metodoPago === "Efectivo" ? costoEfectivo : costoOtros;
+        log("resultado fallback → elegido:", elegido);
+        setCostoTotal(elegido);
+      } catch (e) {
+        console.error("fallback cálculo DatosPago:", e.message);
+      } finally {
+        groupEnd();
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehiculoLocal, tarifas, preciosEfectivo, preciosOtros, parametros]);
+
+  // ✅ CORE: Elegir costo según método usando lo que llegó o lo que calculó el fallback
+  useEffect(() => {
+    group("RECALC por método/tarifa/vehiculo");
+    log("metodoPago:", metodoPago);
+
+    const elegido =
+      metodoPago === "Efectivo"
+        ? (tarifaCalculada?.costoEfectivo ?? tarifaCalculada?.costo)
+        : (tarifaCalculada?.costoOtros ?? tarifaCalculada?.costo);
+
+    const fallback = vehiculoLocal?.estadiaActual?.costoTotal ?? 0;
+    const base = (elegido ?? fallback ?? 0);
+
+    log("valor elegido por método:", elegido);
+    log("fallback (estadiaActual.costoTotal):", fallback);
+    log("→ base que se setea en costoTotal:", base);
+
+    setCostoTotal(base);
+    groupEnd();
+  }, [metodoPago, tarifaCalculada, vehiculoLocal]);
+
+  // ====== Tiempo de estadía y compat SIN pisar selección ======
   useEffect(() => {
     if (!vehiculoLocal) return;
+    group("RECALC tiempo estadía / compat");
 
     const estadia = vehiculoLocal.estadiaActual;
     if (!estadia || !estadia.entrada) {
+      log("→ sin estadia/entrada; horas = 0");
       setTiempoEstadiaHoras(0);
+      groupEnd();
       return;
     }
 
@@ -108,26 +219,40 @@ function DatosPago({
     const diffMs = salida - entrada;
 
     if (diffMs <= 0) {
+      log("→ diffMs <= 0; horas = 0");
       setTiempoEstadiaHoras(0);
+      groupEnd();
       return;
     }
 
     const horas = Math.max(Math.ceil(diffMs / (1000 * 60 * 60)), 1);
     setTiempoEstadiaHoras(horas);
+    log("entrada:", entrada.toISOString(), "salida:", salida.toISOString(), "horas redondeadas:", horas);
 
-    if (estadia.costoTotal != null) setCostoTotal(estadia.costoTotal);
-    else setCostoTotal(0);
+    // ⛔ NO pisar si ya tenemos tarifaCalculada útil
+    const hayTarifaUtil = !!tarifaCalculada && (
+      tarifaCalculada.costo != null ||
+      tarifaCalculada.costoEfectivo != null ||
+      tarifaCalculada.costoOtros != null
+    );
+
+    if (!hayTarifaUtil && estadia.costoTotal != null) {
+      log("Compat: arrastro costoTotal de estadia:", estadia.costoTotal);
+      setCostoTotal(estadia.costoTotal);
+    }
 
     setTarifaAplicada(estadia.tarifa || null);
-  }, [vehiculoLocal, horaSalida]);
+    groupEnd();
+  }, [vehiculoLocal, horaSalida, tarifaCalculada]);
 
-  useEffect(() => {
-    console.log("🚗 vehiculoLocal en DatosPago:", vehiculoLocal);
-  }, [vehiculoLocal]);
+  useEffect(() => { log("🚗 vehiculoLocal en DatosPago:", vehiculoLocal); }, [vehiculoLocal]);
 
-  // ✅ Resetear todo cuando desde DatosAutoSalida limpian el vehiculo (vehiculoLocal → null)
+  // Reset al limpiar
   useEffect(() => {
     if (!vehiculoLocal) {
+      group("RESET por vehiculoLocal=null");
+      log("Reseteando campos de pago, webcam y mensajes");
+      groupEnd();
       resetCamposPago();
       setPromoFoto(null);
       setCapturaTemporal(null);
@@ -137,10 +262,11 @@ function DatosPago({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehiculoLocal]);
 
-  const handleSelectMetodoPago = (metodo) => setMetodoPago(metodo);
-  const handleSelectFactura = (opcion) => setFactura(opcion);
+  const handleSelectMetodoPago = (metodo) => { log("Click método de pago:", metodo); setMetodoPago(metodo); };
+  const handleSelectFactura = (opcion)   => { log("Click factura:", opcion); setFactura(opcion); };
 
   const resetCamposPago = () => {
+    log("resetCamposPago()");
     setMetodoPago("Efectivo");
     setFactura("CC");
     setPromoSeleccionada(null);
@@ -151,7 +277,16 @@ function DatosPago({
     setTotalConDescuento(0);
   };
 
-  // ====== RESPECTA cámara de Config.jsx con fallback ======
+  // ====== Webcam ======
+  const [modalCamAbierto, setModalCamAbierto] = useState(false);
+  const [videoStream, setVideoStream] = useState(null);
+  const [capturaTemporal, setCapturaTemporal] = useState(null);
+  const [promoFoto, setPromoFoto] = useState(null);
+  const videoRef = React.useRef(null);
+
+  const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+  const [mensajeModal, setMensajeModal] = useState(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -159,6 +294,7 @@ function DatosPago({
         if (r.ok) {
           const data = await r.json();
           if (data?.webcam) {
+            log("webcam device desde API:", data.webcam);
             setSelectedDeviceId(data.webcam);
             localStorage.setItem("webcamDeviceId", data.webcam);
             return;
@@ -166,7 +302,10 @@ function DatosPago({
         }
       } catch (_) { /* ignore */ }
       const ls = localStorage.getItem("webcamDeviceId");
-      if (ls) setSelectedDeviceId(ls);
+      if (ls) {
+        log("webcam device desde localStorage:", ls);
+        setSelectedDeviceId(ls);
+      }
     })();
   }, []);
 
@@ -179,16 +318,12 @@ function DatosPago({
 
     let lastErr = null;
     for (const constraints of tryList) {
-      try {
-        return await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (e) {
-        lastErr = e;
-      }
+      try { return await navigator.mediaDevices.getUserMedia(constraints); }
+      catch (e) { lastErr = e; }
     }
     throw lastErr || new Error("No se pudo abrir ninguna cámara");
   };
 
-  // ====== Registrar movimiento ======
   const registrarMovimiento = () => {
     if (!vehiculoLocal?.patente) return;
 
@@ -196,12 +331,15 @@ function DatosPago({
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
-    // ⛔ Foto del movimiento: mantenemos la de ENTRADA (o la que ya tenga el vehículo)
-    const fotoMovimiento =
-      vehiculoLocal?.estadiaActual?.fotoUrl /* /uploads/... de la entrada */ ||
-      null;
+    const fotoMovimiento = vehiculoLocal?.estadiaActual?.fotoUrl || null;
 
-    // 1) Registrar salida
+    group("REGISTRAR MOVIMIENTO payload");
+    log("metodoPago:", metodoPago, "factura:", factura);
+    log("monto final (con promos):", totalConDescuento);
+    log("tarifaAplicada:", tarifaAplicada);
+    log("tiempoHoras:", horas);
+    groupEnd();
+
     fetch(`${BASE_URL}/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
       method: "PUT",
       headers: {
@@ -217,13 +355,10 @@ function DatosPago({
     })
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(json?.msg || "Error al registrar salida");
-        }
+        if (!res.ok) throw new Error(json?.msg || "Error al registrar salida");
         return json;
       })
       .then(() => {
-        // 2) Registrar movimiento
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
           tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
@@ -239,11 +374,12 @@ function DatosPago({
               _id: promoSeleccionada._id,
               nombre: promoSeleccionada.nombre,
               descuento: promoSeleccionada.descuento,
-              // ⬇️ Enviamos la foto de la PROMO como dataURL; el back la persiste en /uploads/fotos/webcamPromos/
               ...(promoFoto ? { fotoUrl: promoFoto } : {})
             }
           } : {})
         };
+
+        log("POST /api/movimientos/registrar", datosMovimiento);
 
         return fetch(`${BASE_URL}/api/movimientos/registrar`, {
           method: "POST",
@@ -257,9 +393,7 @@ function DatosPago({
       .then(async (res) => {
         if (!res) return null;
         const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.movimiento) {
-          throw new Error(json?.msg || "Error al registrar movimiento");
-        }
+        if (!res.ok || !json?.movimiento) throw new Error(json?.msg || "Error al registrar movimiento");
         return json;
       })
       .then(() => {
@@ -291,13 +425,9 @@ function DatosPago({
       const stream = await getStream();
       setVideoStream(stream);
       setModalCamAbierto(true);
-    } catch (err) {
+    } catch {
       setVideoStream(null);
-      setMensajeModal({
-        tipo: "error",
-        titulo: "Error de cámara",
-        mensaje: "No se pudo acceder a la webcam.",
-      });
+      setMensajeModal({ tipo: "error", titulo: "Error de cámara", mensaje: "No se pudo acceder a la webcam." });
     }
   };
 
@@ -313,35 +443,19 @@ function DatosPago({
 
   const reintentarFoto = async () => {
     setCapturaTemporal(null);
-    // reabrimos stream por si se cortó
     try {
-      if (videoStream) {
-        // si ya hay stream vivo, solo volvemos a mostrar vista
-        return;
-      }
+      if (videoStream) return;
       const stream = await getStream();
       setVideoStream(stream);
-    } catch (err) {
+    } catch {
       setVideoStream(null);
-      setMensajeModal({
-        tipo: "error",
-        titulo: "Error de cámara",
-        mensaje: "No se pudo acceder a la webcam.",
-      });
+      setMensajeModal({ tipo: "error", titulo: "Error de cámara", mensaje: "No se pudo acceder a la webcam." });
     }
   };
 
-  const aceptarFotoPromo = () => {
-    if (!capturaTemporal) return;
-    setPromoFoto(capturaTemporal);
-    cerrarModalCam();
-  };
+  const aceptarFotoPromo = () => { if (capturaTemporal) { setPromoFoto(capturaTemporal); cerrarModalCam(); } };
 
-  useEffect(() => {
-    if (videoRef.current && videoStream) {
-      videoRef.current.srcObject = videoStream;
-    }
-  }, [videoStream]);
+  useEffect(() => { if (videoRef.current && videoStream) videoRef.current.srcObject = videoStream; }, [videoStream]);
 
   const cerrarModalCam = () => {
     setModalCamAbierto(false);
@@ -352,13 +466,8 @@ function DatosPago({
     setCapturaTemporal(null);
   };
 
-  // Limpia cámara al desmontar
   useEffect(() => {
-    return () => {
-      if (videoStream) {
-        videoStream.getTracks().forEach((t) => t.stop());
-      }
-    };
+    return () => { if (videoStream) videoStream.getTracks().forEach((t) => t.stop()); };
   }, [videoStream]);
 
   return (
@@ -368,16 +477,10 @@ function DatosPago({
           ${totalConDescuento.toLocaleString("es-AR")}
         </div>
         <div className="promo">
-          <select
-            className="promoSelect"
-            value={promoSeleccionada?._id || "none"}
-            onChange={handleSeleccionPromo}
-          >
+          <select className="promoSelect" value={promoSeleccionada?._id || "none"} onChange={handleSeleccionPromo}>
             <option value="none">Seleccioná una Promo</option>
             {promos?.map((promo) => (
-              <option key={promo._id} value={promo._id}>
-                {promo.nombre} ({promo.descuento}%)
-              </option>
+              <option key={promo._id} value={promo._id}>{promo.nombre} ({promo.descuento}%)</option>
             ))}
           </select>
 
@@ -388,11 +491,7 @@ function DatosPago({
             title={promoFoto ? "Foto de promo cargada" : "Tomar foto para promo"}
           >
             {!promoFoto ? (
-              <img
-                src="https://www.svgrepo.com/show/904/photo-camera.svg"
-                alt=""
-                className="camIcon"
-              />
+              <img src="https://www.svgrepo.com/show/904/photo-camera.svg" alt="" className="camIcon" />
             ) : (
               <span className="promoCheck">✔</span>
             )}
@@ -405,11 +504,7 @@ function DatosPago({
           <div className="title">Método de Pago</div>
           <div className="metodoDePago">
             {["Efectivo", "Transferencia", "Débito", "Crédito", "QR"].map((metodo) => (
-              <div
-                key={metodo}
-                className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`}
-                onClick={() => handleSelectMetodoPago(metodo)}
-              >
+              <div key={metodo} className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`} onClick={() => handleSelectMetodoPago(metodo)}>
                 {metodo}
               </div>
             ))}
@@ -420,11 +515,7 @@ function DatosPago({
           <div className="title">Factura</div>
           <div className="factura">
             {["CC", "A", "Final"].map((opcion) => (
-              <div
-                key={opcion}
-                className={`facturaOption ${factura === opcion ? "selected" : ""}`}
-                onClick={() => handleSelectFactura(opcion)}
-              >
+              <div key={opcion} className={`facturaOption ${factura === opcion ? "selected" : ""}`} onClick={() => handleSelectFactura(opcion)}>
                 {opcion}
               </div>
             ))}
@@ -432,11 +523,8 @@ function DatosPago({
         </div>
       </div>
 
-      <button className="btn-salida" onClick={registrarMovimiento}>
-        ⬆ SALIDA
-      </button>
+      <button className="btn-salida" onClick={registrarMovimiento}>⬆ SALIDA</button>
 
-      {/* Modal de mensajes genéricos */}
       {mensajeModal && (
         <ModalMensaje
           tipo={mensajeModal.tipo}
@@ -446,36 +534,20 @@ function DatosPago({
         />
       )}
 
-      {/* Modal de Cámara (FOTO PROMO) */}
       {modalCamAbierto && (
         <ModalMensaje titulo="Webcam" mensaje="Foto para Promo" onClose={cerrarModalCam}>
           <div style={{ textAlign: "center" }}>
             {!capturaTemporal ? (
               <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  style={{
-                    width: "320px",
-                    height: "240px",
-                    borderRadius: "6px",
-                    background: "#222",
-                  }}
-                />
-                <button className="guardarWebcamBtn" style={{ marginTop: "1rem" }} onClick={tomarFoto}>
-                  Tomar Foto
-                </button>
+                <video ref={videoRef} autoPlay style={{ width: "320px", height: "240px", borderRadius: "6px", background: "#222" }} />
+                <button className="guardarWebcamBtn" style={{ marginTop: "1rem" }} onClick={tomarFoto}>Tomar Foto</button>
               </>
             ) : (
               <>
                 <img src={capturaTemporal} alt="Foto tomada" style={{ width: "320px", borderRadius: "6px" }} />
                 <div style={{ marginTop: "1rem", display: "flex", gap: "10px", justifyContent: "center" }}>
-                  <button className="guardarWebcamBtn" onClick={reintentarFoto}>
-                    Reintentar
-                  </button>
-                  <button className="guardarWebcamBtn aceptarBtn" onClick={aceptarFotoPromo}>
-                    Aceptar
-                  </button>
+                  <button className="guardarWebcamBtn" onClick={reintentarFoto}>Reintentar</button>
+                  <button className="guardarWebcamBtn aceptarBtn" onClick={aceptarFotoPromo}>Aceptar</button>
                 </div>
               </>
             )}

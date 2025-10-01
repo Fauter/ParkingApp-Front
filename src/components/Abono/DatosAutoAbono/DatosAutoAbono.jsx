@@ -800,6 +800,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               <option value="Final">Final</option>
             </select>
           </div>
+
+          {/* ====== Select Tipo de Vehículo (ABONO) ====== */}
           <div>
             <label>Tipo de Vehículo</label>
             <select
@@ -810,19 +812,32 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               required
             >
               <option value="">Seleccione</option>
-              {tiposVehiculo.map((tipo) => {
-                const mensual = precios?.[tipo.nombre?.toLowerCase?.() ?? ""]?.mensual;
-                const labelPrecio =
-                  typeof mensual === "number" ? `$${formatARS(mensual)}` : "N/A";
-                const capitalized = tipo.nombre
-                  ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
-                  : "";
-                return (
-                  <option key={tipo.nombre} value={tipo.nombre}>
-                    {capitalized} - {labelPrecio}
-                  </option>
-                );
-              })}
+              {/** Solo mostrar tipos con mensual === true.
+                   Si no tienen precio mensual válido, mostrarlos deshabilitados en gris con "N/A". */}
+              {tiposVehiculo
+                .filter((tipo) => tipo?.mensual === true)
+                .map((tipo) => {
+                  const key = (tipo.nombre || "").toLowerCase();
+                  const mensual = precios?.[key]?.mensual;
+                  const tienePrecio = typeof mensual === "number" && isFinite(mensual) && mensual > 0;
+
+                  const labelPrecio = tienePrecio ? `$${formatARS(mensual)}` : "N/A";
+                  const capitalized = tipo.nombre
+                    ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
+                    : "";
+
+                  return (
+                    <option
+                      key={tipo.nombre}
+                      value={tienePrecio ? tipo.nombre : ""}
+                      disabled={!tienePrecio}
+                      style={!tienePrecio ? { color: "#888" } : undefined}
+                      title={!tienePrecio ? "Sin precio mensual configurado" : undefined}
+                    >
+                      {capitalized} - {labelPrecio}
+                    </option>
+                  );
+                })}
             </select>
           </div>
         </div>
