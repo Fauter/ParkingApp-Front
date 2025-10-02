@@ -6,8 +6,18 @@ import "./DatosAutoAbono.css";
 const BASE_URL = "http://localhost:5000";
 const CATALOG_POLL_MS = 180000; // 3 min
 
-// === Fallbacks iguales al back ===
-const FALLBACK_PRECIOS = { auto: 100000, camioneta: 160000, moto: 50000 };
+// === Helpers de abono (tier según cochera/exclusiva) ===
+const getTierName = (cochera, exclusiva) => {
+  const c = String(cochera || "").toLowerCase(); // 'fija' | 'móvil' | ''
+  if (c === "fija") return exclusiva ? "exclusiva" : "fija";
+  return "móvil";
+};
+
+const getAbonoTierKeyCandidates = (cochera, exclusiva) => {
+  const t = getTierName(cochera, exclusiva); // 'móvil' | 'fija' | 'exclusiva'
+  if (t === "móvil") return ["móvil", "movil"]; // compat sin tilde
+  return [t];
+};
 
 function DatosAutoAbono({ datosVehiculo, user }) {
   const [formData, setFormData] = useState({
@@ -32,10 +42,9 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
-    // === NUEVO ===
-    cochera: "",            // 'Fija' | 'Móvil'
-    piso: "",               // string libre (1° Piso, Subsuelo, etc.)
-    exclusiva: false        // boolean
+    cochera: "",
+    piso: "",
+    exclusiva: false
   });
 
   const [fileUploaded, setFileUploaded] = useState({
@@ -51,17 +60,33 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   };
 
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
+
+  // 🔹 Traemos AMBOS catálogos
+  const [preciosEfectivo, setPreciosEfectivo] = useState({});
+  const [preciosOtros, setPreciosOtros] = useState({});
+
+  // Compat (algunos helpers esperan 'precios' a secas)
   const [precios, setPrecios] = useState({});
+
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Modal informativo
+  // Modal informativo simple
   const [modal, setModal] = useState({ titulo: "", mensaje: "" });
   const closeModal = () => setModal({ titulo: "", mensaje: "" });
   const showModal = (titulo, mensaje) => setModal({ titulo, mensaje });
 
-  // Modal de confirmación “más caro”
+  // Modal “más caro”
   const [confirmModal, setConfirmModal] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    onConfirm: null,
+    onCancel: null,
+  });
+
+  // Modal confirmación general
+  const [confirmAbono, setConfirmAbono] = useState({
     open: false,
     titulo: "",
     mensaje: "",
@@ -203,7 +228,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   }, [videoStream]);
 
   const formatARS = (n) => {
-    if (typeof n !== "number") return "—";
+    if (typeof n !== "number" || !isFinite(n)) return "—";
     try {
       return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(n);
     } catch {
@@ -236,23 +261,41 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   }, [datosVehiculo]);
 
+  // ====== Carga de catálogos con ambos precios ======
   useEffect(() => {
     let timer = null;
 
     const fetchTiposYPrecios = async () => {
       try {
-        const [tiposRes, preciosRes] = await Promise.all([
-          fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" }),
-          fetch(`${BASE_URL}/api/precios`, { cache: "no-store" }),
-        ]);
+        const tiposRes = await fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" });
         if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
-        if (!preciosRes.ok) throw new Error("No se pudo cargar precios");
-
         const tiposData = await tiposRes.json();
-        const preciosData = await preciosRes.json();
-
         setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
-        setPrecios(preciosData || {});
+
+        // efectivo (con fallback de endpoint, NO de precios)
+        let cash = {};
+        try {
+          const r1 = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
+          if (!r1.ok) throw new Error("precios efectivo falló");
+          cash = await r1.json();
+        } catch {
+          const r2 = await fetch(`${BASE_URL}/api/precios?metodo=efectivo`, { cache: "no-store" });
+          if (!r2.ok) throw new Error("precios efectivo fallback falló");
+          cash = await r2.json();
+        }
+        setPreciosEfectivo(cash);
+
+        // otros
+        let other = {};
+        try {
+          const r3 = await fetch(`${BASE_URL}/api/precios?metodo=otros`, { cache: "no-store" });
+          if (r3.ok) {
+            other = await r3.json();
+          }
+        } catch {}
+        setPreciosOtros(other);
+
+        setPrecios(cash);
       } catch (err) {
         console.error("Error al cargar datos:", err);
         showModal("Error", "Error al cargar datos de vehículos y precios.");
@@ -278,59 +321,20 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fetchClientes();
   }, []);
 
-  const handleChange = async (e) => {
-    const { name, value, files, type, checked } = e.target;
+  // ===== Helpers FRONT: abono por método + prorrateo (SIN fallbacks numéricos) =====
 
-    // Nuevos campos
-    if (name === "cochera") {
-      setFormData(prev => {
-        const next = { ...prev, cochera: value };
-        if (value !== "Fija") {
-          // si no es Fija, deshabilitamos exclusiva
-          next.exclusiva = false;
-        }
-        return next;
-      });
-      return;
+  const getAbonoPrecioByMetodo = (tipoVehiculo, metodoPago, cochera, exclusiva) => {
+    const keyVehiculo = String(tipoVehiculo || "").toLowerCase();
+    if (!keyVehiculo) return null;
+    const mapa = metodoPago === "Efectivo" ? preciosEfectivo : preciosOtros;
+    if (!mapa || !mapa[keyVehiculo]) return null;
+
+    const candidates = getAbonoTierKeyCandidates(cochera, exclusiva);
+    for (const tier of candidates) {
+      const val = mapa[keyVehiculo]?.[tier];
+      if (typeof val === "number" && isFinite(val) && val > 0) return val;
     }
-    if (name === "exclusiva" && type === "checkbox") {
-      // sólo permitimos checkear si cochera === 'Fija'
-      if (formData.cochera === "Fija") {
-        setFormData(prev => ({ ...prev, exclusiva: Boolean(checked) }));
-      }
-      return;
-    }
-
-    if (name === "patente") {
-      setFormData((prev) => ({ ...prev, patente: (value || "").toUpperCase() }));
-      return;
-    }
-    if (files && files.length > 0) {
-      setFormData((prev) => ({ ...prev, [name]: files[0] }));
-      setFileUploaded((prev) => ({ ...prev, [name]: true }));
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const validarPatente = (patente) => {
-    const formatoViejo = /^[A-Z]{3}\d{3}$/;
-    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
-    return formatoViejo.test(patente) || formatoNuevo.test(patente);
-  };
-
-  const validarDNI = (dni) => {
-    const s = String(dni || "").replace(/\D+/g, "");
-    return s.length >= 7 && s.length <= 11;
-  };
-
-  // ===== Helpers FRONT: base mensual + prorrateo idéntico al back =====
-  const getBaseMensualFront = (tipo) => {
-    const key = String(tipo || "").toLowerCase();
-    const cfg = precios?.[key];
-    if (cfg && typeof cfg.mensual === "number") return cfg.mensual;
-    return FALLBACK_PRECIOS[key] ?? 100000;
+    return null; // NO inventamos precio
   };
 
   const getUltimoDiaMesFront = (hoy = new Date()) => {
@@ -405,10 +409,38 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     return nuevoCliente._id;
   };
 
+  // ====== VALIDACIONES ======
+  const validarPatente = (patente) => {
+    const formatoViejo = /^[A-Z]{3}\d{3}$/;
+    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
+    return formatoViejo.test(patente) || formatoNuevo.test(patente);
+  };
+
+  const validarDNI = (dni) => {
+    const s = String(dni || "").replace(/\D+/g, "");
+    return s.length >= 7 && s.length <= 11;
+  };
+
+  // ====== Flujo de guardado con dos confirmaciones ======
   const finalizarSubmit = async () => {
     try {
       const patente = (formData.patente || "").toUpperCase();
       const clienteId = await ensureCliente();
+
+      // === calcular precio dinámico (método + cochera + exclusiva) ===
+      const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+      const baseMensual = getAbonoPrecioByMetodo(
+        formData.tipoVehiculo,
+        formData.metodoPago,
+        formData.cochera || "Móvil",
+        formData.cochera === "Fija" ? formData.exclusiva : false
+      );
+
+      if (!Number.isFinite(baseMensual)) {
+        throw new Error(`No hay precio cargado para "${(formData.tipoVehiculo||'').toLowerCase()}" en tier "${tierName}" (${formData.metodoPago}).`);
+      }
+
+      const { proporcional } = prorratearMontoFront(baseMensual);
 
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
@@ -417,9 +449,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       fd.set("patente", patente);
       fd.set("cliente", clienteId);
       fd.set("operador", user?.nombre || "Sistema");
-
-      // Normalizar exclusiva -> "true"/"false" para multipart
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
+
+      // (Informativo para auditoría en back – el back calcula igual con su catálogo)
+      fd.set("precio", String(baseMensual));
+      fd.set("precioProrrateadoHoy", String(proporcional));
+      fd.set("tierAbono", tierName);
 
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
@@ -427,7 +462,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.message || "Error al registrar abono.");
+        throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
       await fetchClientes(); // refresco local
@@ -472,61 +507,60 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    // Validaciones locales
-    try {
-      const patente = (formData.patente || "").toUpperCase();
-      if (!validarPatente(patente))
-        throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
-      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
-      if (!formData.nombreApellido?.trim())
-        throw new Error("Debe ingresar el nombre y apellido del cliente.");
-      if (!validarDNI(formData.dniCuitCuil))
-        throw new Error("DNI/CUIT/CUIL inválido.");
-      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
-
-      // NUEVO: exigir cochera seleccionada
-      if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
-      // piso es opcional (lo dejé libre)
-      // exclusiva sólo aplica si cochera === 'Fija' (ya está controlado en UI)
-    } catch (err) {
-      return showModal("Error", err.message);
-    }
-
+  const continuarFlujoDespuesDeConfirmacion = async () => {
+    setConfirmAbono((s) => ({ ...s, open: false }));
     setLoading(true);
-
     try {
       const dni = (formData.dniCuitCuil || "").trim();
       const clienteExistente = (clientes || []).find(
         (c) => String(c.dniCuitCuil || "").trim() === dni
       );
 
-      // Si NO existe cliente -> alta inicial sin aviso
-      if (!clienteExistente) {
-        await finalizarSubmit();
-        return;
+      // 🔎 Preview “más caro” (ahora el back considera tier)
+      const params = new URLSearchParams({
+        tipoVehiculo: String(formData.tipoVehiculo || ""),
+        metodoPago: String(formData.metodoPago || "Efectivo"),
+        cochera: String(formData.cochera || "Móvil"),
+        exclusiva: formData.cochera === "Fija" && formData.exclusiva ? "true" : "false",
+      });
+      if (clienteExistente?._id) {
+        params.set("clienteId", clienteExistente._id);
+      } else if (dni) {
+        params.set("dniCuitCuil", dni);
       }
 
-      // Si existe cliente: comparar tier actual vs seleccionado en FRONT
-      const tierActual = String(clienteExistente.precioAbono || "").toLowerCase();
-      const tierNuevo = String(formData.tipoVehiculo || "").toLowerCase();
+      let diffBase = 0;
+      let montoHoy = 0;
+      let baseActual = 0;
+      let baseNuevo = 0;
 
-      const baseActual = tierActual ? getBaseMensualFront(tierActual) : 0;
-      const baseNuevo  = getBaseMensualFront(tierNuevo);
+      try {
+        const r = await fetch(`${BASE_URL}/api/abonos/preview?${params.toString()}`, { cache: "no-store" });
+        const pj = await r.json();
+        if (r.ok && pj) {
+          diffBase = Number(pj?.diffBase || 0);
+          montoHoy = Number(pj?.monto || 0);
+          baseActual = Number(pj?.baseActual || 0);
+          baseNuevo = Number(pj?.baseNuevo || 0);
+        } else {
+          throw new Error(pj?.error || "No se pudo calcular la preview.");
+        }
+      } catch (e) {
+        // Si la preview falla por precio faltante, mostramos y abortamos
+        setLoading(false);
+        return showModal("Error", e?.message || "No se pudo calcular la preview (precios). Revisá el catálogo.");
+      }
 
-      if (tierActual && baseNuevo > baseActual) {
-        const diffBase = baseNuevo - baseActual;
-        const { proporcional } = prorratearMontoFront(diffBase);
+      if (baseActual > 0 && diffBase > 0) {
+        const tierNuevo = getTierName(formData.cochera || "Móvil", formData.exclusiva);
 
         setConfirmModal({
           open: true,
           titulo: "Vehículo más caro",
           mensaje:
-            `Estás pasando de ${tierActual} a ${tierNuevo}.\n\n` +
-            `• Diferencia mensual: $${formatARS(diffBase)}\n` +
-            `• A cobrar HOY: $${formatARS(proporcional)}\n\n` +
+            `Estás pasando a tier "${tierNuevo}".\n\n` +
+            `• Diferencia mensual: $${formatARS(baseNuevo - baseActual)}\n` +
+            `• A cobrar HOY: $${formatARS(montoHoy)}\n\n` +
             `¿Deseás continuar?`,
           onConfirm: async () => {
             setConfirmModal((s) => ({ ...s, open: false }));
@@ -542,7 +576,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         return;
       }
 
-      // Misma banda o más barato -> sin aviso
       await finalizarSubmit();
     } catch (error) {
       console.error(error);
@@ -551,6 +584,113 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       setLoading(false);
     }
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // 1) Validaciones locales rápidas
+    try {
+      const patente = (formData.patente || "").toUpperCase();
+      if (!validarPatente(patente))
+        throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
+      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
+      if (!formData.nombreApellido?.trim())
+        throw new Error("Debe ingresar el nombre y apellido del cliente.");
+      if (!validarDNI(formData.dniCuitCuil))
+        throw new Error("DNI/CUIT/CUIL inválido.");
+      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
+      if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
+    } catch (err) {
+      return showModal("Error", err.message);
+    }
+
+    // 2) Confirmación GENERAL (precio por método + cochera/exclusiva + prorrateo)
+    try {
+      const patente = (formData.patente || "").toUpperCase();
+      const tipo = formData.tipoVehiculo;
+      const metodo = formData.metodoPago;
+      const factura = formData.factura;
+
+      const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+      const baseMensual = getAbonoPrecioByMetodo(
+        tipo,
+        metodo,
+        formData.cochera || "Móvil",
+        formData.cochera === "Fija" ? formData.exclusiva : false
+      );
+
+      if (!Number.isFinite(baseMensual)) {
+        return showModal(
+          "Error",
+          `No hay precio cargado para "${(tipo||'').toLowerCase()}" en tier "${tierName}" (${metodo}). ` +
+          `Actualizá el catálogo en ${metodo === 'Efectivo' ? '/api/precios' : '/api/precios?metodo=otros'}.`
+        );
+      }
+
+      const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(baseMensual);
+
+      const detalleCochera = [
+        `Cochera: ${formData.cochera || "-"}`,
+        `Piso: ${formData.piso || "-"}`,
+        `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`
+      ].join("\n");
+
+      const msg =
+        `Vas a hacer un Abono\n\n` +
+        `Patente: ${patente}\n` +
+        `Tipo: ${tipo}\n` +
+        `Método de pago: ${metodo}\n` +
+        `Factura: ${factura}\n\n` +
+        `Mensual [${tierName}] (catálogo ${metodo === "Efectivo" ? "efectivo" : "otros"}): $${formatARS(baseMensual)}\n` +
+        `A cobrar HOY (prorrateo ${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n\n` +
+        `${detalleCochera}`;
+
+      setConfirmAbono({
+        open: true,
+        titulo: "Confirmar alta de Abono",
+        mensaje: msg,
+        onConfirm: continuarFlujoDespuesDeConfirmacion,
+        onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+      });
+    } catch (err) {
+      return showModal("Error", err?.message || "No se pudo preparar la confirmación.");
+    }
+  };
+
+  const handleChange = async (e) => {
+    const { name, value, files, type, checked } = e.target;
+
+    if (name === "cochera") {
+      setFormData(prev => {
+        const next = { ...prev, cochera: value };
+        if (value !== "Fija") {
+          next.exclusiva = false;
+        }
+        return next;
+      });
+      return;
+    }
+    if (name === "exclusiva" && type === "checkbox") {
+      if (formData.cochera === "Fija") {
+        setFormData(prev => ({ ...prev, exclusiva: Boolean(checked) }));
+      }
+      return;
+    }
+
+    if (name === "patente") {
+      setFormData((prev) => ({ ...prev, patente: (value || "").toUpperCase() }));
+      return;
+    }
+    if (files && files.length > 0) {
+      setFormData((prev) => ({ ...prev, [name]: files[0] }));
+      setFileUploaded((prev) => ({ ...prev, [name]: true }));
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // ===== Render helpers =====
 
   const renderFileInput = (label, name) => (
     <div className="file-input-wrapper">
@@ -591,7 +731,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     <div className="abono-container">
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
 
-        {/* ===== NUEVA FILA SUPERIOR DE PUNTA A PUNTA ===== */}
+        {/* ===== FILA DE COCHERA / PISO / EXCLUSIVA ===== */}
         <div className="cochera-row">
           <div className="fullwidth">
             <label>Cochera</label>
@@ -633,7 +773,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             <label htmlFor="exclusiva">Exclusiva</label>
           </div>
         </div>
-        {/* ===== FIN NUEVA FILA ===== */}
 
         <div className="grid-3cols">
           <div>
@@ -812,29 +951,26 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               required
             >
               <option value="">Seleccione</option>
-              {/** Solo mostrar tipos con mensual === true.
-                   Si no tienen precio mensual válido, mostrarlos deshabilitados en gris con "N/A". */}
               {tiposVehiculo
                 .filter((tipo) => tipo?.mensual === true)
                 .map((tipo) => {
-                  const key = (tipo.nombre || "").toLowerCase();
-                  const mensual = precios?.[key]?.mensual;
-                  const tienePrecio = typeof mensual === "number" && isFinite(mensual) && mensual > 0;
-
-                  const labelPrecio = tienePrecio ? `$${formatARS(mensual)}` : "N/A";
+                  const monthly = getAbonoPrecioByMetodo(
+                    tipo.nombre,
+                    formData.metodoPago,
+                    formData.cochera || "Móvil",
+                    formData.cochera === "Fija" ? formData.exclusiva : false
+                  );
                   const capitalized = tipo.nombre
                     ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
                     : "";
-
+                  const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
                   return (
                     <option
                       key={tipo.nombre}
-                      value={tienePrecio ? tipo.nombre : ""}
-                      disabled={!tienePrecio}
-                      style={!tienePrecio ? { color: "#888" } : undefined}
-                      title={!tienePrecio ? "Sin precio mensual configurado" : undefined}
+                      value={tipo.nombre}
+                      title={`Catálogo (${formData.metodoPago === "Efectivo" ? "efectivo" : "otros"}) • Tier: ${tierName}`}
                     >
-                      {capitalized} - {labelPrecio}
+                      {capitalized} - ${formatARS(monthly)}
                     </option>
                   );
                 })}
@@ -849,6 +985,24 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
       {/* Modal informativo */}
       <ModalMensaje titulo={modal.titulo} mensaje={modal.mensaje} onClose={closeModal} />
+
+      {/* Modal confirmación GENERAL */}
+      {confirmAbono.open && (
+        <ModalMensaje
+          titulo={confirmAbono.titulo}
+          mensaje={confirmAbono.mensaje}
+          onClose={confirmAbono.onCancel}
+        >
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+            <button className="guardarWebcamBtn" onClick={confirmAbono.onCancel}>
+              Cancelar
+            </button>
+            <button className="guardarWebcamBtn" onClick={confirmAbono.onConfirm}>
+              Confirmar
+            </button>
+          </div>
+        </ModalMensaje>
+      )}
 
       {/* Modal confirmación “más caro” */}
       {confirmModal.open && (
