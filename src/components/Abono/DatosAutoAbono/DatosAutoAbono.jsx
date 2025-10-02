@@ -19,6 +19,16 @@ const getAbonoTierKeyCandidates = (cochera, exclusiva) => {
   return [t];
 };
 
+// === Normalización ligera FRONT (el back también normaliza) ===
+const normCocheraFront = (raw) => {
+  const v = String(raw || "").trim().toLowerCase();
+  if (v === "fija") return "Fija";
+  if (v === "móvil" || v === "movil") return "Móvil";
+  return "";
+};
+const normExclusivaFront = (exclusiva, cochera) =>
+  normCocheraFront(cochera) === "Fija" ? Boolean(exclusiva) : false;
+
 function DatosAutoAbono({ datosVehiculo, user }) {
   const [formData, setFormData] = useState({
     nombreApellido: "",
@@ -182,7 +192,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const stream = await getStream();
       setVideoStream(stream);
     } catch (err) {
-      setVideoStream(null);
+      setVideoStream.null;
       showModal("Error de cámara", humanMediaError(err));
     }
   };
@@ -353,14 +363,19 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     return { proporcional, diasRestantes, totalDiasMes: total, factor };
   };
 
-  // 🔐 ensureCliente por DNI (solo crea si no existe)
+  // 🔐 ensureCliente por DNI (solo crea si no existe) —> AHORA envía cochera/exclusiva/piso
   const ensureCliente = async () => {
     const dni = (formData.dniCuitCuil || "").trim();
     if (!validarDNI(dni)) throw new Error("DNI/CUIT/CUIL inválido");
 
+    const cocheraNorm = normCocheraFront(formData.cochera);
+    const exclusivaNorm = normExclusivaFront(formData.exclusiva, cocheraNorm);
+    const pisoVal = String(formData.piso || "").trim();
+
     const encontrado = (clientes || []).find(
       (c) => String(c.dniCuitCuil || "").trim() === dni
     );
+
     if (encontrado && encontrado._id) {
       try {
         await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
@@ -376,6 +391,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             domicilioTrabajo: formData.domicilioTrabajo,
             telefonoTrabajo: formData.telefonoTrabajo,
             email: formData.email,
+            // ===== NUEVO: sincronizar estado de cochera en el Cliente =====
+            cochera: cocheraNorm,
+            exclusiva: exclusivaNorm,
+            piso: pisoVal
           }),
         }).catch(() => {});
       } catch {}
@@ -397,6 +416,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         telefonoTrabajo: formData.telefonoTrabajo,
         email: formData.email,
         precioAbono: formData.tipoVehiculo || "",
+        // ===== NUEVO: estado de cochera del Cliente al crearlo =====
+        cochera: cocheraNorm,
+        exclusiva: exclusivaNorm,
+        piso: pisoVal
       }),
     });
 
@@ -437,7 +460,9 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       );
 
       if (!Number.isFinite(baseMensual)) {
-        throw new Error(`No hay precio cargado para "${(formData.tipoVehiculo||'').toLowerCase()}" en tier "${tierName}" (${formData.metodoPago}).`);
+        throw new Error(
+          `No hay precio cargado para "${(formData.tipoVehiculo || "").toLowerCase()}" en tier "${tierName}" (${formData.metodoPago}).`
+        );
       }
 
       const { proporcional } = prorratearMontoFront(baseMensual);
@@ -546,7 +571,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           throw new Error(pj?.error || "No se pudo calcular la preview.");
         }
       } catch (e) {
-        // Si la preview falla por precio faltante, mostramos y abortamos
         setLoading(false);
         return showModal("Error", e?.message || "No se pudo calcular la preview (precios). Revisá el catálogo.");
       }
@@ -663,7 +687,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     if (name === "cochera") {
       setFormData(prev => {
         const next = { ...prev, cochera: value };
-        if (value !== "Fija") {
+        if (normCocheraFront(value) !== "Fija") {
           next.exclusiva = false;
         }
         return next;
@@ -671,7 +695,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       return;
     }
     if (name === "exclusiva" && type === "checkbox") {
-      if (formData.cochera === "Fija") {
+      if (normCocheraFront(formData.cochera) === "Fija") {
         setFormData(prev => ({ ...prev, exclusiva: Boolean(checked) }));
       }
       return;
@@ -767,8 +791,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               name="exclusiva"
               checked={Boolean(formData.exclusiva)}
               onChange={handleChange}
-              disabled={formData.cochera !== "Fija"}
-              title={formData.cochera === "Fija" ? "Marcar como exclusiva" : "Disponible sólo para Cochera Fija"}
+              disabled={normCocheraFront(formData.cochera) !== "Fija"}
+              title={normCocheraFront(formData.cochera) === "Fija" ? "Marcar como exclusiva" : "Disponible sólo para Cochera Fija"}
             />
             <label htmlFor="exclusiva">Exclusiva</label>
           </div>

@@ -429,6 +429,54 @@
   padding: 8px 10px;
   border-radius: 6px;
 }
+/* --- Cochera badge junto al título --- */
+.vehiculos-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cochera-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  letter-spacing: 0.3px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* variantes por tipo */
+.cochera-badge.movil {
+  background: rgba(59, 130, 246, 0.18);   /* azul */
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+.cochera-badge.fija {
+  background: rgba(139, 92, 246, 0.18);   /* violeta */
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.45);
+}
+.cochera-badge.exclusiva {
+  background: rgba(16, 185, 129, 0.18);   /* verde */
+  color: #86efac;
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+/* --- Badge para piso en la tabla --- */
+.piso-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  background-color: #3a3a4a;
+  color: #e0e0e0;
+  border: 1px solid #4a4a5a;
+}
+
 
 @media (max-width: 768px) {
   .detalles-adicionales {

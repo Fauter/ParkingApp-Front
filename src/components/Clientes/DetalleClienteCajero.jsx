@@ -238,6 +238,21 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   const capitalizeFirstLetter = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : '---';
 
+  // ======== COCHERA: etiqueta para header ========
+  const normalize = (s) => (s || '').toString().trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // saca tildes
+
+  const getCocheraLabel = (cli) => {
+    if (!cli) return null;
+    const cocheraRaw = cli.cochera ?? cli.abonos?.[0]?.cochera ?? '';
+    const exclusivaRaw = (typeof cli.exclusiva === 'boolean') ? cli.exclusiva : !!cli.abonos?.[0]?.exclusiva;
+
+    const c = normalize(cocheraRaw);
+    if (c === 'movil' || c === 'móvil') return 'COCHERA MOVIL';
+    if (c === 'fija') return exclusivaRaw ? 'COCHERA EXCLUSIVA' : 'COCHERA FIJA';
+    return null;
+  };
+
   const abrirFoto = (abono, tipoFoto) => {
     const camposValidos = {
       dni: 'fotoDNI',
@@ -422,6 +437,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   const finDerivado = obtenerFinAbono(cliente);
   const abonoActivo = esAbonoActivo(cliente);
+  const cocheraLabel = getCocheraLabel(cliente);
 
   return (
     <div className="detalle-cliente-cajero">
@@ -459,7 +475,21 @@ function DetalleClienteCajero({ clienteId, volver }) {
       </div>
 
       <div className="vehiculos-header">
-        <h3>Vehículos ({cliente.abonos?.length || 0})</h3>
+        <div className="vehiculos-title">
+          <h3>Vehículos ({cliente.abonos?.length || 0})</h3>
+          {cocheraLabel && (
+            <span
+              className={
+                `cochera-badge ` +
+                (cocheraLabel.includes('EXCLUSIVA') ? 'exclusiva' :
+                 cocheraLabel.includes('FIJA') ? 'fija' : 'movil')
+              }
+              title={cocheraLabel}
+            >
+              {cocheraLabel}
+            </span>
+          )}
+        </div>
         <button
           className="btn-agregar-vehiculo"
           onClick={() => setModalAgregarVisible(true)}
@@ -479,6 +509,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 <th>Modelo</th>
                 <th>Año</th>
                 <th>Tipo</th>
+                <th>Piso</th>{/* nueva columna */}
               </tr>
             </thead>
             <tbody>
@@ -495,10 +526,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
                       <td>{capitalizeFirstLetter(abono.modelo)}</td>
                       <td>{abono.anio || '---'}</td>
                       <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
+                      <td>{abono.piso ? abono.piso : '—'}</td>
                     </tr>
                     {expandido && (
                       <tr className="fila-expandida">
-                        <td colSpan="5">
+                        <td colSpan="6">
                           <div className="expandido-contenido">
                             <div className="detalles-adicionales">
                               <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
@@ -508,7 +540,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
                               <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
                               <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
                               <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
-                              <button onClick={() => abrirFoto(abono, 'cedulaAzul')}>Céd. Azul</button>
                             </div>
                           </div>
                         </td>
