@@ -204,7 +204,7 @@ function DatosAutoEntrada({
       if (ticketPendiente) {
         const candidate = ticketPendiente.fotoUrl
           ? makeAbsolute(ticketPendiente.fotoUrl)
-          : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
+          : `${BASE_URL}/api/camara/captura.jpg`;
         const url = `${candidate}?t=${timestamp}`;
         try {
           const res = await fetch(url, { method: "HEAD" });

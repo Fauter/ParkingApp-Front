@@ -94,7 +94,7 @@ function Header({
       <div className="menu" ref={menuRef}>
         <button className={getButtonClass('operador')} onClick={() => manejarCambioVista('operador')} disabled={modalActivo !== null}>Operador</button>
         <button className={getButtonClass('vehiculos')} onClick={() => manejarCambioVista('vehiculos')} disabled={modalActivo !== null}>Auditoría</button>
-        <button className={getButtonClass('turnos')} onClick={() => manejarCambioVista('turnos')} disabled={modalActivo !== null}>Turnos</button>
+        <button className={getButtonClass('turnos')} onClick={() => manejarCambioVista('turnos')} disabled={modalActivo !== null}>Anticipados</button>
         <button className={getButtonClass('abono')} onClick={handleAbonoClick} disabled={modalActivo !== null && !mostrarSubmenu}>Abono</button>
 
         {mostrarSubmenu && (

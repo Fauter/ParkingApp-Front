@@ -67,8 +67,8 @@ function Interfaz() {
   const navigate = useNavigate();
 
   // -------------------- AUTOFOCUS Refs para MODALES --------------------
-  const recaudadoRef = useRef(null);     // cierre de caja - Total Recaudado
-  const enCajaRef = useRef(null);        // (opcional) cierre de caja - Efectivo en Caja
+  const recaudadoRef = useRef(null);     // cierre de caja - Total en Caja
+  const enCajaRef = useRef(null);        // (opcional) cierre de caja - Queda en Caja
   const montoParcialRef = useRef(null);  // cierre parcial - Monto
   const incidenteRef = useRef(null);     // incidente - textarea
 
@@ -530,7 +530,7 @@ function Interfaz() {
         <ModalHeader titulo="Cierre de Caja" onClose={cerrarModal}>
           {!confirmandoCaja ? (
             <>
-              <label>Total Recaudado</label>
+              <label>Total en Caja</label>
               <input
                 ref={recaudadoRef}
                 type="text"
@@ -538,12 +538,12 @@ function Interfaz() {
                 pattern="[0-9]*"
                 onKeyDown={handleNumericKeyDown}
                 className="modal-input"
-                placeholder="Total Recaudado"
+                placeholder="Total en Caja"
                 value={formatearVisualmente(recaudado)}
                 onChange={(e) => setRecaudado(limpiarNumero(e.target.value))}
               />
 
-              <label>Efectivo en Caja</label>
+              <label>Queda en Caja</label>
               <input
                 ref={enCajaRef}
                 type="text"
@@ -551,7 +551,7 @@ function Interfaz() {
                 pattern="[0-9]*"
                 onKeyDown={handleNumericKeyDown}
                 className="modal-input"
-                placeholder="Efectivo en Caja"
+                placeholder="Queda en Caja"
                 value={formatearVisualmente(enCaja)}
                 onChange={(e) => setEnCaja(limpiarNumero(e.target.value))}
               />
@@ -562,8 +562,8 @@ function Interfaz() {
             </>
           ) : (
             <>
-              <p>Total Recaudado: ${formatearVisualmente(recaudado)}</p>
-              <p>Efectivo en Caja: ${formatearVisualmente(enCaja)}</p>
+              <p>Total en Caja: ${formatearVisualmente(recaudado)}</p>
+              <p>Queda en Caja: ${formatearVisualmente(enCaja)}</p>
               <p>Total Rendido: ${totalRendidoPreview()}</p>
               <button className="modal-btn" onClick={() => setConfirmandoCaja(false)}>Modificar</button>
               <button className="modal-btn" onClick={enviarCierreDeCaja}>Confirmar</button>

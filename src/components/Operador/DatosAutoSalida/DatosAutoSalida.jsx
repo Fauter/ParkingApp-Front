@@ -62,7 +62,7 @@ function DatosAutoSalida({
       return;
     }
     const fotoUrl = vehiculoLocal.estadiaActual?.fotoUrl;
-    if (fotoUrl) setImgSrc(`http://localhost:5000${fotoUrl}`);
+    if (fotoUrl) setImgSrc(/^https?:\/\//i.test(fotoUrl) ? fotoUrl : `http://localhost:5000${fotoUrl}`);
     else setImgSrc(AutoPlaceHolderNoimage);
   }, [vehiculoLocal]);
 

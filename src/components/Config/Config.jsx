@@ -69,7 +69,6 @@ function Config() {
       }
 
       unique.sort((a, b) => (a.label || "").localeCompare(b.label || ""));
-
       setWebcams(unique);
 
       const saved = localStorage.getItem(LS_WEBCAM_KEY);
@@ -88,17 +87,40 @@ function Config() {
     }
   }
 
+  // --- Helpers RTSP ---
+  const extractHostFromRtsp = (rtsp) => {
+    try {
+      const s = String(rtsp || "").replace(/^rtsp:\/\//i, "");
+      const at = s.indexOf("@");
+      const afterCreds = at >= 0 ? s.slice(at + 1) : s;
+      const slash = afterCreds.indexOf("/");
+      const hostPort = slash >= 0 ? afterCreds.slice(0, slash) : afterCreds;
+      const colon = hostPort.indexOf(":");
+      return colon >= 0 ? hostPort.slice(0, colon) : hostPort;
+    } catch { return ""; }
+  };
+
   useEffect(() => {
     async function fetchIp() {
       try {
-        const res = await fetch(`${BASE_URL}/api/camara/get-ip`);
-        if (!res.ok) throw new Error("No se pudo obtener IP");
+        // RUTA CORRECTA EN BACKEND
+        const res = await fetch(`${BASE_URL}/api/camara/get-config`);
+        if (!res.ok) throw new Error("No se pudo obtener config");
         const data = await res.json();
-        setIpCamara(data.ip);
-        localStorage.setItem(LS_IP_KEY, data.ip);
+        const cfg = data?.config || {};
+        // preferí HOST; si no, extraelo de RTSP_URL
+        const host = cfg.HOST || extractHostFromRtsp(cfg.RTSP_URL) || "";
+        if (host) {
+          setIpCamara(host);
+          localStorage.setItem(LS_IP_KEY, host);
+        } else {
+          // fallback localStorage
+          const savedIp = localStorage.getItem(LS_IP_KEY);
+          if (savedIp) setIpCamara(savedIp);
+        }
       } catch (error) {
         console.error(error);
-        setMensaje("⚠️ No se pudo cargar la IP desde backend");
+        setMensaje("⚠️ No se pudo cargar la config de cámara");
         const savedIp = localStorage.getItem(LS_IP_KEY);
         if (savedIp) setIpCamara(savedIp);
       }
@@ -140,26 +162,49 @@ function Config() {
     }
   }, [webcamDefault]);
 
-  const handleChangeIP = (e) => setIpCamara(e.target.value);
+  const handleChangeIP = (e) => setIpCamara(e.target.value.trim());
 
   const guardarIP = async () => {
     try {
-      setMensaje("💾 Guardando IP...");
+      setMensaje("💾 Guardando...");
       setModalAbierto(true);
 
-      const response = await fetch(`${BASE_URL}/api/camara/set-ip`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ip: ipCamara }),
-      });
+      const value = ipCamara.trim();
+      let response;
 
-      if (!response.ok) throw new Error("Error al guardar IP");
+      if (/^rtsp:\/\//i.test(value)) {
+        // Si pegaste una RTSP completa, usá set-rtsp
+        response = await fetch(`${BASE_URL}/api/camara/set-rtsp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rtsp: value }),
+        });
+      } else {
+        // Si es host/IP, usá set-ip
+        response = await fetch(`${BASE_URL}/api/camara/set-ip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ip: value }),
+        });
+      }
 
-      localStorage.setItem(LS_IP_KEY, ipCamara);
-      setMensaje("✅ IP guardada correctamente");
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const j = await response.json();
+          detail = j?.mensaje || j?.error || "";
+        } catch {}
+        throw new Error(detail || "Error al guardar");
+      }
+
+      // Persisto host/IP en localStorage para el front
+      const host = /^rtsp:\/\//i.test(value) ? extractHostFromRtsp(value) : value;
+      if (host) localStorage.setItem(LS_IP_KEY, host);
+
+      setMensaje("✅ Configuración de cámara guardada");
     } catch (error) {
       console.error(error);
-      setMensaje("❌ Error al guardar IP");
+      setMensaje("❌ No se pudo guardar: " + (error.message || ""));
     }
   };
 
@@ -191,12 +236,10 @@ function Config() {
 
       if (!body.exito) throw new Error(body.mensaje || "No se pudo capturar la foto en el backend");
 
-      // darle un momento al filesystem para que la imagen esté disponible y bustear cache
       await sleep(1200);
       const timestamp = Date.now();
       const imageUrl = `${BASE_URL}/api/camara/capturaTest.jpg?t=${timestamp}`;
 
-      // Verificar existencia (HEAD) antes de setear la URL
       try {
         const head = await fetch(imageUrl, { method: "HEAD" });
         if (!head.ok) throw new Error("La imagen no está disponible en el servidor");
@@ -297,15 +340,15 @@ function Config() {
       <h2>Configuración</h2>
 
       <div className="campo-config">
-        <label htmlFor="ip-camara">IP de la Cámara:</label>
+        <label htmlFor="ip-camara">IP de la Cámara (o RTSP completa):</label>
         <input
           type="text"
           id="ip-camara"
-          placeholder="Ej: 192.168.0.100"
+          placeholder="Ej: 192.168.0.100  ó  rtsp://user:pass@192.168.0.100:554/..."
           value={ipCamara}
           onChange={handleChangeIP}
         />
-        <button onClick={guardarIP}>Guardar IP</button>
+        <button onClick={guardarIP}>Guardar</button>
         <button onClick={testearCamara} disabled={loading}>
           {loading ? "Cargando..." : "Testear Cámara IP"}
         </button>

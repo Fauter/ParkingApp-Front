@@ -220,7 +220,7 @@ const DatosAutoTurnos = ({ user }) => {
             onChange={e => setTurnoSeleccionado(e.target.value)}
             className="select-style"
           >
-            <option value="">Seleccione un turno</option>
+            <option value="">Seleccione un anticipado</option>
             {turnos.map(turno => (
               <option key={turno._id} value={turno._id}>
                 {turno.nombre}
@@ -261,7 +261,7 @@ const DatosAutoTurnos = ({ user }) => {
           </div>
         </div>
 
-        <button className="registrarTurno" type="submit">Registrar Turno</button>
+        <button className="registrarTurno" type="submit">Registrar Anticipado</button>
       </form>
 
       <ModalMensaje

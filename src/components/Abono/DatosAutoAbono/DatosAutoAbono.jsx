@@ -192,7 +192,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const stream = await getStream();
       setVideoStream(stream);
     } catch (err) {
-      setVideoStream.null;
+      setVideoStream(null); // <-- fix
       showModal("Error de cámara", humanMediaError(err));
     }
   };
@@ -282,7 +282,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         const tiposData = await tiposRes.json();
         setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
 
-        // efectivo (con fallback de endpoint, NO de precios)
+        // efectivo
         let cash = {};
         try {
           const r1 = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
@@ -299,9 +299,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         let other = {};
         try {
           const r3 = await fetch(`${BASE_URL}/api/precios?metodo=otros`, { cache: "no-store" });
-          if (r3.ok) {
-            other = await r3.json();
-          }
+          if (r3.ok) other = await r3.json();
         } catch {}
         setPreciosOtros(other);
 
@@ -331,7 +329,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     fetchClientes();
   }, []);
 
-  // ===== Helpers FRONT: abono por método + prorrateo (SIN fallbacks numéricos) =====
+  // ===== Helpers FRONT: abono por método + prorrateo =====
 
   const getAbonoPrecioByMetodo = (tipoVehiculo, metodoPago, cochera, exclusiva) => {
     const keyVehiculo = String(tipoVehiculo || "").toLowerCase();
@@ -344,7 +342,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const val = mapa[keyVehiculo]?.[tier];
       if (typeof val === "number" && isFinite(val) && val > 0) return val;
     }
-    return null; // NO inventamos precio
+    return null;
   };
 
   const getUltimoDiaMesFront = (hoy = new Date()) => {
@@ -391,7 +389,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
             domicilioTrabajo: formData.domicilioTrabajo,
             telefonoTrabajo: formData.telefonoTrabajo,
             email: formData.email,
-            // ===== NUEVO: sincronizar estado de cochera en el Cliente =====
             cochera: cocheraNorm,
             exclusiva: exclusivaNorm,
             piso: pisoVal
@@ -416,7 +413,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         telefonoTrabajo: formData.telefonoTrabajo,
         email: formData.email,
         precioAbono: formData.tipoVehiculo || "",
-        // ===== NUEVO: estado de cochera del Cliente al crearlo =====
         cochera: cocheraNorm,
         exclusiva: exclusivaNorm,
         piso: pisoVal
@@ -476,11 +472,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       fd.set("operador", user?.nombre || "Sistema");
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
 
-      // (Informativo para auditoría en back – el back calcula igual con su catálogo)
+      // (informativo)
       fd.set("precio", String(baseMensual));
       fd.set("precioProrrateadoHoy", String(proporcional));
       fd.set("tierAbono", tierName);
 
+      // 1) Registrar Abono
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
         body: fd,
@@ -490,11 +487,54 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
+      // 2) Crear Ticket en DB (tipo ABONO) — separado del ticket de entrada
+      try {
+        const payloadTicketAbono = {
+          tipo: "abono",
+          patente,
+          cliente: clienteId,
+          operador: user?.username || user?.nombre || "Sistema",
+          metodoPago: formData.metodoPago,
+          factura: formData.factura,
+          tierAbono: tierName,
+          baseMensual: baseMensual,
+          montoProporcional: proporcional,
+          tipoVehiculo: formData.tipoVehiculo,
+          fecha: new Date().toISOString()
+        };
+        await fetch(`${BASE_URL}/api/tickets`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadTicketAbono)
+        });
+      } catch (e) {
+        console.warn("⚠️ No se pudo crear el ticket ABONO en DB:", e);
+      }
+
+      // 3) Imprimir ticket de ABONO (usa la nueva ruta /api/tickets/imprimir-abono)
+      try {
+        const printRes = await fetch(`${BASE_URL}/api/tickets/imprimir-abono`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            proporcional: `${formatARS(proporcional)}`, // sin "$"; Python ya lo agrega
+            patente
+          }),
+        });
+        if (!printRes.ok) {
+          const t = await printRes.text().catch(() => "");
+          console.warn("⚠️ Falló impresión de ABONO:", t || printRes.status);
+        }
+      } catch (e) {
+        console.warn("⚠️ No se pudo imprimir el ticket de ABONO:", e);
+      }
+
       await fetchClientes(); // refresco local
       fetch(`${BASE_URL}/api/sync/run-now`, { method: "POST" }).catch(() => {});
 
       showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
 
+      // Reset UI
       setFormData({
         nombreApellido: "",
         dniCuitCuil: "",
@@ -550,8 +590,9 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       });
       if (clienteExistente?._id) {
         params.set("clienteId", clienteExistente._id);
-      } else if (dni) {
-        params.set("dniCuitCuil", dni);
+      } else {
+        const dni = (formData.dniCuitCuil || "").trim();
+        if (dni) params.set("dniCuitCuil", dni);
       }
 
       let diffBase = 0;
@@ -628,7 +669,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       return showModal("Error", err.message);
     }
 
-    // 2) Confirmación GENERAL (precio por método + cochera/exclusiva + prorrateo)
+    // 2) Confirmación GENERAL
     try {
       const patente = (formData.patente || "").toUpperCase();
       const tipo = formData.tipoVehiculo;
@@ -655,7 +696,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
       const detalleCochera = [
         `Cochera: ${formData.cochera || "-"}`,
-        `Piso: ${formData.piso || "-"}`,
+        `N° de Cochera: ${formData.piso || "-"}`,
         `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`
       ].join("\n");
 
@@ -773,13 +814,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
 
           <div className="fullwidth">
-            <label>Piso</label>
+            <label>N° de Cochera</label>
             <input
               type="text"
               name="piso"
               value={formData.piso}
               onChange={handleChange}
-              placeholder="1° Piso, Subsuelo, etc."
               className="input-style-wide"
             />
           </div>
