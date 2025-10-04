@@ -370,32 +370,50 @@
 /* Form modal edición */
 .edit-form {
   margin-top: 8px;
+  /* >>> Ajuste clave: limitar ancho relativo al viewport para que no se salga del ModalMensaje */
+  width: min(92vw, 860px);
+  max-width: 100%;
 }
+
 .grid-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* >>> Ajuste clave: permite que las columnas encojan sin overflow */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 16px;
 }
+
 @media (max-width: 800px) {
   .grid-2 {
     grid-template-columns: 1fr;
   }
 }
+
 .form-item {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* >>> Previene que el contenido fuerce el ancho de la columna */
+  min-width: 0;
 }
+
 .form-item label {
   font-size: 0.85rem;
   color: #cdd2e0;
+  /* por si hay textos largos, que se partan y no empujen */
+  overflow-wrap: anywhere;
 }
-.form-item input, .form-item select {
+
+.form-item input,
+.form-item select {
   background-color: #1f1f28;
   border: 1px solid #444a5a;
   border-radius: 6px;
   padding: 8px 10px;
   color: white;
+  /* >>> Asegura que los campos respeten el contenedor */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .edit-actions {
@@ -429,6 +447,7 @@
   padding: 8px 10px;
   border-radius: 6px;
 }
+
 /* --- Cochera badge junto al título --- */
 .vehiculos-title {
   display: flex;
@@ -477,16 +496,28 @@
   border: 1px solid #4a4a5a;
 }
 
+.piso-square {
+  background-color: #3a3a4a;
+  padding: 0px 5px 0px 5px;
+  border-radius: 2px;
+}
 
 @media (max-width: 768px) {
   .detalles-adicionales {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .tabla-vehiculos th,
   .tabla-vehiculos td {
     padding: 8px;
     font-size: 0.9rem;
+  }
+
+  /* En pantallas chicas, si el modal está justo, habilitamos scroll vertical suave */
+  .edit-form {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }

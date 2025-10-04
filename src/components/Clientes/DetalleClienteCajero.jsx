@@ -253,6 +253,20 @@ function DetalleClienteCajero({ clienteId, volver }) {
     return null;
   };
 
+  // ======== PISO: resolver desde cliente o algún abono ========
+  const getPisoFromCliente = (cli) => {
+    if (!cli) return null;
+    // Prioridad: campo directo en cliente
+    const directo = (cli.piso ?? cli.pisoAbono);
+    if (directo !== undefined && directo !== null && directo !== '') return String(directo);
+    // Luego, primer abono con piso definido
+    if (Array.isArray(cli.abonos) && cli.abonos.length) {
+      const withPiso = cli.abonos.find(a => a && a.piso !== undefined && a.piso !== null && a.piso !== '');
+      if (withPiso) return String(withPiso.piso);
+    }
+    return null;
+  };
+
   const abrirFoto = (abono, tipoFoto) => {
     const camposValidos = {
       dni: 'fotoDNI',
@@ -438,13 +452,25 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const finDerivado = obtenerFinAbono(cliente);
   const abonoActivo = esAbonoActivo(cliente);
   const cocheraLabel = getCocheraLabel(cliente);
+  const piso = getPisoFromCliente(cliente);
 
   return (
     <div className="detalle-cliente-cajero">
       <div className="header-detalle header-detalle--space">
         <div className="header-left">
           <button onClick={volver} className="btn-volver"><FaArrowLeft /></button>
-          <h2>{cliente.nombreApellido}</h2>
+          <h2 className="titulo-cliente">
+            {cliente.nombreApellido}
+          </h2>
+          {piso && (
+            <span
+              className="piso-square"
+              title={`Piso ${piso}`}
+              aria-label={`Piso ${piso}`}
+            >
+              N° de Cochera: {piso}
+            </span>
+          )}
         </div>
         <div className="header-actions">
           <button className="btn-editar" onClick={openEditModal} title="Editar datos del cliente">
@@ -509,7 +535,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 <th>Modelo</th>
                 <th>Año</th>
                 <th>Tipo</th>
-                <th>Piso</th>{/* nueva columna */}
               </tr>
             </thead>
             <tbody>
@@ -526,7 +551,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
                       <td>{capitalizeFirstLetter(abono.modelo)}</td>
                       <td>{abono.anio || '---'}</td>
                       <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
-                      <td>{abono.piso ? abono.piso : '—'}</td>
                     </tr>
                     {expandido && (
                       <tr className="fila-expandida">

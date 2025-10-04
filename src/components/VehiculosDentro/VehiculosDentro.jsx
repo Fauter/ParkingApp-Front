@@ -182,12 +182,10 @@ function VehiculosDentro() {
     setModalAbierto(false);
   };
 
+  // 🔧 Input libre para la patente del modal: MAYÚSCULAS y tope 10; sin regex de restricción
   const handlePatenteChange = (e) => {
-    const valor = e.target.value.toUpperCase().replace(/\s/g, '');
-    const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
-    if (valor === "" || regexParcial.test(valor)) {
-      setNuevoVehiculo({ ...nuevoVehiculo, patente: valor });
-    }
+    const valor = (e.target.value || "").toUpperCase().slice(0, 10);
+    setNuevoVehiculo({ ...nuevoVehiculo, patente: valor });
   };
 
   const crearAlertaConflicto = async (tipoConflicto) => {
@@ -401,9 +399,9 @@ function VehiculosDentro() {
               type="text"
               value={nuevoVehiculo.patente}
               onChange={handlePatenteChange}
-              placeholder="Ej: ABC123 o AB123CD"
+              placeholder="Patente"
               required
-              maxLength={7}
+              maxLength={10}
               className="modal-input-audit"
             />
           </div>

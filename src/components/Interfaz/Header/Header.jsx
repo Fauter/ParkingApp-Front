@@ -21,6 +21,9 @@ function Header({
   const [timestamp, setTimestamp] = useState(Date.now());
   const menuRef = useRef();
 
+  // ⏱️ Timer de auto-impresión si no confirman en 20s
+  const autoPrintTimerRef = useRef(null);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -53,13 +56,6 @@ function Header({
     abrirModal(modal);
   };
 
-  const cerrarSubmenuYOverlay = () => {
-    if (mostrarSubmenu) {
-      setMostrarSubmenu(false);
-      setMostrarOverlay(false);
-    }
-  };
-
   const getButtonClass = (boton) => {
     if (modalActivo !== null) {
       switch (modalActivo) {
@@ -82,10 +78,59 @@ function Header({
     }
   };
 
-  const handleEjecutarBot = async () => {
-    await onEjecutarBot();
-    setMostrarModalEntrada(true);        // Mostrar modal de Registrar Entrada
-    setTimestamp(Date.now());            // Forzar recarga (foto)
+  // 🔸 Abrimos el modal INMEDIATO y disparamos BOT sin esperar
+  const handleEjecutarBot = () => {
+    setMostrarModalEntrada(true);  // Mostrar modal YA
+    setTimestamp(Date.now());      // Forzar recarga (foto)
+    Promise.resolve(onEjecutarBot()).catch(() => {}); // Fire & forget
+  };
+
+  // 🚨 Auto-impresión si no confirman en 20s
+  useEffect(() => {
+    if (autoPrintTimerRef.current) {
+      clearTimeout(autoPrintTimerRef.current);
+      autoPrintTimerRef.current = null;
+    }
+
+    if (mostrarModalEntrada && ticketPendiente?.ticket) {
+      autoPrintTimerRef.current = setTimeout(async () => {
+        try {
+          if (mostrarModalEntrada) {
+            const ticketNumFormateado = String(ticketPendiente.ticket).padStart(6, '0');
+            await fetch('http://localhost:5000/api/ticket/imprimir', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                texto: ticketNumFormateado,
+                ticketNumero: ticketNumFormateado
+              }),
+            });
+          }
+        } catch (e) {
+          console.error('Auto-impresión fallida:', e);
+        } finally {
+          autoPrintTimerRef.current = null;
+        }
+      }, 20000); // 20s
+    }
+
+    return () => {
+      if (autoPrintTimerRef.current) {
+        clearTimeout(autoPrintTimerRef.current);
+        autoPrintTimerRef.current = null;
+      }
+    };
+  }, [mostrarModalEntrada, ticketPendiente]);
+
+  const cancelarAutoImpresion = () => {
+    if (autoPrintTimerRef.current) {
+      clearTimeout(autoPrintTimerRef.current);
+      autoPrintTimerRef.current = null;
+    }
+  };
+
+  const handleEntradaConfirmada = () => {
+    cancelarAutoImpresion();
   };
 
   return (
@@ -113,18 +158,22 @@ function Header({
       </div>
 
       {mostrarModalEntrada && (
-        <ModalHeader titulo="Registrar Entrada" onClose={() => setMostrarModalEntrada(false)}>
+        <ModalHeader titulo="Registrar Entrada" onClose={() => {
+          cancelarAutoImpresion();
+          setMostrarModalEntrada(false);
+        }}>
           <DatosAutoEntrada
             user={user}
             ticketPendiente={ticketPendiente}
             onClose={() => {
+              cancelarAutoImpresion();
               setMostrarModalEntrada(false);
               setTicketPendiente(null);
             }}
             timestamp={timestamp}
             setTicketPendiente={setTicketPendiente}
-            // ✅ Al estar en modal, enfocar input automáticamente
             autoFocusOnMount
+            onEntradaConfirmada={handleEntradaConfirmada}
           />
         </ModalHeader>
       )}

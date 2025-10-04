@@ -394,76 +394,77 @@ function Interfaz() {
   };
 
   const ejecutarBot = async () => {
+    let capturaFallida = false;
     let fotoUrlTemporal = null;
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const resFoto = await fetch('http://localhost:5000/api/camara/sacarfoto', {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      const json = await resFoto.json();
-      if (json.exito) {
-        const bust = Date.now();
-        const staticUrl = `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${bust}`;
-        await new Promise(r => setTimeout(r, 1200));
-        const head = await fetch(staticUrl, { method: 'HEAD' });
-        if (!head.ok) throw new Error('La imagen no está disponible (HEAD != 200)');
-        fotoUrlTemporal = 'http://localhost:5000/camara/sacarfoto/captura.jpg';
-      } else {
-        console.warn("⚠️ No se pudo capturar foto:", json.mensaje);
+    // 🔸 Arranco captura con timeout corto (3.5s) pero NO bloqueo UI
+    const capturaPromise = (async () => {
+      try {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch('http://localhost:5000/api/camara/sacarfoto', { signal: controller.signal });
+        clearTimeout(t);
+        const json = await res.json().catch(() => ({}));
+        if (json?.exito) {
+          // doy 900ms para que el archivo aparezca
+          const bust = Date.now();
+          const staticUrl = `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${bust}`;
+          await new Promise(r => setTimeout(r, 900));
+          const head = await fetch(staticUrl, { method: 'HEAD' });
+          if (head.ok) {
+            fotoUrlTemporal = '/camara/sacarfoto/captura.jpg';
+            return true;
+          }
+        }
+        capturaFallida = true;
+        return false;
+      } catch (err) {
+        capturaFallida = true;
+        return false;
       }
-    } catch (err) {
-      if (err.name === 'AbortError') console.warn("⏰ Timeout al intentar sacar la foto");
-      else console.error("❌ Error al sacar foto:", err);
-    }
+    })();
 
-    let ticketCreado = null;
-    try {
-      const resTicket = await fetch('http://localhost:5000/api/tickets', {
+    // 🔸 Creo ticket en paralelo
+    const ticketPromise = (async () => {
+      const res = await fetch('http://localhost:5000/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      ticketCreado = await resTicket.json();
+      return res.json();
+    })();
 
-      if (fotoUrlTemporal && ticketCreado?.ticket?._id) {
-        try {
-          const putRes = await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fotoUrl: '/camara/sacarfoto/captura.jpg' })
-          });
-          const updated = await putRes.json();
-          if (putRes.ok && updated?.ticket) {
-            ticketCreado.ticket = updated.ticket;
-          } else {
-            console.warn('⚠️ No se pudo persistir la foto del ticket:', updated);
-          }
-        } catch (e) {
-          console.warn('⚠️ Error persistiendo foto del ticket:', e);
-        }
-      }
-
-      setTicketPendiente(ticketCreado.ticket);
-    } catch (err) {
-      console.error("❌ Error al crear ticket:", err);
-      return;
-    }
-
+    // 🔸 Espero ambas (UI ya mostró el modal)
+    let ticketCreado = null;
     try {
-      const ticketNumFormateado = String(ticketCreado.ticket.ticket).padStart(6, '0');
-      const textoTicket = `${ticketNumFormateado}`;
-      await fetch('http://localhost:5000/api/ticket/imprimir', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoTicket, ticketNumero: ticketNumFormateado }),
-      });
-    } catch (err) {
-      console.error("❌ Error al imprimir ticket:", err);
+      const [_, ticketJson] = await Promise.allSettled([capturaPromise, ticketPromise]);
+      ticketCreado = ticketJson.status === 'fulfilled' ? ticketJson.value : null;
+    } catch {}
+
+    // 🔸 Persisto foto si existe
+    if (ticketCreado?.ticket?._id && fotoUrlTemporal) {
+      try {
+        const putRes = await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fotoUrl: fotoUrlTemporal })
+        });
+        if (putRes.ok) {
+          const updated = await putRes.json().catch(() => null);
+          if (updated?.ticket) ticketCreado.ticket = updated.ticket;
+        }
+      } catch {}
     }
 
+    // 🔸 Publico estado para DatosAutoEntrada (capturaFallida controla placeholder)
+    if (ticketCreado?.ticket) {
+      setTicketPendiente({
+        ...ticketCreado.ticket,
+        capturaFallida: Boolean(capturaFallida),
+        fotoUrl: fotoUrlTemporal || ticketCreado.ticket.fotoUrl || null,
+      });
+    }
+
+    // ⛩️ Mantengo tu flujo de barrera
     setTimeout(() => {
       setBarreraIzqAbierta(true);
       setTimeout(() => setBarreraIzqAbierta(false), 10000);

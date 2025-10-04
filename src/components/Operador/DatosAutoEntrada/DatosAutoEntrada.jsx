@@ -47,6 +47,7 @@ function DatosAutoEntrada({
   timestamp,
   setTicketPendiente = () => {},
   autoFocusOnMount = false,
+  onEntradaConfirmada = () => {},
 }) {
   const [patente, setPatente] = useState("");
   const [tipoVehiculo, setTipoVehiculo] = useState("");
@@ -67,6 +68,8 @@ function DatosAutoEntrada({
   const [mostrarModal, setMostrarModal] = useState(false);
 
   const [fotoUrl, setFotoUrl] = useState(AutoPlaceHolder);
+  // ✅ NUEVO: bandera de “foto resuelta” (captura.jpg o placeholderNoImage)
+  const [fotoResuelta, setFotoResuelta] = useState(false);
 
   const abortRef = useRef(null);
   const lastHashesRef = useRef({ precios: "", tipos: "", tarifasHora: "" });
@@ -208,13 +211,20 @@ function DatosAutoEntrada({
         const url = `${candidate}?t=${timestamp}`;
         try {
           const res = await fetch(url, { method: "HEAD" });
-          if (res.ok) setFotoUrl(url);
-          else setFotoUrl(AutoPlaceHolderNoimage);
+          if (res.ok) {
+            setFotoUrl(url);
+            setFotoResuelta(true); // ✅ captura.jpg disponible
+          } else {
+            setFotoUrl(AutoPlaceHolderNoimage);
+            setFotoResuelta(true); // ✅ placeholderNoImage
+          }
         } catch {
           setFotoUrl(AutoPlaceHolderNoimage);
+          setFotoResuelta(true);   // ✅ placeholderNoImage por error
         }
       } else {
         setFotoUrl(AutoPlaceHolder);
+        setFotoResuelta(false);     // ⛔ sin ticket -> no resuelta
       }
     };
     verificarFoto();
@@ -231,7 +241,6 @@ function DatosAutoEntrada({
       return;
     }
 
-    // Normalizo el mapa de precios por tipo y sus claves
     const preciosNormPorTipo = {};
     for (const [tipo, mapa] of Object.entries(precios)) {
       const inner = {};
@@ -241,13 +250,12 @@ function DatosAutoEntrada({
       preciosNormPorTipo[norm(tipo)] = inner;
     }
 
-    // Criterio: tipos con hora === true y precio 'hora' válido (> 0)
     const filtrados = tiposVehiculoApi.filter(({ nombre, hora }) => {
       if (!hora) return false;
       const tipoN = norm(nombre);
       const mapa = preciosNormPorTipo[tipoN];
       if (!mapa) return false;
-      const precioHora = mapa["hora"]; // ya normalizado arriba
+      const precioHora = mapa["hora"];
       return isPriceValid(precioHora);
     });
 
@@ -267,6 +275,7 @@ function DatosAutoEntrada({
     setPatente("");
     setTipoVehiculo("");
     setFotoUrl(AutoPlaceHolder);
+    setFotoResuelta(false); // ✅ volvemos a “no resuelta”
     setTicketPendiente(null);
   };
 
@@ -284,10 +293,10 @@ function DatosAutoEntrada({
     if (!user) return mostrarMensaje("Atención", "No estás logueado.");
     if (!ticketPendiente) return mostrarMensaje("Atención", "Primero generá un ticket con BOT.");
 
-    const regexCompleto = /^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$/;
-    if (!regexCompleto.test(patente)) return mostrarMensaje("Patente inválida", "Formato ABC123 o AB123CD.");
-
-    if (!patente || !tipoVehiculo) return mostrarMensaje("Faltan datos", "Patente y tipo de vehículo.");
+    // 🔓 Sin validación de formato; solo que no esté vacío y haya tipo
+    if (!patente || !tipoVehiculo) {
+      return mostrarMensaje("Faltan datos", "Patente y tipo de vehículo.");
+    }
 
     const sigueSiendoValido = tiposVehiculoDisponibles.some(t => norm(t.nombre) === norm(tipoVehiculo));
     if (!sigueSiendoValido) return mostrarMensaje("Sin precios válidos", "El tipo de vehículo seleccionado ya no es válido.");
@@ -297,6 +306,7 @@ function DatosAutoEntrada({
         ? makeAbsolute(ticketPendiente.fotoUrl)
         : `${BASE_URL}/camara/sacarfoto/captura.jpg`;
 
+      // Asociar datos al ticket
       const resAsociar = await fetch(
         `${BASE_URL}/api/tickets/${ticketPendiente._id}/asociar`,
         {
@@ -315,6 +325,8 @@ function DatosAutoEntrada({
 
       // Registrar entrada
       const checkResponse = await fetch(`${BASE_URL}/api/vehiculos/${patente}`);
+      const precioHora = precios[norm(tipoVehiculo)]?.hora ?? precios[norm(tipoVehiculo)]?.["hora"] ?? null;
+
       if (checkResponse.ok) {
         const entradaResponse = await fetch(
           `${BASE_URL}/api/vehiculos/${patente}/registrarEntrada`,
@@ -324,7 +336,7 @@ function DatosAutoEntrada({
             body: JSON.stringify({
               operador: user.nombre,
               metodoPago: "Efectivo",
-              monto: precios[norm(tipoVehiculo)]?.hora ?? precios[norm(tipoVehiculo)]?.["hora"],
+              monto: precioHora,
               ticket: ticketPendiente.ticket,
               entrada: ticketPendiente.creadoEn,
               fotoUrl: fotoUrlActual,
@@ -351,9 +363,32 @@ function DatosAutoEntrada({
 
       await eliminarFotoTemporal();
 
+      // 🖨️ Imprimir AHORA con meta
+      try {
+        const ticketNumFormateado = String(ticketPendiente.ticket).padStart(6, '0');
+        await fetch(`${BASE_URL}/api/ticket/imprimir`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            texto: ticketNumFormateado,
+            ticketNumero: ticketNumFormateado,
+            valorHora: (precioHora != null ? `$${Number(precioHora).toLocaleString('es-AR')}` : `${tipoVehiculo || ''}`),
+            patente: patente,
+            tipoVehiculo: tipoVehiculo 
+          }),
+        });
+      } catch (e) {
+        console.warn("Impresión con meta falló, se ignora:", e);
+      }
+
+      // Aviso al padre para cancelar el fallback de 20s
+      try { onEntradaConfirmada(); } catch {}
+
+      // UI
       setPatente("");
       setTipoVehiculo("");
       setFotoUrl(AutoPlaceHolder);
+      setFotoResuelta(false);
       mostrarMensaje("Éxito", `Entrada registrada para ${patente}.`);
     } catch (error) {
       console.error("Error:", error.message);
@@ -361,10 +396,10 @@ function DatosAutoEntrada({
     }
   };
 
+  // 🔧 Input libre: mayúsculas y límite 10, sin regex de restricción
   const handlePatenteChange = (e) => {
-    const valor = e.target.value.toUpperCase();
-    const regexParcial = /^[A-Z]{0,3}[0-9]{0,3}[A-Z]{0,2}$/;
-    if (valor === "" || regexParcial.test(valor)) setPatente(valor);
+    const valor = (e.target.value || "").toUpperCase().slice(0, 10);
+    setPatente(valor);
   };
 
   /* ---------- Render ---------- */
@@ -378,6 +413,7 @@ function DatosAutoEntrada({
           onError={(e) => {
             e.target.onerror = null;
             e.target.src = AutoPlaceHolderNoimage;
+            setFotoResuelta(true); // ✅ si falla carga, queda como “sin imagen”
           }}
         />
       </div>
@@ -392,7 +428,7 @@ function DatosAutoEntrada({
           value={patente}
           onChange={handlePatenteChange}
           className="inputPatente"
-          maxLength={8}
+          maxLength={10}
         />
 
         <label htmlFor="tipoVehiculo">Tipo de Vehículo</label>
@@ -410,7 +446,15 @@ function DatosAutoEntrada({
           ))}
         </select>
 
-        <button className="btn-entrada" onClick={handleEntrada}>
+        <button
+          className="btn-entrada"
+          onClick={handleEntrada}
+          disabled={!fotoResuelta}
+          style={{
+            opacity: fotoResuelta ? 1 : 0.6,
+            cursor: fotoResuelta ? "pointer" : "not-allowed",
+          }}
+        >
           Registrar Entrada
         </button>
       </div>

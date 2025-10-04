@@ -265,7 +265,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     if (datosVehiculo) {
       setFormData((prev) => ({
         ...prev,
-        patente: datosVehiculo.patente || "",
+        patente: (datosVehiculo.patente || "").toUpperCase().slice(0, 10),
         tipoVehiculo: datosVehiculo.tipoVehiculo || "",
       }));
     }
@@ -429,11 +429,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   };
 
   // ====== VALIDACIONES ======
-  const validarPatente = (patente) => {
-    const formatoViejo = /^[A-Z]{3}\d{3}$/;
-    const formatoNuevo = /^[A-Z]{2}\d{3}[A-Z]{2}$/;
-    return formatoViejo.test(patente) || formatoNuevo.test(patente);
-  };
 
   const validarDNI = (dni) => {
     const s = String(dni || "").replace(/\D+/g, "");
@@ -487,7 +482,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
-      // 2) Crear Ticket en DB (tipo ABONO) — separado del ticket de entrada
+      // 2) Crear Ticket en DB (tipo ABONO)
       try {
         const payloadTicketAbono = {
           tipo: "abono",
@@ -511,14 +506,40 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         console.warn("⚠️ No se pudo crear el ticket ABONO en DB:", e);
       }
 
-      // 3) Imprimir ticket de ABONO (usa la nueva ruta /api/tickets/imprimir-abono)
+      // 3) Imprimir ticket de ABONO
       try {
+        // recalculo acá para tener también los días
+        const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+        const baseMensual = getAbonoPrecioByMetodo(
+          formData.tipoVehiculo,
+          formData.metodoPago,
+          formData.cochera || "Móvil",
+          formData.cochera === "Fija" ? formData.exclusiva : false
+        );
+        const { proporcional, diasRestantes } = prorratearMontoFront(baseMensual);
+
         const printRes = await fetch(`${BASE_URL}/api/tickets/imprimir-abono`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            proporcional: `${formatARS(proporcional)}`, // sin "$"; Python ya lo agrega
-            patente
+            // importes (en string formateado para que Python solo agregue "$")
+            proporcional: `${formatARS(proporcional)}`,
+            valorMensual: `${formatARS(baseMensual)}`,
+            // numéricos de respaldo (por si querés usarlos en el server)
+            baseMensual: baseMensual,
+            proporcionalRaw: proporcional,
+            // datos para el cuerpo del ticket
+            nombreApellido: formData.nombreApellido,
+            metodoPago: formData.metodoPago,
+            tipoVehiculo: formData.tipoVehiculo,
+            marca: formData.marca,
+            modelo: formData.modelo,
+            patente: patente,
+            // cochera (para “Cochera Asignada”)
+            cochera: formData.cochera,     // "Fija" | "Móvil"
+            piso: formData.piso,           // número/identificador si es fija
+            exclusiva: !!formData.exclusiva,
+            diasRestantes: diasRestantes   // para "Por días"
           }),
         });
         if (!printRes.ok) {
@@ -653,11 +674,10 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1) Validaciones locales rápidas
+    // 1) Validaciones locales rápidas (SIN validar formato de patente)
     try {
-      const patente = (formData.patente || "").toUpperCase();
-      if (!validarPatente(patente))
-        throw new Error("Patente inválida. Formatos permitidos: ABC123 o AB123CD.");
+      const patente = (formData.patente || "").trim();
+      if (!patente) throw new Error("Debe ingresar la patente.");
       if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
       if (!formData.nombreApellido?.trim())
         throw new Error("Debe ingresar el nombre y apellido del cliente.");
@@ -743,7 +763,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
 
     if (name === "patente") {
-      setFormData((prev) => ({ ...prev, patente: (value || "").toUpperCase() }));
+      setFormData((prev) => ({ ...prev, patente: (value || "").toUpperCase().slice(0, 10) }));
       return;
     }
     if (files && files.length > 0) {
@@ -942,7 +962,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
               name="patente"
               value={formData.patente}
               onChange={handleChange}
-              maxLength={8}
+              maxLength={10}
               required
             />
           </div>

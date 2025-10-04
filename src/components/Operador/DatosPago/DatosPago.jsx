@@ -324,6 +324,38 @@ function DatosPago({
     throw lastErr || new Error("No se pudo abrir ninguna cámara");
   };
 
+  // ==== NUEVO: helper para imprimir ticket de salida ====
+  const imprimirTicketSalida = async () => {
+    try {
+      const payload = {
+        ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
+        ingreso: vehiculoLocal?.estadiaActual?.entrada,
+        egreso: horaSalida || new Date().toISOString(),
+        totalConDescuento,  // number
+        patente: vehiculoLocal?.patente,
+        tipoVehiculo: vehiculoLocal?.tipoVehiculo,
+      };
+
+      log("POST /api/tickets/imprimir-salida payload:", payload);
+
+      const r = await fetch(`${BASE_URL}/api/tickets/imprimir-salida`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        console.error("❌ Error al imprimir ticket de salida:", txt || r.status);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error("❌ Excepción al imprimir ticket de salida:", e);
+      return false;
+    }
+  };
+
   const registrarMovimiento = () => {
     if (!vehiculoLocal?.patente) return;
 
@@ -396,7 +428,10 @@ function DatosPago({
         if (!res.ok || !json?.movimiento) throw new Error(json?.msg || "Error al registrar movimiento");
         return json;
       })
-      .then(() => {
+      .then(async () => {
+        // ⬅️ NUEVO: imprimir ticket de salida ANTES de limpiar/abrir barrera
+        await imprimirTicketSalida();
+
         setMensajeModal({
           tipo: "exito",
           titulo: "Movimiento registrado",
