@@ -55,13 +55,16 @@ function ConfirmModal({ open, titulo, patente, nombreTurno, tipoVehiculo, precio
         </div>
 
         <div className="cfm-body">
-          {/* Texto centrado y en columnas, uno abajo del otro */}
           <div className="cfm-line">
             Vas a registrar un anticipado <span className="cfm-highlight">({nombreTurno})</span> para
             <span className="cfm-badge">{patente}</span>
           </div>
-          <div className="cfm-line">Tipo de Vehículo: <span className="cfm-strong">{capitalizarPrimera(tipoVehiculo)}</span></div>
-          <div className="cfm-line">Precio: <span className="cfm-strong">$ {formatARS(precio)}</span></div>
+          <div className="cfm-line">
+            Tipo de Vehículo: <span className="cfm-strong">{capitalizarPrimera(tipoVehiculo)}</span>
+          </div>
+          <div className="cfm-line">
+            Precio: <span className="cfm-strong">$ {formatARS(precio)}</span>
+          </div>
         </div>
 
         <div className="cfm-actions">
@@ -177,7 +180,7 @@ const DatosAutoTurnos = ({ user }) => {
     return tipoVehiculoRaw;
   };
 
-  // Acciones de registro (turno + movimiento)
+  // Acciones de registro (turno + movimiento) — devuelve info del turno creado para imprimir
   const registrarTurnoYMovimiento = async ({ patenteU, turnoData, tipoVehiculoRaw, precioTurno }) => {
     // Duración (horas/min/días)
     const minutosExtra =
@@ -210,9 +213,9 @@ const DatosAutoTurnos = ({ user }) => {
       body: JSON.stringify(payloadTurno),
     });
 
-    const data = await res.json().catch(() => ({}));
+    const dataTurno = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error('Error del servidor al crear turno: ' + (data?.error || JSON.stringify(data)));
+      throw new Error('Error del servidor al crear turno: ' + (dataTurno?.error || JSON.stringify(dataTurno)));
     }
 
     // Registrar Movimiento
@@ -237,6 +240,15 @@ const DatosAutoTurnos = ({ user }) => {
       const errorMov = await resMovimiento.json().catch(() => ({}));
       throw new Error('Turno registrado, pero error al crear movimiento: ' + (errorMov.error || JSON.stringify(errorMov)));
     }
+
+    // ➕ Devuelvo datos necesarios para imprimir
+    return {
+      dataTurno,
+      precioTurno,
+      tipoVehiculoRaw,
+      fin,
+      duracionHoras,
+    };
   };
 
   // Submit con confirmación previa (usa ConfirmModal propio)
@@ -282,12 +294,45 @@ const DatosAutoTurnos = ({ user }) => {
         onConfirm: async () => {
           setConfirm(s => ({ ...s, open: false }));
           try {
-            await registrarTurnoYMovimiento({
+            // Registrar en backend
+            const { dataTurno, fin, duracionHoras } = await registrarTurnoYMovimiento({
               patenteU: pat,
               turnoData,
               tipoVehiculoRaw,
               precioTurno
             });
+
+            // ===============================
+            // 🖨️ Imprimir ANTICIPADO (nuevo)
+            // ===============================
+            try {
+              // ticketNumero: preferimos 10 dígitos (controller igual paddea)
+              const bruto = (dataTurno?.ticket ?? dataTurno?.numero ?? dataTurno?._id ?? Date.now()).toString();
+              const ticketNumero10 = bruto.replace(/\D/g, '').padStart(10, '0').slice(-10);
+
+              await fetch(`${baseUrl}/api/tickets/imprimir-anticipado`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ticketNumero: ticketNumero10,
+                  // el script acepta alias: valorAnticipado | precio | valorHora
+                  valorAnticipado: `$${Number(precioTurno.precio).toLocaleString('es-AR')}`,
+                  nombreTurno: turnoData.nombre,
+                  patente: pat,
+                  tipoVehiculo: tipoVehiculoRaw,
+
+                  // (opcional, por si querés loguear más adelante)
+                  metodoPago,
+                  factura,
+                  operador: user?.nombre || 'Desconocido',
+                  fin: new Date(fin).toISOString(),
+                  duracionHoras
+                }),
+              });
+            } catch (e) {
+              console.warn('Impresión de anticipado falló, se ignora:', e);
+            }
+
             setMensajeModal('Turno y movimiento registrados correctamente');
             setPatente('');
             setTurnoSeleccionado('');
