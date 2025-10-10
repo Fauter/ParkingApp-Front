@@ -391,6 +391,15 @@ function DatosPago({
         return json;
       })
       .then(() => {
+        // ======= AQUÍ VA EL OPERADOR LOGUEADO =======
+        const operadorPayload = user ? {
+          username: user.username,
+          nombre: user.nombre,
+          apellido: user.apellido,
+          email: user.email,
+          _id: user._id || user.id
+        } : undefined;
+
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
           tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
@@ -401,6 +410,12 @@ function DatosPago({
           tipoTarifa: "hora",
           ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
           fotoUrl: fotoMovimiento || undefined,
+
+          // 👇 Incluimos operador en todas las variantes que tu backend entiende
+          ...(operadorPayload ? { operador: operadorPayload } : {}),
+          ...(user?.username ? { operadorUsername: user.username } : {}),
+          ...(user?._id || user?.id ? { operadorId: (user._id || user.id).toString() } : {}),
+
           ...(promoSeleccionada ? {
             promo: {
               _id: promoSeleccionada._id,

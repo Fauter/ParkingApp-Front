@@ -1,0 +1,371 @@
+/* ===== Scope local para evitar fugas de estilo ===== */
+.cm-scope-cargamensuales {
+  --bg: #0e1620;
+  --panel: #121c28;
+  --panel-2: #162232;
+  --stroke: #1e2b3d;
+  --text: #e7eef7;
+  --muted: #9fb3c9;
+  --accent: #86bdf4;
+  --ok: #38d39f;
+  --danger: #ef5b6b;
+
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 14px;
+  line-height: 1.25;
+  color: var(--text);
+}
+.cm-scope-cargamensuales * { box-sizing: border-box; }
+
+/* ——— Layout general ——— */
+.cm-page-cargamensuales {
+  height: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  justify-content: center;
+}
+
+/* Topbar */
+.cm-topbar-cargamensuales {
+  background: var(--panel);
+  border-bottom: 1px solid var(--stroke);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  height: 46px;
+}
+.cm-top-left-cargamensuales { display:flex; align-items:center; gap:8px; }
+.cm-title-cargamensuales { margin:0; font-size:16px; font-weight:600; letter-spacing:.2px; }
+.cm-role-cargamensuales {
+  font-size:11px; color:var(--accent);
+  background:#0b1521; border:1px solid var(--stroke);
+  padding:2px 8px; border-radius:999px;
+}
+.cm-top-right-cargamensuales { display:flex; gap:6px; }
+
+/* Contenedor sin scroll global */
+.cm-container-cargamensuales {
+  flex:1; min-height:0;
+  display:flex; justify-content:center;
+  padding: 10px 12px;
+  overflow: hidden; /* evita scroll global */
+}
+
+/* Grid 2 columnas */
+.cm-grid-cargamensuales{
+  width: 100%;
+  max-width: 1320px;
+  display:grid;
+  grid-template-columns: 0.40fr 0.60fr;
+  gap:12px;
+}
+
+/* Tarjetas */
+.cm-left-cargamensuales, .cm-right-cargamensuales{
+  background:var(--panel); border:1px solid var(--stroke);
+  border-radius:12px; padding:10px;
+  min-height: 0; /* importante para contención en Flex/Grid */
+}
+
+/* ===================== LEFT (NO TOCAR LISTA) ===================== */
+.cm-left-cargamensuales{ display:flex; flex-direction:column; min-height:0; }
+.cm-left-static-cargamensuales{ display:flex; flex-direction:column; gap:8px; min-height:0; }
+.cm-left-scrollbox-cargamensuales{
+  flex:1; min-height:0;
+  overflow:auto;
+  overflow-x:hidden;
+  scrollbar-gutter: stable both-edges;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+/* custom scrollbar discreto */
+.cm-left-scrollbox-cargamensuales{ scrollbar-width: thin; scrollbar-color: #27507a transparent; }
+.cm-left-scrollbox-cargamensuales::-webkit-scrollbar{ width: 10px; }
+.cm-left-scrollbox-cargamensuales::-webkit-scrollbar-track{ background: transparent; }
+.cm-left-scrollbox-cargamensuales::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, #274564, #2f5d89);
+  border-radius: 8px;
+}
+.cm-search-cargamensuales{ display:flex; gap:8px; align-items:center; }
+.cm-empty-cargamensuales{
+  margin:8px;
+  padding:14px; text-align:center; color:var(--muted);
+  background:#0f1a26; border:1px dashed var(--stroke); border-radius:10px;
+}
+.cm-meta-cargamensuales{ color:var(--muted); font-size:11.5px; }
+.cm-table-cargamensuales{ width:100%; border-collapse:collapse; font-size:13.5px; }
+.cm-table-cargamensuales thead th{
+  text-align:left; font-weight:600; color:var(--muted);
+  border-bottom:1px solid var(--stroke); padding:8px 8px;
+  background: #122033;
+}
+.cm-table-cargamensuales tbody td{
+  padding:8px 8px; border-bottom:1px solid var(--stroke);
+  vertical-align:top; word-break:break-word;
+}
+.cm-table-cargamensuales tbody tr:hover{ background:#0f1a26; }
+.cm-table-cargamensuales tbody tr.is-selected{ background:#0d2135; }
+.cm-email-cargamensuales{ max-width:240px; }
+
+/* Skeleton rows (para evitar flash al refrescar) */
+.cm-skel-row-cargamensuales td { height: 34px; }
+.cm-skel{
+  display:block; width:100%; height:12px; border-radius:6px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+  background-size: 200% 100%;
+  animation: cmskel-move 1.1s linear infinite;
+}
+.cm-skel--w40{ width:40%; }
+.cm-skel--w50{ width:50%; }
+.cm-skel--w60{ width:60%; }
+.cm-skel--w70{ width:70%; }
+.cm-skel--circle{ width:18px; height:18px; border-radius:999px; margin-left:auto; margin-right:auto; }
+@keyframes cmskel-move {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ===================== RIGHT (sin scroll, comprimido) ===================== */
+.cm-right-cargamensuales{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  overflow:hidden;
+}
+
+.cm-right-static-cargamensuales{
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* El form reusa la clase de "page", anular tamaño dentro de la derecha */
+.cm-right-static-cargamensuales .cm-page-cargamensuales{
+  height:auto;
+  min-height:0;
+  flex:1;
+  background:transparent;
+  overflow:hidden;
+  padding:0;
+  margin:0;
+  display:flex;
+  flex-direction:column;
+}
+
+/* Inputs/labels (COMPRIMIDOS) */
+.cm-page-cargamensuales input,
+.cm-page-cargamensuales select{
+  background:var(--panel-2); border:1px solid var(--stroke);
+  color:var(--text); border-radius:10px;
+  padding:5px 10px;
+  outline:none; width:100%; font-size:14px;
+}
+.cm-page-cargamensuales input::placeholder{ color:#8ea5bf; }
+.cm-page-cargamensuales label{
+  display:block; margin:0 0 2px;
+  font-size:12.25px; color:var(--muted);
+}
+
+/* Botones (ligeramente más bajos) */
+.cm-btn-cargamensuales{
+  border:1px solid var(--stroke); background:var(--panel-2); color:var(--text);
+  border-radius:10px; padding:7px 38px;
+  font-size:13.25px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.cm-btn--primary-cargamensuales{ background:linear-gradient(0deg,#18314a,#1e3b58); border-color:#1f3e5c; color:#eaf4ff; }
+.cm-btn--ghost-cargamensuales{ background:transparent; padding:7px 10px; }
+.cm-btn--danger-cargamensuales{ background:#2a1820; border-color:#4a2230; color:#ffdbe1; padding:7px 10px; }
+.cm-btn--icon-cargamensuales{ padding:6px 8px; display:grid; place-items:center; }
+
+/* Refrescar: spinner + estados */
+.cm-btn--refresh-cargamensuales{ min-width: 118px; gap:6px; }
+.cm-btn--refresh-cargamensuales.is-busy{ cursor:progress; }
+.cm-btn--refresh-cargamensuales:disabled{
+  opacity: .55;
+  cursor: not-allowed;
+  filter: grayscale(.25);
+  background: rgba(22,34,50,0.5);
+  border-color: #243247;
+}
+.cm-spin-cargamensuales{ animation: cmspin-cargamensuales .9s linear infinite; }
+@keyframes cmspin-cargamensuales {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Filas/grids (COMPRIMIDOS) */
+.cm-right-static-cargamensuales .cm-row-3-cargamensuales,
+.cm-right-static-cargamensuales .cm-grid-3-cargamensuales,
+.cm-right-static-cargamensuales .cm-photos-cargamensuales{
+  flex:0 0 auto;
+  min-height:0;
+}
+
+.cm-row-3-cargamensuales{
+  display:grid; grid-template-columns: 1fr 1fr auto;
+  gap:8px;
+  margin-bottom:8px;
+}
+.cm-field-cargamensuales{ display:flex; flex-direction:column; }
+.cm-field--toggle-cargamensuales{ align-items:center; justify-content:flex-end; }
+.cm-field--toggle-cargamensuales .lbl{ margin:0 0 2px; }
+
+/* Grids */
+.cm-grid-3-cargamensuales{
+  display:grid; grid-template-columns: repeat(3, 1fr);
+  gap:6px 10px;
+  margin-bottom:8px;
+}
+
+/* ===== Fotos (comprimidas + centrado de ícono + texto en una sola línea) ===== */
+.cm-photos-cargamensuales .cm-file-input-wrapper-cargamensuales{
+  display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; width:100%;
+}
+.cm-file-visible-label-cargamensuales{ color:var(--muted); font-size:12.25px; text-align:center; }
+
+.cm-file-label-cargamensuales{
+  background:var(--panel-2); border:1px dashed var(--stroke); border-radius:12px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:8px 10px;
+  gap:6px;
+  min-height:66px;
+  width:120px; max-width:150px;
+  place-self:center;
+  cursor:pointer; transition: transform .08s ease, border-color .15s ease, box-shadow .15s ease;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+.cm-file-label-cargamensuales:hover{ border-color:#2e4a6b; transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(134,189,244,0.12); }
+
+/* Ícono bien centrado horizontalmente */
+.cm-icon-wrapper-cargamensuales{
+  width:26px; height:26px;
+  display:grid; place-items:center;
+  background:#0f1a26; border:1px solid var(--stroke); border-radius:8px;
+  margin:0 auto;
+}
+.cm-icon-cargamensuales{ color:var(--accent); font-size:1rem; }
+
+/* Texto en una sola línea: “Sacar Foto” */
+.cm-file-text-cargamensuales{
+  display:flex; flex-direction:row; align-items:center; justify-content:center;
+  gap:6px; line-height:1; font-size:12px; color:var(--muted); text-align:center;
+  white-space:nowrap;
+}
+
+/* Estado “subido” */
+.cm-file-uploaded-cargamensuales{ color:var(--ok); display:flex; align-items:center; gap:6px; }
+
+/* ===== Acciones + Meses (inline) ===== */
+.cm-actions-cargamensuales{
+  display:flex; gap:10px;
+  align-items:center; justify-content:center;
+  margin-top:10px;
+  flex-wrap:wrap; /* si no entra, baja prolijo */
+}
+.cm-months-inline-cargamensuales{
+  display:inline-flex; align-items:center; gap:8px;
+  background: rgba(22,34,50,0.6);
+  border:1px solid var(--stroke);
+  border-radius:12px;
+  padding:6px 10px;
+}
+.cm-months-inline-cargamensuales label{
+  margin:0; font-size:12.5px; color:var(--muted);
+}
+.cm-months-select-cargamensuales{
+  width:auto; min-width: 120px; max-width: 180px;
+  background:var(--panel-2); border:1px solid var(--stroke); color:var(--text);
+  border-radius:10px; padding:6px 10px; font-size:13.5px;
+}
+
+/* ——— Responsivo ——— */
+@media (max-height: 820px){
+  .cm-title-cargamensuales{ font-size:15px; }
+  .cm-topbar-cargamensuales{ height:46px; }
+  .cm-container-cargamensuales{ padding:10px 12px; }
+  .cm-grid-cargamensuales{ gap:10px; }
+}
+@media (max-width: 1180px){
+  .cm-grid-cargamensuales{ grid-template-columns: 1fr; max-width: 1000px; }
+  .cm-email-cargamensuales{ max-width: unset; }
+}
+@media (max-width: 640px){
+  .cm-months-select-cargamensuales{ min-width: 100px; }
+  .cm-file-label-cargamensuales{ width: 150px; max-width: 100%; }
+}
+
+/* ===== Modal de Confirmación (custom) ===== */
+.cm-confirm-overlay-cargamensuales{
+  position: fixed; inset: 0;
+  background: rgba(5,12,20,0.65);
+  display: grid; place-items: center;
+  z-index: 1000;
+}
+.cm-confirm-card-cargamensuales{
+  width: min(560px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  overflow: hidden;
+}
+.cm-confirm-header-cargamensuales{ padding: 12px 14px; border-bottom: 1px solid var(--stroke); }
+.cm-confirm-header-cargamensuales h3{ margin: 0; font-size: 16px; font-weight: 600; }
+
+/* Cuerpo con “secciones” y total destacado */
+.cm-confirm-body-cargamensuales{
+  padding: 12px 14px;
+  max-height: 60vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* separación entre bloques */
+}
+
+.cm-confirm-list-cargamensuales{ margin: 0; padding-left: 18px; }
+.cm-confirm-list-cargamensuales li{ margin: 6px 0; color: var(--text); }
+
+/* Caja sutil para cada sección detectada por dobles saltos */
+.cm-confirm-section-cargamensuales{
+  background: #0f1a26;
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+/* Franja final para el TOTAL */
+.cm-confirm-total-cargamensuales{
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(0deg,#18314a,#1e3b58);
+  border: 1px solid #1f3e5c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+.cm-total-label-cargamensuales{
+  color: #cfe6ff;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+.cm-total-value-cargamensuales{
+  color: #ffffff;
+  font-size: 15px;
+}
+
+.cm-confirm-actions-cargamensuales{
+  display:flex; gap:8px; justify-content:flex-end;
+  padding: 12px 14px; border-top:1px solid var(--stroke);
+}

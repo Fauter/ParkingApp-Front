@@ -17,6 +17,22 @@ import Config from '../Config/Config';
 const TOKEN_KEY = 'token';
 const OPERADOR_KEY = 'operador';
 
+// ===== Helpers operador (double-parse & validación) =====
+const readOperador = () => {
+  const raw = localStorage.getItem(OPERADOR_KEY);
+  if (!raw) return null;
+  try {
+    const first = JSON.parse(raw);
+    if (first && typeof first === 'object') return first;
+    if (typeof first === 'string') {
+      try { const second = JSON.parse(first); return second && typeof second === 'object' ? second : null; }
+      catch { return null; }
+    }
+    return null;
+  } catch { return null; }
+};
+const isOperadorValido = (op) => !!(op && (op.username || op.nombre));
+
 // Formatea con separadores de miles (.)
 const formatearVisualmente = (valor) => {
   if (!valor && valor !== 0) return '';
@@ -67,12 +83,11 @@ function Interfaz() {
   const navigate = useNavigate();
 
   // -------------------- AUTOFOCUS Refs para MODALES --------------------
-  const recaudadoRef = useRef(null);     // cierre de caja - Total en Caja
-  const enCajaRef = useRef(null);        // (opcional) cierre de caja - Queda en Caja
-  const montoParcialRef = useRef(null);  // cierre parcial - Monto
-  const incidenteRef = useRef(null);     // incidente - textarea
+  const recaudadoRef = useRef(null);
+  const enCajaRef = useRef(null);
+  const montoParcialRef = useRef(null);
+  const incidenteRef = useRef(null);
 
-  // Autofocus: Cierre de Caja (solo en etapa de carga de datos, no en confirmación)
   useEffect(() => {
     if (modalActivo === 'cierredecaja' && !confirmandoCaja) {
       const t = setTimeout(() => recaudadoRef.current?.focus({ preventScroll: true }), 0);
@@ -80,7 +95,6 @@ function Interfaz() {
     }
   }, [modalActivo, confirmandoCaja]);
 
-  // Autofocus: Cierre Parcial
   useEffect(() => {
     if (modalActivo === 'cierreparcial') {
       const t = setTimeout(() => montoParcialRef.current?.focus({ preventScroll: true }), 0);
@@ -88,7 +102,6 @@ function Interfaz() {
     }
   }, [modalActivo]);
 
-  // Autofocus: Incidente
   useEffect(() => {
     if (modalActivo === 'incidente') {
       const t = setTimeout(() => incidenteRef.current?.focus({ preventScroll: true }), 0);
@@ -97,16 +110,23 @@ function Interfaz() {
   }, [modalActivo]);
   // --------------------------------------------------------------------
 
+  // 🔐 Guard de entrada: si no hay operador válido, desloguea; si es cargaMensuales, redirige.
   useEffect(() => {
-    const operadorStr = localStorage.getItem(OPERADOR_KEY);
-    if (operadorStr) {
-      try {
-        const op = JSON.parse(operadorStr);
-        if (op && op.username) setUser(op);
-      } catch {}
+    const op = readOperador();
+    if (!isOperadorValido(op)) {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(OPERADOR_KEY);
+      navigate('/login', { replace: true });
+      return;
     }
-  }, []);
+    if (op.role === 'cargaMensuales') {
+      navigate('/carga-mensuales', { replace: true });
+      return;
+    }
+    setUser(op);
+  }, [navigate]);
 
+  // 🔄 Refresca perfil; si falla o viene inválido, desloguea. Si rol es cargaMensuales, redirige.
   useEffect(() => {
     const fetchUser = async () => {
       const token = localStorage.getItem(TOKEN_KEY);
@@ -125,9 +145,17 @@ function Interfaz() {
         });
         if (!response.ok) throw new Error('Failed to fetch user');
         const data = await response.json();
-        if (data && data.username) {
-          setUser(data);
+
+        if (data && (data.username || data.nombre)) {
+          // persistimos bien serializado (no doble)
           localStorage.setItem(OPERADOR_KEY, JSON.stringify(data));
+          if (data.role === 'cargaMensuales') {
+            navigate('/carga-mensuales', { replace: true });
+            return;
+          }
+          setUser(data);
+        } else {
+          throw new Error('Perfil inválido');
         }
       } catch (error) {
         console.error('Error al obtener usuario:', error);
@@ -397,7 +425,6 @@ function Interfaz() {
     let capturaFallida = false;
     let fotoUrlTemporal = null;
 
-    // 🔸 Arranco captura con timeout corto (3.5s) pero NO bloqueo UI
     const capturaPromise = (async () => {
       try {
         const controller = new AbortController();
@@ -406,7 +433,6 @@ function Interfaz() {
         clearTimeout(t);
         const json = await res.json().catch(() => ({}));
         if (json?.exito) {
-          // doy 900ms para que el archivo aparezca
           const bust = Date.now();
           const staticUrl = `http://localhost:5000/camara/sacarfoto/captura.jpg?t=${bust}`;
           await new Promise(r => setTimeout(r, 900));
@@ -424,7 +450,6 @@ function Interfaz() {
       }
     })();
 
-    // 🔸 Creo ticket en paralelo
     const ticketPromise = (async () => {
       const res = await fetch('http://localhost:5000/api/tickets', {
         method: 'POST',
@@ -433,14 +458,12 @@ function Interfaz() {
       return res.json();
     })();
 
-    // 🔸 Espero ambas (UI ya mostró el modal)
     let ticketCreado = null;
     try {
       const [_, ticketJson] = await Promise.allSettled([capturaPromise, ticketPromise]);
       ticketCreado = ticketJson.status === 'fulfilled' ? ticketJson.value : null;
     } catch {}
 
-    // 🔸 Persisto foto si existe
     if (ticketCreado?.ticket?._id && fotoUrlTemporal) {
       try {
         const putRes = await fetch(`http://localhost:5000/api/tickets/${ticketCreado.ticket._id}/foto`, {
@@ -455,7 +478,6 @@ function Interfaz() {
       } catch {}
     }
 
-    // 🔸 Publico estado para DatosAutoEntrada (capturaFallida controla placeholder)
     if (ticketCreado?.ticket) {
       setTicketPendiente({
         ...ticketCreado.ticket,
@@ -464,7 +486,6 @@ function Interfaz() {
       });
     }
 
-    // ⛩️ Mantengo tu flujo de barrera
     setTimeout(() => {
       setBarreraIzqAbierta(true);
       setTimeout(() => setBarreraIzqAbierta(false), 10000);
@@ -478,7 +499,6 @@ function Interfaz() {
     return formatearVisualmente(String(resta));
   };
 
-  // ⬇️ Cualquier modal/overlay activo? (bloquea autofocus de salida)
   const hayModalBloqueante =
     Boolean(modalActivo) || Boolean(mensajeModal) || Boolean(modalEntradaAbierto);
 
@@ -495,7 +515,6 @@ function Interfaz() {
         user={user}
         ticketPendiente={ticketPendiente}
         setTicketPendiente={setTicketPendiente}
-        // ⬇️ estado levantado del modal de entrada
         mostrarModalEntrada={modalEntradaAbierto}
         setMostrarModalEntrada={setModalEntradaAbierto}
       />
@@ -505,7 +524,6 @@ function Interfaz() {
             ticketPendiente={ticketPendiente} 
             onAbrirBarreraSalida={abrirBarreraSalida}
             setTicketPendiente={forzarLimpiarTicket}
-            // ⬇️ controla el autofocus del input de salida
             autoFocusSalida={!hayModalBloqueante}
           />
         )}
@@ -526,7 +544,6 @@ function Interfaz() {
         />
       </div>
 
-      {/* Modal: Cierre de Caja */}
       {modalActivo === 'cierredecaja' && (
         <ModalHeader titulo="Cierre de Caja" onClose={cerrarModal}>
           {!confirmandoCaja ? (
@@ -573,7 +590,6 @@ function Interfaz() {
         </ModalHeader>
       )}
 
-      {/* Modal: Cierre Parcial */}
       {modalActivo === 'cierreparcial' && (
         <ModalHeader titulo="Cierre Parcial" onClose={cerrarModal}>
           <label>Monto</label>
@@ -615,7 +631,6 @@ function Interfaz() {
         </ModalHeader>
       )}
 
-      {/* Modal: Incidente */}
       {modalActivo === 'incidente' && (
         <ModalHeader titulo="Incidente" onClose={cerrarModal}>
           <label>Descripción del Incidente</label>
@@ -632,7 +647,6 @@ function Interfaz() {
         </ModalHeader>
       )}
 
-      {/* Modal de Mensajes */}
       {mensajeModal && (
         <ModalMensaje
           titulo={mensajeModal.titulo}

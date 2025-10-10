@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Header.css';
 import ModalHeader from './ModalHeader/ModalHeader';
 import DatosAutoEntrada from '../../Operador/DatosAutoEntrada/DatosAutoEntrada';
+import { useNavigate } from 'react-router-dom';
+
+const TOKEN_KEY = 'token';
+const OPERADOR_KEY = 'operador';
 
 function Header({
   cambiarVista,
@@ -20,9 +24,26 @@ function Header({
   const [mostrarSubmenu, setMostrarSubmenu] = useState(false);
   const [timestamp, setTimestamp] = useState(Date.now());
   const menuRef = useRef();
+  const navigate = useNavigate();
 
   // ⏱️ Timer de auto-impresión si no confirman en 20s
   const autoPrintTimerRef = useRef(null);
+
+  // 👉 Cierra sesión (logout)
+  const handleLogout = async () => {
+    try {
+      // eliminamos token local
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(OPERADOR_KEY);
+
+      // opcionalmente podrías avisar al backend, pero no es necesario.
+      // await fetch('http://localhost:5000/api/auth/logout', { method: 'POST' }).catch(() => {});
+
+      navigate('/login', { replace: true });
+    } catch (err) {
+      console.error('Error al desloguearse:', err);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -137,6 +158,13 @@ function Header({
     <header className="topbar">
       <h1>Parking</h1>
       <div className="menu" ref={menuRef}>
+        {/* 🔘 Botón cuadrado para Logout (sin texto) */}
+        <button
+          className="boton-logout"
+          title="Cerrar sesión"
+          onClick={handleLogout}
+        ></button>
+
         <button className={getButtonClass('operador')} onClick={() => manejarCambioVista('operador')} disabled={modalActivo !== null}>Operador</button>
         <button className={getButtonClass('vehiculos')} onClick={() => manejarCambioVista('vehiculos')} disabled={modalActivo !== null}>Auditoría</button>
         <button className={getButtonClass('turnos')} onClick={() => manejarCambioVista('turnos')} disabled={modalActivo !== null}>Anticipados</button>
@@ -152,7 +180,6 @@ function Header({
         <button className={getButtonClass('cierredecaja')} onClick={() => handleAbrirModal('cierredecaja')}>Cierre de Caja</button>
         <button className={getButtonClass('cierreparcial')} onClick={() => handleAbrirModal('cierreparcial')}>Cierre Parcial</button>
         <button className={getButtonClass('incidente')} onClick={() => handleAbrirModal('incidente')}>Incidente</button>
-
         <button className={getButtonClass('config')} onClick={() => manejarCambioVista('config')} disabled={modalActivo !== null}>Config</button>
         <button className="boton-bot" onClick={handleEjecutarBot} disabled={modalActivo !== null}>BOT</button>
       </div>

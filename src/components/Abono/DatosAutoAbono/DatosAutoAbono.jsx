@@ -29,6 +29,75 @@ const normCocheraFront = (raw) => {
 const normExclusivaFront = (exclusiva, cochera) =>
   normCocheraFront(cochera) === "Fija" ? Boolean(exclusiva) : false;
 
+/* ===========================
+   Modal simple inline (solo para Confirmar Abono)
+   Usa tus clases CSS provistas y renderiza cada línea en un bloque separado
+=========================== */
+const InlineConfirmModal = ({ open, titulo, mensaje, onConfirm, onCancel }) => {
+  if (!open) return null;
+  const lines = String(mensaje || "")
+    .split("\n")
+    .map((l) => l.trimEnd());
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div
+        className="modal-contenedor"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 420, maxWidth: "92%" }}
+      >
+        <div className="modal-header">
+          <h3 style={{ margin: 0 }}>{titulo || "Confirmar"}</h3>
+          <button className="modal-cerrar" onClick={onCancel} title="Cerrar">
+            ×
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {lines.map((line, i) => {
+              // Bloques vacíos => separadores visuales
+              if (!line.trim()) {
+                return (
+                  <div key={`sep-${i}`} style={{ height: 6, opacity: 0.4 }} />
+                );
+              }
+              return (
+                <div key={i} style={{ lineHeight: 1.25 }}>
+                  {line}
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              justifyContent: "center",
+              marginTop: 12,
+            }}
+          >
+            <button className="guardarWebcamBtn" onClick={onCancel}>
+              Cancelar
+            </button>
+            <button className="guardarWebcamBtn" onClick={onConfirm}>
+              Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function DatosAutoAbono({ datosVehiculo, user }) {
   const [formData, setFormData] = useState({
     nombreApellido: "",
@@ -95,7 +164,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     onCancel: null,
   });
 
-  // Modal confirmación general
+  // Modal confirmación general (abono)
   const [confirmAbono, setConfirmAbono] = useState({
     open: false,
     titulo: "",
@@ -192,7 +261,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const stream = await getStream();
       setVideoStream(stream);
     } catch (err) {
-      setVideoStream(null); // <-- fix
+      setVideoStream(null);
       showModal("Error de cámara", humanMediaError(err));
     }
   };
@@ -473,8 +542,11 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       fd.set("tierAbono", tierName);
 
       // 1) Registrar Abono
+      const token = localStorage.getItem('token');
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
+        headers: authHeaders, // si hay auth, pasa operador al back
         body: fd,
       });
       if (!resp.ok) {
@@ -482,7 +554,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
-      // 2) Crear Ticket en DB (tipo ABONO)
+      // 2) Crear Ticket en DB (tipo ABONO) — se captura ticket/_id si viene
+      let ticketNumber = null;
       try {
         const payloadTicketAbono = {
           tipo: "abono",
@@ -497,57 +570,92 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           tipoVehiculo: formData.tipoVehiculo,
           fecha: new Date().toISOString()
         };
-        await fetch(`${BASE_URL}/api/tickets`, {
+        const ticketRes = await fetch(`${BASE_URL}/api/tickets`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify(payloadTicketAbono)
         });
+        // tolerante a diferentes formas de respuesta
+        const tj = await ticketRes.json().catch(() => null);
+        ticketNumber = tj?.ticket ?? tj?.data?.ticket ?? tj?.result?.ticket ?? tj?._id ?? null;
       } catch (e) {
-        console.warn("⚠️ No se pudo crear el ticket ABONO en DB:", e);
+        console.warn("⚠️ No se pudo crear/leer el ticket ABONO en DB:", e);
       }
 
       // 3) Imprimir ticket de ABONO
       try {
         // recalculo acá para tener también los días
-        const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-        const baseMensual = getAbonoPrecioByMetodo(
+        const tierName2 = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+        const baseMensual2 = getAbonoPrecioByMetodo(
           formData.tipoVehiculo,
           formData.metodoPago,
           formData.cochera || "Móvil",
           formData.cochera === "Fija" ? formData.exclusiva : false
         );
-        const { proporcional, diasRestantes } = prorratearMontoFront(baseMensual);
+        const { proporcional: proporcional2, diasRestantes } = prorratearMontoFront(baseMensual2);
 
         const printRes = await fetch(`${BASE_URL}/api/tickets/imprimir-abono`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify({
-            // importes (en string formateado para que Python solo agregue "$")
-            proporcional: `${formatARS(proporcional)}`,
-            valorMensual: `${formatARS(baseMensual)}`,
-            // numéricos de respaldo (por si querés usarlos en el server)
-            baseMensual: baseMensual,
-            proporcionalRaw: proporcional,
-            // datos para el cuerpo del ticket
+            proporcional: `${formatARS(proporcional2)}`,
+            valorMensual: `${formatARS(baseMensual2)}`,
+            baseMensual: baseMensual2,
+            proporcionalRaw: proporcional2,
             nombreApellido: formData.nombreApellido,
             metodoPago: formData.metodoPago,
             tipoVehiculo: formData.tipoVehiculo,
             marca: formData.marca,
             modelo: formData.modelo,
             patente: patente,
-            // cochera (para “Cochera Asignada”)
-            cochera: formData.cochera,     // "Fija" | "Móvil"
-            piso: formData.piso,           // número/identificador si es fija
+            cochera: formData.cochera,
+            piso: formData.piso,
             exclusiva: !!formData.exclusiva,
-            diasRestantes: diasRestantes   // para "Por días"
+            diasRestantes: diasRestantes
           }),
         });
         if (!printRes.ok) {
           const t = await printRes.text().catch(() => "");
           console.warn("⚠️ Falló impresión de ABONO:", t || printRes.status);
         }
+
+        // 4) ✅ Registrar MOVIMIENTO (Alta abono) — usa proporcional del día
+        try {
+          const movBody = {
+            patente,
+            tipoVehiculo: formData.tipoVehiculo,
+            metodoPago: formData.metodoPago,
+            factura: formData.factura,
+            monto: Number.isFinite(proporcional2) ? proporcional2 : proporcional, // backup
+            descripcion: "Alta abono",
+            tipoTarifa: "abono",
+            cliente: clienteId,
+            operador: user || null,                  
+          };
+          if (ticketNumber) movBody.ticket = ticketNumber;
+
+          const movRes = await fetch(`${BASE_URL}/api/movimientos/registrar`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify(movBody)
+          });
+
+          if (!movRes.ok) {
+            const txt = await movRes.text().catch(() => "");
+            console.warn("⚠️ Registrar movimiento ABONO respondió no-OK:", movRes.status, txt);
+          } else {
+            // opcionalmente podríamos leer json para logging
+            // const mj = await movRes.json().catch(() => null);
+            // console.log("Movimiento ABONO:", mj);
+          }
+        } catch (e) {
+          console.warn("⚠️ No se pudo registrar el MOVIMIENTO de ABONO:", e);
+        }
       } catch (e) {
-        console.warn("⚠️ No se pudo imprimir el ticket de ABONO:", e);
+        console.warn("⚠️ No se pudo imprimir o registrar movimiento:", e);
       }
 
       await fetchClientes(); // refresco local
@@ -612,8 +720,8 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (clienteExistente?._id) {
         params.set("clienteId", clienteExistente._id);
       } else {
-        const dni = (formData.dniCuitCuil || "").trim();
-        if (dni) params.set("dniCuitCuil", dni);
+        const dni2 = (formData.dniCuitCuil || "").trim();
+        if (dni2) params.set("dniCuitCuil", dni2);
       }
 
       let diffBase = 0;
@@ -720,14 +828,25 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`
       ].join("\n");
 
+      const ucfirst = (s) => {
+        const str = String(s || "").trim();
+        return str ? str.charAt(0).toLocaleUpperCase("es-AR") + str.slice(1) : "";
+      };
+
+      const tierPretty = ucfirst(tierName);
+      const metodoCatalogo = ucfirst(metodo === "Efectivo" ? "efectivo" : "otros");
+
       const msg =
-        `Vas a hacer un Abono\n\n` +
+        `Vas a hacer un Abono\n` +
+        `\n` +
         `Patente: ${patente}\n` +
         `Tipo: ${tipo}\n` +
         `Método de pago: ${metodo}\n` +
-        `Factura: ${factura}\n\n` +
-        `Mensual [${tierName}] (catálogo ${metodo === "Efectivo" ? "efectivo" : "otros"}): $${formatARS(baseMensual)}\n` +
-        `A cobrar HOY (prorrateo ${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n\n` +
+        `Factura: ${factura}\n` +
+        `\n` +
+        `[${tierPretty}] (Precio Completo: ${metodoCatalogo}): $${formatARS(baseMensual)}\n` +
+        `A cobrar HOY (${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n` +
+        `\n` +
         `${detalleCochera}`;
 
       setConfirmAbono({
@@ -1070,25 +1189,16 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       {/* Modal informativo */}
       <ModalMensaje titulo={modal.titulo} mensaje={modal.mensaje} onClose={closeModal} />
 
-      {/* Modal confirmación GENERAL */}
-      {confirmAbono.open && (
-        <ModalMensaje
-          titulo={confirmAbono.titulo}
-          mensaje={confirmAbono.mensaje}
-          onClose={confirmAbono.onCancel}
-        >
-          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
-            <button className="guardarWebcamBtn" onClick={confirmAbono.onCancel}>
-              Cancelar
-            </button>
-            <button className="guardarWebcamBtn" onClick={confirmAbono.onConfirm}>
-              Confirmar
-            </button>
-          </div>
-        </ModalMensaje>
-      )}
+      {/* Modal confirmación GENERAL (stackeado línea por línea) */}
+      <InlineConfirmModal
+        open={confirmAbono.open}
+        titulo={confirmAbono.titulo}
+        mensaje={confirmAbono.mensaje}
+        onConfirm={confirmAbono.onConfirm}
+        onCancel={confirmAbono.onCancel}
+      />
 
-      {/* Modal confirmación “más caro” */}
+      {/* Modal confirmación “más caro” (se mantiene igual) */}
       {confirmModal.open && (
         <ModalMensaje
           titulo={confirmModal.titulo}

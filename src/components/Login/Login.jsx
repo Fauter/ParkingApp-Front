@@ -6,6 +6,19 @@ const TOKEN_KEY = 'token';
 const REDIRECT_KEY = 'redirectAfterLogin';
 const OPERADOR_KEY = 'operador';
 
+// helper para normalizar el operador (por si viene doblemente serializado)
+function normalizeOperador(opCandidate) {
+  if (!opCandidate) return null;
+  if (typeof opCandidate === 'object') return opCandidate;
+  if (typeof opCandidate === 'string') {
+    try {
+      const p1 = JSON.parse(opCandidate);
+      if (p1 && typeof p1 === 'object') return p1;
+    } catch {}
+  }
+  return null;
+}
+
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -28,16 +41,26 @@ function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // ✅ guardar token y operador
         localStorage.setItem(TOKEN_KEY, data.token);
-        if (data.operador) {
-          localStorage.setItem(OPERADOR_KEY, JSON.stringify(data.operador));
-        } else if (data.user) {
-          // fallback si backend retorna "user"
-          const { _id, username, nombre, apellido, role } = data.user;
-          localStorage.setItem(OPERADOR_KEY, JSON.stringify({ _id, username, nombre, apellido, role }));
+
+        // normalizamos operador (sea data.operador, data.user o string) y guardamos BIEN
+        const rawOp = data.operador ?? data.user ?? null;
+        const op = normalizeOperador(rawOp) ?? (typeof rawOp === 'object' ? rawOp : null);
+        if (op) {
+          localStorage.setItem(OPERADOR_KEY, JSON.stringify(op));
+        } else {
+          // si vino mal, limpiamos para forzar login
+          localStorage.removeItem(OPERADOR_KEY);
         }
 
+        // 👉 Redirección inmediata por rol
+        if (op?.role === 'cargaMensuales') {
+          localStorage.removeItem(REDIRECT_KEY); // landing fija para este rol
+          navigate('/carga-mensuales', { replace: true });
+          return;
+        }
+
+        // Caso general
         const redirectTo = localStorage.getItem(REDIRECT_KEY) || '/';
         localStorage.removeItem(REDIRECT_KEY);
         navigate(redirectTo, { replace: true });
