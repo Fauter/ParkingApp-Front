@@ -146,18 +146,59 @@
   background-color: #3a3a4a;
 }
 
+/* =================== Plegado / Expandido (efecto hundido) =================== */
 .fila-expandida {
-  background-color: #333344;
+  background-color: transparent;
 }
 
 .expandido-contenido {
-  padding: 15px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  padding: 16px;
+  background-color: #2b2b37;           /* un toque más oscuro que la fila */
+
+  /* Sombras internas arriba y abajo para dar profundidad hacia adentro */
+  box-shadow: inset 0 3px 15px rgba(0,0,0,0.60), inset 0 -3px 8px rgba(0,0,0,0.10);
+
+  /* Opcional: línea suave arriba para “fundir” con la fila expandida */
+  position: relative;
+}
+.expandido-contenido::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -1px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255,255,255,0.06) 20%,
+    rgba(255,255,255,0.06) 80%,
+    transparent 100%
+  );
 }
 
+.expandido-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.expandido-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 220px;
+}
+
+/* detalles/documentos */
 .detalles-adicionales {
   display: flex;
   gap: 20px;
-  margin-bottom: 15px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .detalles-adicionales p {
@@ -171,17 +212,21 @@
 }
 
 .botones-documentos button {
-  background-color: #4a4a5a;
-  border: none;
+  background-color: #3a3a4a;
+  border: 1px solid #4a4a5a;
   color: #e0e0e0;
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: background-color 0.2s, transform 0.06s ease-in-out;
 }
 
 .botones-documentos button:hover {
-  background-color: #5a5a6a;
+  background-color: #4a4a5a;
+}
+
+.botones-documentos button:active {
+  transform: translateY(1px);
 }
 
 .sin-vehiculos {
@@ -190,6 +235,49 @@
   color: #a0a0a0;
 }
 
+/* ===== Acciones de vehículo (derecha) ===== */
+.vehiculo-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-vehiculo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #454b5f;
+  background: #2c2f3d;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: filter .15s ease-in-out, transform .06s ease-in-out, background-color .2s;
+  user-select: none;
+}
+
+.btn-vehiculo:hover {
+  filter: brightness(1.08);
+  background-color: #32384a;
+}
+
+.btn-vehiculo:active {
+  transform: translateY(1px);
+}
+
+.btn-vehiculo.editar {
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+}
+
+.btn-vehiculo.eliminar {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+/* ===== Modales de foto ===== */
 .modal-foto-overlay {
   position: fixed;
   top: 0;
@@ -226,7 +314,7 @@
   display: block;
 }
 
-/* Estilos para el modal de renovación */
+/* ===== Modal de renovación ===== */
 .modal-renovar-overlay {
   position: fixed;
   top: 0;
@@ -356,7 +444,7 @@
   gap: 8px;
 }
 .btn-editar {
-  background: #3b82f6; /* azul */
+  background: #3b82f6;
   color: #fff;
   border: none;
   padding: 8px 12px;
@@ -367,17 +455,15 @@
 .btn-editar:hover { filter: brightness(1.05); }
 .btn-editar:active { transform: translateY(1px); }
 
-/* Form modal edición */
+/* Form modal edición (cliente/vehículo) */
 .edit-form {
   margin-top: 8px;
-  /* >>> Ajuste clave: limitar ancho relativo al viewport para que no se salga del ModalMensaje */
   width: min(92vw, 860px);
   max-width: 100%;
 }
 
 .grid-2 {
   display: grid;
-  /* >>> Ajuste clave: permite que las columnas encojan sin overflow */
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 16px;
 }
@@ -392,14 +478,12 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* >>> Previene que el contenido fuerce el ancho de la columna */
   min-width: 0;
 }
 
 .form-item label {
   font-size: 0.85rem;
   color: #cdd2e0;
-  /* por si hay textos largos, que se partan y no empujen */
   overflow-wrap: anywhere;
 }
 
@@ -410,7 +494,6 @@
   border-radius: 6px;
   padding: 8px 10px;
   color: white;
-  /* >>> Asegura que los campos respeten el contenedor */
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -423,7 +506,7 @@
   gap: 10px;
 }
 .btn-primario {
-  background: #10b981; /* verde */
+  background: #10b981;
   color: #0b1b1b;
   border: none;
   padding: 8px 12px;
@@ -431,9 +514,17 @@
   cursor: pointer;
 }
 .btn-secundario {
-  background: #374151; /* gris oscuro */
+  background: #374151;
   color: #e5e7eb;
   border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-eliminar {
+  background: #7f1d1d;
+  color: #fca5a5;
+  border: 1px solid #b91c1c;
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -470,22 +561,22 @@
 
 /* variantes por tipo */
 .cochera-badge.movil {
-  background: rgba(59, 130, 246, 0.18);   /* azul */
+  background: rgba(59, 130, 246, 0.18);
   color: #93c5fd;
   border-color: rgba(59, 130, 246, 0.45);
 }
 .cochera-badge.fija {
-  background: rgba(139, 92, 246, 0.18);   /* violeta */
+  background: rgba(139, 92, 246, 0.18);
   color: #c4b5fd;
   border-color: rgba(139, 92, 246, 0.45);
 }
 .cochera-badge.exclusiva {
-  background: rgba(16, 185, 129, 0.18);   /* verde */
+  background: rgba(16, 185, 129, 0.18);
   color: #86efac;
   border-color: rgba(16, 185, 129, 0.45);
 }
 
-/* --- Badge para piso en la tabla --- */
+/* --- Badge para piso --- */
 .piso-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -514,10 +605,17 @@
     font-size: 0.9rem;
   }
 
-  /* En pantallas chicas, si el modal está justo, habilitamos scroll vertical suave */
   .edit-form {
     max-height: calc(100vh - 180px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
+}
+
+/* ===== Confirm modal actions ===== */
+.confirm-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
