@@ -14,17 +14,23 @@
   font-size: 14px;
   line-height: 1.25;
   color: var(--text);
+
+  /* >>> Fix: que el scope ocupe toda la altura de la ventana y pinte el fondo */
+  min-height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
 }
 .cm-scope-cargamensuales * { box-sizing: border-box; }
 
 /* ——— Layout general ——— */
 .cm-page-cargamensuales {
-  height: 100%;
-  min-height: 100%;
+  /* >>> Fix: no centres verticalmente; estirá a 100vh */
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  justify-content: center;
+  background: inherit;
+  flex: 1 1 auto;
 }
 
 /* Topbar */
@@ -49,7 +55,9 @@
 
 /* Contenedor sin scroll global */
 .cm-container-cargamensuales {
-  flex:1; min-height:0;
+  /* >>> Fix: ocupar todo el remanente y evitar huecos */
+  flex: 1 1 auto;
+  min-height: 0;
   display:flex; justify-content:center;
   padding: 10px 12px;
   overflow: hidden; /* evita scroll global */
@@ -62,6 +70,8 @@
   display:grid;
   grid-template-columns: 0.40fr 0.60fr;
   gap:12px;
+  /* >>> Fix: que el grid se estire verticalmente */
+  align-items: stretch;
 }
 
 /* Tarjetas */
@@ -139,7 +149,7 @@
 }
 
 .cm-right-static-cargamensuales{
-  flex:1;
+  flex:1 1 auto;
   min-height:0;
   display:flex;
   flex-direction:column;
@@ -286,6 +296,26 @@
   border-radius:10px; padding:6px 10px; font-size:13.5px;
 }
 
+/* ===== Tipo de Vehículo: COMPRIMIDO + CENTRADO ===== */
+.cm-type-center-wrapper{
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+}
+.cm-type-center-field{
+  width: min(420px, 100%);
+}
+.cm-type-center-field label{
+  text-align:center;
+}
+.cm-type-center-field .select-cargamensuales{
+  width:100%;
+  max-width:100%;
+  padding:6px 10px;       /* un toque más alto que inputs estándar */
+  font-size:13.75px;      /* levemente comprimido pero legible */
+  border-radius:10px;
+}
+
 /* ——— Responsivo ——— */
 @media (max-height: 820px){
   .cm-title-cargamensuales{ font-size:15px; }
@@ -296,10 +326,12 @@
 @media (max-width: 1180px){
   .cm-grid-cargamensuales{ grid-template-columns: 1fr; max-width: 1000px; }
   .cm-email-cargamensuales{ max-width: unset; }
+  .cm-type-center-field{ width:min(520px, 100%); } /* un poco más ancho en 1 columna */
 }
 @media (max-width: 640px){
   .cm-months-select-cargamensuales{ min-width: 100px; }
   .cm-file-label-cargamensuales{ width: 150px; max-width: 100%; }
+  .cm-type-center-field{ width:100%; }
 }
 
 /* ===== Modal de Confirmación (custom) ===== */
@@ -329,7 +361,6 @@
   flex-direction: column;
   gap: 8px; /* separación entre bloques */
 }
-
 .cm-confirm-list-cargamensuales{ margin: 0; padding-left: 18px; }
 .cm-confirm-list-cargamensuales li{ margin: 6px 0; color: var(--text); }
 

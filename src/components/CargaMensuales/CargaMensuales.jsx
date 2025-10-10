@@ -96,16 +96,13 @@ function ConfirmDialog({ open, titulo, mensaje, onConfirm, onCancel }) {
     .filter(Boolean);
 
   let totalLine = null;
-  const top = [];       // Patente / Tipo / Método de pago / Factura / Meses a abonar
+  const top = [];       // Patente / Tipo / Meses a abonar
   const cochera = [];   // Cochera / N° de Cochera / Exclusiva
   const precios = [];   // [tier] Precio mensual / Proporcional / Meses completos / Vence el
 
   const isTop = (l) =>
     /^Patente:/i.test(l) ||
     /^Tipo:/i.test(l) ||
-    /^Método de pago:/i.test(l) ||
-    /^Metodo de pago:/i.test(l) || // por si sin tilde
-    /^Factura:/i.test(l) ||
     /^Meses a abonar:/i.test(l);
 
   const isCochera = (l) =>
@@ -163,7 +160,7 @@ function ConfirmDialog({ open, titulo, mensaje, onConfirm, onCancel }) {
             </div>
           )}
 
-          {/* Bloque inferior: precios + vence */}
+          {/* Bloque inferior: precios + vence (si existieran) */}
           {precios.length > 0 && (
             <div className="cm-confirm-block-cargamensuales cm-confirm-block--precios-cargamensuales">
               {precios.map((l, i) => (
@@ -308,6 +305,7 @@ export default function CargaMensuales() {
         if (!tiposRes.ok) throw new Error();
         setTiposVehiculo(await tiposRes.json());
 
+        // Se mantienen caches de precios por si a futuro se usan, pero NO se muestran.
         let cash = {};
         try {
           const r1 = await fetch(`${BASE_URL}/api/precios`, {
@@ -352,6 +350,7 @@ export default function CargaMensuales() {
     };
   }, [authHeaders]);
 
+  // Mantengo la función por compatibilidad (no se usa para mostrar precios aquí)
   const getAbonoPrecioByMetodo = useCallback(
     (tipoVehiculo, metodoPago, cochera, exclusiva) => {
       const keyVehiculo = String(tipoVehiculo || "").toLowerCase();
@@ -385,8 +384,8 @@ export default function CargaMensuales() {
     color: "",
     anio: "",
     companiaSeguro: "",
-    metodoPago: "Efectivo",
-    factura: "CC",
+    // (Eliminado) metodoPago
+    // (Eliminado) factura
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
@@ -668,14 +667,6 @@ export default function CargaMensuales() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const getPrecioBase = () =>
-    getAbonoPrecioByMetodo(
-      formData.tipoVehiculo,
-      formData.metodoPago,
-      formData.cochera || "Móvil",
-      formData.cochera === "Fija" ? formData.exclusiva : false
-    );
-
   const confirmarYGuardar = async () => {
     setConfirmAbono((s) => ({ ...s, open: false }));
     setLoadingSave(true);
@@ -684,8 +675,7 @@ export default function CargaMensuales() {
       const clienteId = await ensureCliente();
 
       const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-      const baseMensual = getPrecioBase();
-      const { proporcional } = prorratearMontoFront(baseMensual);
+      // No enviamos precio ni prorrateos (sin cobro acá)
 
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
@@ -696,8 +686,6 @@ export default function CargaMensuales() {
       fd.set("cliente", clienteId);
       fd.set("operador", operador?.username || operador?.nombre || "Sistema");
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
-      fd.set("precio", String(baseMensual));
-      fd.set("precioProrrateadoHoy", String(proporcional));
       fd.set("tierAbono", tierName);
 
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
@@ -760,53 +748,24 @@ export default function CargaMensuales() {
       if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
     } catch (err) { return showModal("Error", err.message); }
 
-    const baseMensual = getPrecioBase();
-    if (!Number.isFinite(baseMensual)) {
-      return showModal(
-        "Error",
-        `No hay precio cargado para "${(formData.tipoVehiculo || "").toLowerCase()}" en ` +
-          `"${getTierName(formData.cochera || "Móvil", formData.exclusiva)}" (${formData.metodoPago}).`
-      );
-    }
-
     const hoy = new Date();
     const meses = Math.max(1, Math.min(12, Number(formData.mesesAbonar) || 1));
-    const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(baseMensual, hoy);
-    const mesesCompletos = Math.max(0, meses - 1);
-    const subtotalMesesCompletos = mesesCompletos * baseMensual;
-    const totalCobrar = proporcional + subtotalMesesCompletos;
     const venceEl = getUltimoDiaMesOffsetFront(hoy, meses - 1);
 
     const dd = String(venceEl.getDate()).padStart(2, "0");
     const mm = String(venceEl.getMonth() + 1).padStart(2, "0");
     const yyyy = venceEl.getFullYear();
 
-    // SIN el encabezado “Vas a registrar…”
+    // Mensaje de confirmación SIN método de pago ni factura, ni precios.
     const msg =
       `Patente: ${formData.patente.toUpperCase()}\n` +
       `Tipo: ${formData.tipoVehiculo}\n` +
-      `Método de pago: ${formData.metodoPago}\n` +
-      `Factura: ${formData.factura}\n` +
-      `Meses a abonar: ${meses}\n\n` +
-      `Cochera: ${formData.cochera || "-"}\n` +
-      `N° de Cochera: ${formData.piso || "-"}\n` +
-      `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n`
-
-    const msgConTotalACobrar =
-      `Patente: ${formData.patente.toUpperCase()}\n` +
-      `Tipo: ${formData.tipoVehiculo}\n` +
-      `Método de pago: ${formData.metodoPago}\n` +
-      `Factura: ${formData.factura}\n` +
       `Meses a abonar: ${meses}\n\n` +
       `Cochera: ${formData.cochera || "-"}\n` +
       `N° de Cochera: ${formData.piso || "-"}\n` +
       `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
-      `Vence el: ${dd}/${mm}/${yyyy}\n` +
-      `[${getTierName(formData.cochera || "Móvil", formData.exclusiva)}] Precio mensual: $${formatARS(baseMensual)}\n` +
-      `Mes actual (proporcional ${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n` +
-      `Meses completos siguientes (${mesesCompletos}): $${formatARS(subtotalMesesCompletos)}\n` +
-      `TOTAL a cobrar: $${formatARS(totalCobrar)}`;
-      
+      `Vence el: ${dd}/${mm}/${yyyy}`;
+
     setConfirmAbono({
       open: true,
       titulo: "Confirmar alta de Abono",
@@ -1037,50 +996,27 @@ export default function CargaMensuales() {
                     <div className="cm-field-cargamensuales"><label>Compañía Seguro</label><input type="text" name="companiaSeguro" value={formData.companiaSeguro} onChange={handleChange} /></div>
                   </div>
 
-                  {/* Método / Factura / Tipo */}
-                  <div className="cm-grid-3-cargamensuales">
-                    <div className="cm-field-cargamensuales">
-                      <label>Método de Pago</label>
-                      <select name="metodoPago" value={formData.metodoPago} onChange={handleChange} className="select-cargamensuales" required>
-                        <option value="Efectivo">Efectivo</option>
-                        <option value="Transferencia">Transferencia</option>
-                        <option value="Débito">Débito</option>
-                        <option value="Crédito">Crédito</option>
-                        <option value="QR">QR</option>
-                      </select>
-                    </div>
-                    <div className="cm-field-cargamensuales">
-                      <label>Factura</label>
-                      <select name="factura" value={formData.factura} onChange={handleChange} className="select-cargamensuales">
-                        <option value="CC">CC</option>
-                        <option value="A">A</option>
-                        <option value="Final">Final</option>
-                      </select>
-                    </div>
-                    <div className="cm-field-cargamensuales">
+                  {/* Solo Tipo de Vehículo (centrado) */}
+                  <div className="cm-type-center-wrapper">
+                    <div className="cm-field-cargamensuales cm-type-center-field">
                       <label>Tipo de Vehículo</label>
-                      <select name="tipoVehiculo" value={formData.tipoVehiculo} onChange={handleChange} className="select-cargamensuales" required>
+                      <select
+                        name="tipoVehiculo"
+                        value={formData.tipoVehiculo}
+                        onChange={handleChange}
+                        className="select-cargamensuales"
+                        required
+                      >
                         <option value="">Seleccione</option>
                         {tiposVehiculo
                           .filter((t) => t?.mensual === true)
                           .map((tipo) => {
-                            const monthly = getAbonoPrecioByMetodo(
-                              tipo.nombre,
-                              formData.metodoPago,
-                              formData.cochera || "Móvil",
-                              formData.cochera === "Fija" ? formData.exclusiva : false
-                            );
                             const capitalized = tipo.nombre
                               ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
                               : "";
-                            const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
                             return (
-                              <option
-                                key={tipo.nombre}
-                                value={tipo.nombre}
-                                title={`Catálogo (${formData.metodoPago === "Efectivo" ? "efectivo" : "otros"}) • Tier: ${tierName}`}
-                              >
-                                {capitalized} - ${formatARS(monthly)}
+                              <option key={tipo.nombre} value={tipo.nombre}>
+                                {capitalized}
                               </option>
                             );
                           })}
