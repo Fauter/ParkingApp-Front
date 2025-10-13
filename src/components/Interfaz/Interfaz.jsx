@@ -42,7 +42,6 @@ const formatearVisualmente = (valor) => {
 };
 // Deja solo dígitos (elimina todo lo que no sea 0-9)
 const limpiarNumero = (valor) => (valor || '').replace(/[^\d]/g, '');
-
 // Bloquea teclas no numéricas (permite navegación/edición)
 const handleNumericKeyDown = (e) => {
   const permitidas = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
@@ -147,7 +146,6 @@ function Interfaz() {
         const data = await response.json();
 
         if (data && (data.username || data.nombre)) {
-          // persistimos bien serializado (no doble)
           localStorage.setItem(OPERADOR_KEY, JSON.stringify(data));
           if (data.role === 'cargaMensuales') {
             navigate('/carga-mensuales', { replace: true });
@@ -216,15 +214,21 @@ function Interfaz() {
     setTimeout(() => setBarreraDerAbierta(false), 10000);
   };
 
+  // 👉 sigue existiendo para parcial/incidente (guardás objeto ahí)
   const operadorPayload = () => {
     if (!user) return null;
     const { _id, username, nombre, apellido, role } = user;
     return { _id, username, nombre, apellido, role };
   };
 
+  // ✅ NUEVO: para CIERRE DE CAJA mandamos SOLO el _id
+  const getOperadorId = () => {
+    return user?._id || readOperador()?._id || null;
+  };
+
   const enviarCierreDeCaja = async () => {
-    const op = operadorPayload();
-    if (!op) return;
+    const operadorId = getOperadorId();
+    if (!operadorId) return;
 
     const { fecha, hora } = getFechaHora();
     const totalRecaudado = parseFloat(limpiarNumero(recaudado));
@@ -237,7 +241,7 @@ function Interfaz() {
       totalRecaudado,
       dejoEnCaja: efectivoEnCaja,
       totalRendido,
-      operador: op,
+      operador: operadorId, // 👈 SOLO el ObjectId
     };
 
     try {
@@ -327,9 +331,10 @@ function Interfaz() {
         return;
       }
 
+      const { fecha: f2, hora: h2 } = getFechaHora();
       const dataAlerta = {
-        fecha,
-        hora,
+        fecha: f2,
+        hora: h2,
         tipoDeAlerta: `Cierre Parcial ($${monto.toLocaleString('es-AR')})`,
         operador: op,
       };

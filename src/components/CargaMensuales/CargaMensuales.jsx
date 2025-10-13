@@ -2,8 +2,9 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ModalMensaje from "../ModalMensaje/ModalMensaje";
-import { FaCamera, FaCheckCircle, FaArrowRight, FaSyncAlt } from "react-icons/fa";
+import { FaCamera, FaCheckCircle, FaArrowRight, FaSyncAlt, FaEye } from "react-icons/fa";
 import "./CargaMensuales.css";
+import CargaMensualesDetalle from "./CargaMensualesDetalle";
 
 const TOKEN_KEY = "token";
 const OPERADOR_KEY = "operador";
@@ -83,6 +84,13 @@ const prorratearMontoFront = (base, hoy = new Date()) => {
     totalDiasMes: total,
     factor,
   };
+};
+
+// NUEVO: formatear DNI/CUIT/CUIL con puntos (simple "thousands")
+const formatDNI = (v) => {
+  const digits = String(v || "").replace(/\D+/g, "");
+  if (!digits) return "—";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
 /* ======= Modal de Confirmación (custom) ======= */
@@ -213,6 +221,9 @@ export default function CargaMensuales() {
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState(null);
 
+  // NUEVO: id del cliente para ver detalle en la misma vista
+  const [detalleClienteId, setDetalleClienteId] = useState(null);
+
   // 🔄 Refrescar (soft + cooldown)
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
@@ -278,12 +289,10 @@ export default function CargaMensuales() {
     return clientes.filter((c) => {
       const nombre = String(c?.nombreApellido || "").toLowerCase();
       const dni = String(c?.dniCuitCuil || "").toLowerCase();
-      const email = String(c?.email || "").toLowerCase();
       const patente = String(c?.patente || "").toLowerCase();
       return (
         nombre.includes(term) ||
         dni.includes(term) ||
-        email.includes(term) ||
         patente.includes(term)
       );
     });
@@ -305,7 +314,6 @@ export default function CargaMensuales() {
         if (!tiposRes.ok) throw new Error();
         setTiposVehiculo(await tiposRes.json());
 
-        // Se mantienen caches de precios por si a futuro se usan, pero NO se muestran.
         let cash = {};
         try {
           const r1 = await fetch(`${BASE_URL}/api/precios`, {
@@ -350,7 +358,6 @@ export default function CargaMensuales() {
     };
   }, [authHeaders]);
 
-  // Mantengo la función por compatibilidad (no se usa para mostrar precios aquí)
   const getAbonoPrecioByMetodo = useCallback(
     (tipoVehiculo, metodoPago, cochera, exclusiva) => {
       const keyVehiculo = String(tipoVehiculo || "").toLowerCase();
@@ -675,7 +682,6 @@ export default function CargaMensuales() {
       const clienteId = await ensureCliente();
 
       const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-      // No enviamos precio ni prorrateos (sin cobro acá)
 
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
@@ -756,7 +762,6 @@ export default function CargaMensuales() {
     const mm = String(venceEl.getMonth() + 1).padStart(2, "0");
     const yyyy = venceEl.getFullYear();
 
-    // Mensaje de confirmación SIN método de pago ni factura, ni precios.
     const msg =
       `Patente: ${formData.patente.toUpperCase()}\n` +
       `Tipo: ${formData.tipoVehiculo}\n` +
@@ -801,6 +806,18 @@ export default function CargaMensuales() {
   /* ================== UI ================== */
   const showSkeleton = loadingClientes || isRefreshing;
 
+  // NUEVO: cuando hay un cliente elegido para ver detalle, muestro el detalle full-page dentro del scope
+  if (detalleClienteId) {
+    return (
+      <div className="cm-scope-cargamensuales">
+        <CargaMensualesDetalle
+          clienteId={detalleClienteId}
+          volver={() => setDetalleClienteId(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="cm-scope-cargamensuales">
       <div className="cm-page-cargamensuales">
@@ -836,7 +853,7 @@ export default function CargaMensuales() {
               <div className="cm-search-cargamensuales">
                 <input
                   className="input-wide-cargamensuales"
-                  placeholder="Buscar por nombre, DNI, email o patente…"
+                  placeholder="Buscar por nombre, DNI o patente…"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -864,9 +881,8 @@ export default function CargaMensuales() {
                       <tr>
                         <th>Nombre</th>
                         <th>DNI/CUIT</th>
-                        <th>Email</th>
                         <th>Cochera</th>
-                        <th style={{ width: 28 }} />
+                        <th style={{ width: 56 }} />
                       </tr>
                     </thead>
                     <tbody>
@@ -875,32 +891,43 @@ export default function CargaMensuales() {
                           <tr key={`sk-${i}`} className="cm-skel-row-cargamensuales">
                             <td><div className="cm-skel cm-skel--w60" /></td>
                             <td><div className="cm-skel cm-skel--w40" /></td>
-                            <td><div className="cm-skel cm-skel--w70" /></td>
                             <td><div className="cm-skel cm-skel--w50" /></td>
-                            <td><div className="cm-skel cm-skel--circle" /></td>
+                            <td style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                              <div className="cm-skel cm-skel--circle" />
+                              <div className="cm-skel cm-skel--circle" />
+                            </td>
                           </tr>
                         ))
                       ) : filteredClientes.length === 0 ? (
                         <tr>
-                          <td colSpan={5}>
+                          <td colSpan={4}>
                             <div className="cm-empty-cargamensuales">No hay clientes que coincidan.</div>
                           </td>
                         </tr>
                       ) : (
                         filteredClientes.map((c) => (
                           <tr
-                            key={c._id || `${c.dniCuitCuil}-${c.email}`}
+                            key={c._id || `${c.dniCuitCuil}-${c.nombreApellido}`}
                             className={selectedCliente?._id === c._id ? "is-selected" : undefined}
                           >
                             <td>{c?.nombreApellido || "—"}</td>
-                            <td>{c?.dniCuitCuil || "—"}</td>
-                            <td className="cm-email-cargamensuales">{c?.email || "—"}</td>
+                            <td>{formatDNI(c?.dniCuitCuil)}</td>
                             <td>
                               {normCocheraFront(c?.cochera) || "—"}
                               {c?.piso ? ` • N° ${c.piso}` : ""}
                               {c?.exclusiva ? " • Exclusiva" : ""}
                             </td>
-                            <td>
+                            <td style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
+                              {/* NUEVO: ver detalle en la misma vista */}
+                              <button
+                                className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
+                                type="button"
+                                title="Ver detalle del cliente"
+                                onClick={() => setDetalleClienteId(c._id)}
+                              >
+                                <FaEye size={12} />
+                              </button>
+                              {/* EXISTENTE: cargar datos al form */}
                               <button
                                 className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
                                 type="button"

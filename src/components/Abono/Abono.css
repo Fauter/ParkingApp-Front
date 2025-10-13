@@ -1,15 +1,20 @@
-
-
 .izquierdaAbono {
-    display: flex;
-    flex: 1;
-    padding: 6px 10px 10px 10px;
+  display: flex;
+  flex: 1;
+  padding: 6px 10px 10px 10px;
+
+  /* ⬇️ Asegura que el panel ocupe todo el alto disponible y no quede centrado */
+  align-items: stretch;
+  align-self: stretch;
+  height: 100%;
+  min-height: 100%;
 }
+
 .derechaAbono {
-    display: flex;
-    flex: 1.5;
-    padding: 10px 10px 20px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: flex;
+  flex: 1.5;
+  padding: 10px 10px 20px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

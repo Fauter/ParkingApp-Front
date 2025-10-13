@@ -1,0 +1,259 @@
+/* Usa el mismo esquema de colores que CargaMensuales.css a través de las vars del scope .cm-scope-cargamensuales */
+.cmdet-scope {
+  /* el contenedor se monta dentro de .cm-scope-cargamensuales, así que hereda vars */
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Header */
+.cmdet-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.cmdet-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.cmdet-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.cmdet-pill {
+  font-size: 12px;
+  color: var(--accent);
+  background: #0b1521;
+  border: 1px solid var(--stroke);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.cmdet-btn-ghost, .cmdet-btn-primary, .cmdet-btn-danger, .cmdet-btn-action {
+  border: 1px solid var(--stroke);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cmdet-btn-primary {
+  background: linear-gradient(0deg,#18314a,#1e3b58);
+  border-color: #1f3e5c;
+  color: #eaf4ff;
+}
+.cmdet-btn-danger {
+  background: #2a1820;
+  border-color: #4a2230;
+  color: #ffdbe1;
+}
+
+/* Estado del abono */
+.cmdet-status {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+.cmdet-status.is-active {
+  color: #86efac;
+  background: rgba(16,185,129,0.08);
+  border-color: #1f3e5c;
+}
+.cmdet-status.is-inactive {
+  color: #fca5a5;
+  background: rgba(239,68,68,0.08);
+  border-color: #4a2230;
+}
+.cmdet-status-date { font-size: 15px; }
+
+/* Card contenedora */
+.cmdet-card {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+/* Tabla de vehículos */
+.cmdet-veh-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cmdet-cochera-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.cmdet-cochera-badge.movil {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.45);
+}
+.cmdet-cochera-badge.fija {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.45);
+}
+.cmdet-cochera-badge.exclusiva {
+  background: rgba(16, 185, 129, 0.18);
+  color: #86efac;
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.cmdet-table { width: 100%; border-collapse: collapse; }
+.cmdet-table thead th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--stroke);
+  padding: 8px 8px;
+  background: #122033;
+}
+.cmdet-table tbody td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--stroke);
+}
+.cmdet-row { cursor: pointer; }
+.cmdet-row:hover { background: #0f1a26; }
+
+/* Expandido con efecto “hundido” en la misma línea visual que el resto del sistema */
+.cmdet-row-expanded { background: transparent; }
+.cmdet-expanded {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  padding: 14px;
+  background: #0f1a26;
+  box-shadow: inset 0 3px 15px rgba(0,0,0,0.60), inset 0 -3px 8px rgba(0,0,0,0.10);
+  position: relative;
+}
+.cmdet-expanded::before {
+  content: "";
+  position: absolute;
+  left: 8px; right: 8px; top: -1px;
+  height: 1px;
+  background: linear-gradient(to right, transparent 0%, rgba(255,255,255,0.06) 20%, rgba(255,255,255,0.06) 80%, transparent 100%);
+}
+.cmdet-left { display: flex; flex-direction: column; gap: 10px; }
+.cmdet-right { display: flex; align-items: center; justify-content: flex-end; min-width: 220px; }
+.cmdet-kv { display:flex; gap:20px; flex-wrap:wrap; }
+.cmdet-kv p { margin:0; }
+.cmdet-docs { display:flex; gap:8px; flex-wrap:wrap; }
+.cmdet-docs button{
+  background: var(--panel-2);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cmdet-actions { display: flex; gap: 8px; }
+.cmdet-btn-action {
+  font-weight: 600;
+}
+.cmdet-btn-action.edit {
+  border-color: rgba(59,130,246,0.45);
+  background: rgba(59,130,246,0.18);
+  color: #93c5fd;
+}
+.cmdet-btn-action.del {
+  border-color: rgba(239,68,68,0.45);
+  background: rgba(239,68,68,0.15);
+  color: #fca5a5;
+}
+
+.cmdet-empty {
+  text-align: center;
+  padding: 16px;
+  color: var(--muted);
+  background: #0f1a26;
+  border: 1px dashed var(--stroke);
+  border-radius: 10px;
+}
+
+/* Foto modal */
+.cmdet-photo-overlay {
+  position: fixed; inset: 0;
+  background: rgba(5,12,20,0.75);
+  display: grid; place-items: center;
+  z-index: 1000;
+}
+.cmdet-photo-content {
+  position: relative;
+  max-width: 92%;
+  max-height: 90%;
+}
+.cmdet-modal-close {
+  position: absolute; top: -40px; right: 0;
+  background: none; border: none; color: white;
+  font-size: 28px; cursor: pointer;
+}
+.cmdet-photo-content img {
+  max-width: 100%; max-height: 80vh; display: block;
+}
+
+/* Edit forms */
+.cmdet-edit-form { margin-top: 8px; width: min(92vw, 860px); max-width: 100%; }
+.cmdet-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px 16px; }
+@media (max-width: 800px) { .cmdet-grid2 { grid-template-columns: 1fr; } }
+.form-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.form-item label { font-size: 12px; color: var(--muted); }
+.form-item input, .form-item select {
+  background: var(--panel-2);
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: var(--text);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.cmdet-edit-actions { margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px; }
+.cmdet-form-error {
+  margin-top: 6px;
+  background: #7f1d1d;
+  color: #fca5a5;
+  border: 1px solid #b91c1c;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.cmdet-error {
+  background: #2a1820;
+  border: 1px solid #4a2230;
+  color: #ffdbe1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.cmdet-muted { color: var(--muted); font-size: 12.5px; }
+.cmdet-confirm-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }

@@ -9,7 +9,7 @@ const API_BASE = 'http://localhost:5000';
 const API_PRECIOS = `${API_BASE}/api/precios`;
 const API_CLIENTES = `${API_BASE}/api/clientes`;
 const API_ABONOS = `${API_BASE}/api/abonos`;
-const API_VEHICULOS = `${API_BASE}/api/vehiculos`; // 👈 NUEVO
+const API_VEHICULOS = `${API_BASE}/api/vehiculos`; // 👈 ya lo tenías
 
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
@@ -453,6 +453,8 @@ function DetalleClienteCajero({ clienteId, volver }) {
     try {
       setVehEditSaving(true);
       setVehEditError('');
+
+      // 1) Actualizo el ABONO
       const payload = {
         patente: (vehEditForm.patente || '').toUpperCase(),
         marca: vehEditForm.marca || '',
@@ -471,11 +473,40 @@ function DetalleClienteCajero({ clienteId, volver }) {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.msg || data?.message || 'No se pudo actualizar el vehículo');
+      if (!res.ok) {
+        // muestra mensaje coherente, incluyendo 409
+        throw new Error(data?.msg || data?.message || 'No se pudo actualizar el vehículo');
+      }
+
+      // 2) Sincronizar el VEHÍCULO con lo que quedó en el Abono
+      //    PATCH /api/vehiculos/sync-from-abono/:abonoId
+      try {
+        const syncRes = await fetch(`${API_VEHICULOS}/sync-from-abono/${vehEditAbonoId}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+
+        if (!syncRes.ok) {
+          let syncErrBody = {};
+          try { syncErrBody = await syncRes.json(); } catch (_) {}
+          if (syncRes.status === 409) {
+            setVehEditError(syncErrBody?.msg || 'Ya existe un vehículo con esa patente. Elegí otra.');
+          } else {
+            setVehEditError(syncErrBody?.msg || 'No se pudo sincronizar el vehículo. Intentá nuevamente.');
+          }
+          return; // dejo el modal abierto para corrección
+        }
+      } catch (syncErr) {
+        console.error('Error sync vehiculo:', syncErr);
+        setVehEditError('Se guardó el abono, pero hubo un error al sincronizar el vehículo.');
+        return;
+      }
+
+      // Éxito
       setVehEditOpen(false);
       setMensajeModal({
         titulo: 'Guardado',
-        mensaje: 'Vehículo actualizado correctamente.',
+        mensaje: 'Vehículo/Abono actualizado correctamente.',
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
@@ -532,7 +563,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         body: JSON.stringify({ vehiculoId: null })
       }).catch(() => { /* es opcional */ });
 
-      // 4) Optimistic UI: saco el abono de la lista y el vehiculo del array del cliente
+      // 4) Optimistic UI
       setCliente(prev => {
         if (!prev) return prev;
         const nuevo = { ...prev };
@@ -551,7 +582,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         mensaje: 'Se desactivó el abono y se quitó el vehículo del listado.',
         onClose: async () => {
           setMensajeModal(null);
-          await cargarCliente(); // refresco definitivo
+          await cargarCliente();
         }
       });
     } catch (err) {
@@ -655,14 +686,14 @@ function DetalleClienteCajero({ clienteId, volver }) {
             </span>
           )}
         </div>
-        <button
+        {/* <button
           className="btn-agregar-vehiculo"
           onClick={() => setModalAgregarVisible(true)}
           aria-label="Agregar vehículo"
           title="Agregar vehículo"
         >
           <FaPlus />
-        </button>
+        </button> */}
       </div>
 
       <div className="vehiculos-section">
@@ -694,7 +725,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                     </tr>
                     {expandido && (
                       <tr className="fila-expandida">
-                        <td colSpan="6">
+                        <td colSpan="5">
                           <div className="expandido-contenido">
                             <div className="expandido-left">
                               <div className="detalles-adicionales">
@@ -845,7 +876,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         >
           <div className="edit-form">
             <div className="grid-2">
-              {/* ...campos... (sin cambios) */}
+              {/* ...campos... */}
               <div className="form-item">
                 <label>Nombre y Apellido</label>
                 <input name="nombreApellido" type="text" value={editForm.nombreApellido} onChange={handleEditChange} autoFocus />
@@ -903,7 +934,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         >
           <div className="edit-form">
             <div className="grid-2">
-              {/* ...campos... (sin cambios) */}
+              {/* ...campos... */}
               <div className="form-item">
                 <label>Patente</label>
                 <input name="patente" type="text" value={vehEditForm.patente} onChange={handleVehEditChange} />

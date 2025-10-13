@@ -19,8 +19,10 @@ function DatosPago({
   user,
   onAbrirBarreraSalida,
 }) {
-  const [metodoPago, setMetodoPago] = useState("Efectivo");
-  const [factura, setFactura] = useState("CC");
+  // ⬇️ ahora SIN default
+  const [metodoPago, setMetodoPago] = useState(null); // "Efectivo" | "Transferencia" | "Débito" | "Crédito" | "QR" | null
+  const [factura, setFactura] = useState(null);       // "CC" | "A" | "Final" | null
+
   const [promos, setPromos] = useState([]);
   const [promoSeleccionada, setPromoSeleccionada] = useState(null);
   const [tiempoEstadiaHoras, setTiempoEstadiaHoras] = useState(0);
@@ -168,9 +170,14 @@ function DatosPago({
 
         didFallbackCalcRef.current = true;
 
-        const elegido = metodoPago === "Efectivo" ? costoEfectivo : costoOtros;
-        log("resultado fallback → elegido:", elegido);
-        setCostoTotal(elegido);
+        // ⬇️ si no hay método seleccionado, NO fijamos costo todavía
+        if (!metodoPago) {
+          log("Sin método seleccionado → no seteo costoTotal en fallback (queda 0 hasta elegir)");
+        } else {
+          const elegido = metodoPago === "Efectivo" ? costoEfectivo : costoOtros;
+          log("resultado fallback → elegido:", elegido);
+          setCostoTotal(elegido || 0);
+        }
       } catch (e) {
         console.error("fallback cálculo DatosPago:", e.message);
       } finally {
@@ -178,20 +185,30 @@ function DatosPago({
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehiculoLocal, tarifas, preciosEfectivo, preciosOtros, parametros]);
+  }, [vehiculoLocal, tarifas, preciosEfectivo, preciosOtros, parametros, metodoPago]);
+
+  // Helper: bucket de método
+  const metodoEsEfectivo = (m) => m === "Efectivo";
+  const metodoEsOtros = (m) => m && m !== "Efectivo";
 
   // ✅ CORE: Elegir costo según método usando lo que llegó o lo que calculó el fallback
   useEffect(() => {
     group("RECALC por método/tarifa/vehiculo");
     log("metodoPago:", metodoPago);
 
-    const elegido =
-      metodoPago === "Efectivo"
-        ? (tarifaCalculada?.costoEfectivo ?? tarifaCalculada?.costo)
-        : (tarifaCalculada?.costoOtros ?? tarifaCalculada?.costo);
+    let elegido = null;
+
+    if (metodoEsEfectivo(metodoPago)) {
+      elegido = tarifaCalculada?.costoEfectivo ?? tarifaCalculada?.costo;
+    } else if (metodoEsOtros(metodoPago)) {
+      elegido = tarifaCalculada?.costoOtros ?? tarifaCalculada?.costo;
+    } else {
+      // sin método: si vino un costo genérico lo usamos; si no, 0
+      elegido = tarifaCalculada?.costo ?? null;
+    }
 
     const fallback = vehiculoLocal?.estadiaActual?.costoTotal ?? 0;
-    const base = (elegido ?? fallback ?? 0);
+    const base = (elegido ?? (metodoPago ? fallback : 0) ?? 0);
 
     log("valor elegido por método:", elegido);
     log("fallback (estadiaActual.costoTotal):", fallback);
@@ -236,14 +253,14 @@ function DatosPago({
       tarifaCalculada.costoOtros != null
     );
 
-    if (!hayTarifaUtil && estadia.costoTotal != null) {
+    if (!hayTarifaUtil && estadia.costoTotal != null && metodoPago) {
       log("Compat: arrastro costoTotal de estadia:", estadia.costoTotal);
       setCostoTotal(estadia.costoTotal);
     }
 
     setTarifaAplicada(estadia.tarifa || null);
     groupEnd();
-  }, [vehiculoLocal, horaSalida, tarifaCalculada]);
+  }, [vehiculoLocal, horaSalida, tarifaCalculada, metodoPago]);
 
   useEffect(() => { log("🚗 vehiculoLocal en DatosPago:", vehiculoLocal); }, [vehiculoLocal]);
 
@@ -267,8 +284,8 @@ function DatosPago({
 
   const resetCamposPago = () => {
     log("resetCamposPago()");
-    setMetodoPago("Efectivo");
-    setFactura("CC");
+    setMetodoPago(null);
+    setFactura(null);
     setPromoSeleccionada(null);
     setTiempoEstadiaHoras(0);
     setCostoTotal(0);
@@ -358,6 +375,20 @@ function DatosPago({
 
   const registrarMovimiento = () => {
     if (!vehiculoLocal?.patente) return;
+
+    // ⛔ Validaciones duras: requiere método y factura
+    if (!metodoPago || !factura) {
+      setMensajeModal({
+        tipo: "error",
+        titulo: "Faltan datos",
+        mensaje: !metodoPago && !factura
+          ? "Seleccioná un método de pago y un tipo de factura."
+          : !metodoPago
+            ? "Seleccioná un método de pago."
+            : "Seleccioná un tipo de factura."
+      });
+      return;
+    }
 
     const token = localStorage.getItem('token') || '';
     const horas = tiempoEstadiaHoras || 1;
@@ -554,7 +585,11 @@ function DatosPago({
           <div className="title">Método de Pago</div>
           <div className="metodoDePago">
             {["Efectivo", "Transferencia", "Débito", "Crédito", "QR"].map((metodo) => (
-              <div key={metodo} className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`} onClick={() => handleSelectMetodoPago(metodo)}>
+              <div
+                key={metodo}
+                className={`metodoOption ${metodoPago === metodo ? "selected" : ""}`}
+                onClick={() => handleSelectMetodoPago(metodo)}
+              >
                 {metodo}
               </div>
             ))}
@@ -565,7 +600,11 @@ function DatosPago({
           <div className="title">Factura</div>
           <div className="factura">
             {["CC", "A", "Final"].map((opcion) => (
-              <div key={opcion} className={`facturaOption ${factura === opcion ? "selected" : ""}`} onClick={() => handleSelectFactura(opcion)}>
+              <div
+                key={opcion}
+                className={`facturaOption ${factura === opcion ? "selected" : ""}`}
+                onClick={() => handleSelectFactura(opcion)}
+              >
                 {opcion}
               </div>
             ))}

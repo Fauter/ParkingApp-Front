@@ -1,3 +1,4 @@
+// src/Operador/CargaMensuales/DatosAutoAbono.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
@@ -30,8 +31,7 @@ const normExclusivaFront = (exclusiva, cochera) =>
   normCocheraFront(cochera) === "Fija" ? Boolean(exclusiva) : false;
 
 /* ===========================
-   Modal simple inline (solo para Confirmar Abono)
-   Usa tus clases CSS provistas y renderiza cada línea en un bloque separado
+   Modal simple inline (Confirmación GENERAL)
 =========================== */
 const InlineConfirmModal = ({ open, titulo, mensaje, onConfirm, onCancel }) => {
   if (!open) return null;
@@ -63,28 +63,14 @@ const InlineConfirmModal = ({ open, titulo, mensaje, onConfirm, onCancel }) => {
             }}
           >
             {lines.map((line, i) => {
-              // Bloques vacíos => separadores visuales
               if (!line.trim()) {
-                return (
-                  <div key={`sep-${i}`} style={{ height: 6, opacity: 0.4 }} />
-                );
+                return <div key={`sep-${i}`} style={{ height: 6, opacity: 0.4 }} />;
               }
-              return (
-                <div key={i} style={{ lineHeight: 1.25 }}>
-                  {line}
-                </div>
-              );
+              return <div key={i} style={{ lineHeight: 1.25 }}>{line}</div>;
             })}
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 8,
-              justifyContent: "center",
-              marginTop: 12,
-            }}
-          >
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
             <button className="guardarWebcamBtn" onClick={onCancel}>
               Cancelar
             </button>
@@ -98,7 +84,7 @@ const InlineConfirmModal = ({ open, titulo, mensaje, onConfirm, onCancel }) => {
   );
 };
 
-function DatosAutoAbono({ datosVehiculo, user }) {
+function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
   const [formData, setFormData] = useState({
     nombreApellido: "",
     dniCuitCuil: "",
@@ -149,6 +135,12 @@ function DatosAutoAbono({ datosVehiculo, user }) {
 
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Upgrade flag para la descripción del movimiento (derivado del preview del back)
+  const [isUpgrade, setIsUpgrade] = useState(false);
+
+  // Guardamos el último preview del back para usar montos exactos
+  const [lastPreview, setLastPreview] = useState(null);
 
   // Modal informativo simple
   const [modal, setModal] = useState({ titulo: "", mensaje: "" });
@@ -318,7 +310,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const fetchClientes = async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/clientes`, { cache: "no-store" });
-      if (res.ok) {
+    if (res.ok) {
         const data = await res.json();
         setClientes(Array.isArray(data) ? data : []);
       } else {
@@ -330,6 +322,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
   };
 
+  // si cambia la patente/tipoVehiculo que vienen por prop, los actualizo
   useEffect(() => {
     if (datosVehiculo) {
       setFormData((prev) => ({
@@ -339,6 +332,27 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       }));
     }
   }, [datosVehiculo]);
+
+  // si el usuario elige un cliente a la izquierda, prellenamos el form
+  useEffect(() => {
+    if (!clienteSeleccionado) return;
+    setFormData((prev) => ({
+      ...prev,
+      nombreApellido: clienteSeleccionado?.nombreApellido || prev.nombreApellido,
+      dniCuitCuil: clienteSeleccionado?.dniCuitCuil || prev.dniCuitCuil,
+      email: clienteSeleccionado?.email || prev.email,
+      domicilio: clienteSeleccionado?.domicilio || prev.domicilio,
+      localidad: clienteSeleccionado?.localidad || prev.localidad,
+      telefonoParticular: clienteSeleccionado?.telefonoParticular || prev.telefonoParticular,
+      telefonoEmergencia: clienteSeleccionado?.telefonoEmergencia || prev.telefonoEmergencia,
+      domicilioTrabajo: clienteSeleccionado?.domicilioTrabajo || prev.domicilioTrabajo,
+      telefonoTrabajo: clienteSeleccionado?.telefonoTrabajo || prev.telefonoTrabajo,
+      cochera: normCocheraFront(clienteSeleccionado?.cochera) || prev.cochera,
+      exclusiva: normExclusivaFront(clienteSeleccionado?.exclusiva, clienteSeleccionado?.cochera) || false,
+      piso: clienteSeleccionado?.piso || prev.piso,
+      patente: (clienteSeleccionado?.patente || prev.patente || "").toUpperCase().slice(0, 10),
+    }));
+  }, [clienteSeleccionado]);
 
   // ====== Carga de catálogos con ambos precios ======
   useEffect(() => {
@@ -426,11 +440,28 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     const dia = hoy.getDate();
     const diasRestantes = dia === 1 ? total : (total - dia + 1);
     const factor = diasRestantes / total;
-    const proporcional = Math.round(base * factor);
+    const proporcional = Math.round(Math.max(0, Number(base) || 0) * factor);
     return { proporcional, diasRestantes, totalDiasMes: total, factor };
   };
 
-  // 🔐 ensureCliente por DNI (solo crea si no existe) —> AHORA envía cochera/exclusiva/piso
+  // === Dentro del mes actual (para abonos del cliente)
+  const isDentroMesActual = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    if (isNaN(d)) return false;
+    const now = new Date();
+    const inicio = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const fin = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return d >= inicio && d <= fin;
+  };
+
+  // ====== VALIDACIONES ======
+  const validarDNI = (dni) => {
+    const s = String(dni || "").replace(/\D+/g, "");
+    return s.length >= 7 && s.length <= 11;
+  };
+
+  // 🔐 ensureCliente por DNI (crea/actualiza si hace falta) → ahora devuelve { id, isNew }
   const ensureCliente = async () => {
     const dni = (formData.dniCuitCuil || "").trim();
     if (!validarDNI(dni)) throw new Error("DNI/CUIT/CUIL inválido");
@@ -464,7 +495,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           }),
         }).catch(() => {});
       } catch {}
-      return encontrado._id;
+      return { id: encontrado._id, isNew: false };
     }
 
     // Crear
@@ -494,23 +525,93 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
     const nuevoCliente = await nuevoClienteRes.json();
     if (!nuevoCliente._id) throw new Error("No se pudo crear cliente");
-    return nuevoCliente._id;
+    return { id: nuevoCliente._id, isNew: true };
   };
 
-  // ====== VALIDACIONES ======
+  // === Nuevo: pedir preview al back para decidir si es "Aumento de precio" o "Alta abono"
+  const fetchPreviewAbono = async () => {
+    const params = new URLSearchParams();
+    const dni = (formData.dniCuitCuil || "").trim();
+    if (validarDNI(dni)) params.set("dniCuitCuil", dni);
+    if (formData.tipoVehiculo) params.set("tipoVehiculo", formData.tipoVehiculo);
+    params.set("metodoPago", formData.metodoPago || "Efectivo");
+    params.set("cochera", formData.cochera || "Móvil");
+    params.set(
+      "exclusiva",
+      normCocheraFront(formData.cochera) === "Fija" && formData.exclusiva ? "true" : "false"
+    );
+    params.set("mesesAbonar", "1");
 
-  const validarDNI = (dni) => {
-    const s = String(dni || "").replace(/\D+/g, "");
-    return s.length >= 7 && s.length <= 11;
+    const url = `${BASE_URL}/api/abonos/preview?${params.toString()}`;
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err?.error || "No se pudo obtener el preview de abono");
+    }
+    const data = await r.json();
+    return data; // incluye: baseActual, baseNuevo, diffBase, proporcionalMesActual, diasRestantes, totalDiasMes, ...
+  };
+
+  // === Cálculo LOCAL del “más caro” (usado sólo como fallback si falla el preview del back)
+  const calcularUpgradeLocal = (clienteExistente) => {
+    const metodoNuevo = formData.metodoPago;
+    const cocheraNueva = formData.cochera || "Móvil";
+    const exclNueva = formData.cochera === "Fija" ? !!formData.exclusiva : false;
+
+    const baseNuevo = getAbonoPrecioByMetodo(
+      formData.tipoVehiculo,
+      metodoNuevo,
+      cocheraNueva,
+      exclNueva
+    ) || 0;
+
+    let baseActual = 0;
+
+    if (clienteExistente?.abonos?.length) {
+      // max del mes actual
+      for (const a of clienteExistente.abonos) {
+        if (!a?.activo) continue;
+        if (!isDentroMesActual(a?.fechaExpiracion)) continue;
+
+        const metodoAbo = a.metodoPago || metodoNuevo;
+        const cochAbo = a.cochera || cocheraNueva;
+        const exclAbo = (a.cochera === "Fija") ? !!a.exclusiva : false;
+
+        const baseAbo = getAbonoPrecioByMetodo(
+          a.tipoVehiculo,
+          metodoAbo,
+          cochAbo,
+          exclAbo
+        );
+        if (Number.isFinite(baseAbo) && baseAbo > baseActual) baseActual = baseAbo;
+      }
+    } else if (clienteExistente?.abonado && clienteExistente?.precioAbono) {
+      // fallback si no tenemos abonos poblados
+      const baseA = getAbonoPrecioByMetodo(
+        clienteExistente.precioAbono,
+        metodoNuevo,
+        cocheraNueva,
+        exclNueva
+      );
+      if (Number.isFinite(baseA)) baseActual = baseA;
+    }
+
+    const diffBase = Math.max(0, baseNuevo - baseActual);
+    const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(diffBase);
+    return { baseActual, baseNuevo, diffBase, montoHoy: proporcional, diasRestantes, totalDiasMes };
   };
 
   // ====== Flujo de guardado con dos confirmaciones ======
-  const finalizarSubmit = async () => {
+  const finalizarSubmit = async (previewOverride = null, decision = null) => {
     try {
       const patente = (formData.patente || "").toUpperCase();
-      const clienteId = await ensureCliente();
 
-      // === calcular precio dinámico (método + cochera + exclusiva) ===
+      // ⚠️ ahora necesito saber si el cliente es nuevo o existente
+      const clienteInfo = await ensureCliente(); // { id, isNew }
+      const clienteId = clienteInfo.id;
+      const clienteEsNuevo = decision?.isNew ?? clienteInfo.isNew;
+
+      // precio base del NUEVO abono (para etiquetas / info)
       const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
       const baseMensual = getAbonoPrecioByMetodo(
         formData.tipoVehiculo,
@@ -525,8 +626,47 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         );
       }
 
-      const { proporcional } = prorratearMontoFront(baseMensual);
+      // Decisión final de "upgrade" (aumento) y monto HOY
+      const esUpgradeDecision =
+        decision?.upgrade ??
+        (previewOverride &&
+          Number(previewOverride.baseActual) > 0 &&
+          Number(previewOverride.diffBase) > 0);
 
+      let proporcionalHoy;
+      let diasRestantes;
+      let totalDiasMes;
+
+      if (clienteEsNuevo) {
+        // cliente NUEVO: cobra prorrateo de la base mensual completa
+        const pr = prorratearMontoFront(baseMensual);
+        proporcionalHoy = pr.proporcional;
+        diasRestantes = pr.diasRestantes;
+        totalDiasMes = pr.totalDiasMes;
+      } else if (esUpgradeDecision) {
+        // EXISTENTE con aumento: cobra la DIFERENCIA prorrateada (usa preview del back si está disponible)
+        if (previewOverride && Number.isFinite(previewOverride.proporcionalMesActual)) {
+          proporcionalHoy = Number(previewOverride.proporcionalMesActual);
+          diasRestantes = Number(previewOverride.diasRestantes);
+          totalDiasMes = Number(previewOverride.totalDiasMes);
+        } else {
+          // fallback defensivo (ya casi no debería ocurrir)
+          const pr = prorratearMontoFront(
+            Math.max(0, (previewOverride?.baseNuevo || baseMensual) - (previewOverride?.baseActual || 0))
+          );
+          proporcionalHoy = pr.proporcional;
+          diasRestantes = pr.diasRestantes;
+          totalDiasMes = pr.totalDiasMes;
+        }
+      } else {
+        // EXISTENTE y SIN aumento: no se cobra nada
+        const pr = prorratearMontoFront(0);
+        proporcionalHoy = 0;
+        diasRestantes = pr.diasRestantes;
+        totalDiasMes = pr.totalDiasMes;
+      }
+
+      // Para el back (info referencial — no rompe si no la usa)
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
         if (v !== null && v !== undefined) fd.append(k, v);
@@ -535,18 +675,16 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       fd.set("cliente", clienteId);
       fd.set("operador", user?.nombre || "Sistema");
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
+      fd.set("precio", String(baseMensual)); // precio de catálogo
+      fd.set("precioProrrateadoHoy", String(proporcionalHoy));
+      fd.set("tierAbono", getTierName(formData.cochera || "Móvil", formData.exclusiva));
 
-      // (informativo)
-      fd.set("precio", String(baseMensual));
-      fd.set("precioProrrateadoHoy", String(proporcional));
-      fd.set("tierAbono", tierName);
-
-      // 1) Registrar Abono
-      const token = localStorage.getItem('token');
+      // 1) Registrar Abono SIEMPRE
+      const token = localStorage.getItem("token");
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
-        headers: authHeaders, // si hay auth, pasa operador al back
+        headers: authHeaders,
         body: fd,
       });
       if (!resp.ok) {
@@ -554,114 +692,101 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
-      // 2) Crear Ticket en DB (tipo ABONO) — se captura ticket/_id si viene
+      const debeCobrar = clienteEsNuevo || esUpgradeDecision;
+
+      // 2) (condicional) Crear Ticket en DB (tipo ABONO) sólo si se cobra algo
       let ticketNumber = null;
-      try {
-        const payloadTicketAbono = {
-          tipo: "abono",
-          patente,
-          cliente: clienteId,
-          operador: user?.username || user?.nombre || "Sistema",
-          metodoPago: formData.metodoPago,
-          factura: formData.factura,
-          tierAbono: tierName,
-          baseMensual: baseMensual,
-          montoProporcional: proporcional,
-          tipoVehiculo: formData.tipoVehiculo,
-          fecha: new Date().toISOString()
-        };
-        const ticketRes = await fetch(`${BASE_URL}/api/tickets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify(payloadTicketAbono)
-        });
-        // tolerante a diferentes formas de respuesta
-        const tj = await ticketRes.json().catch(() => null);
-        ticketNumber = tj?.ticket ?? tj?.data?.ticket ?? tj?.result?.ticket ?? tj?._id ?? null;
-      } catch (e) {
-        console.warn("⚠️ No se pudo crear/leer el ticket ABONO en DB:", e);
+      if (debeCobrar && proporcionalHoy > 0) {
+        try {
+          const payloadTicketAbono = {
+            tipo: "abono",
+            patente,
+            cliente: clienteId,
+            operador: user?.username || user?.nombre || "Sistema",
+            metodoPago: formData.metodoPago,
+            factura: formData.factura,
+            tierAbono: getTierName(formData.cochera || "Móvil", formData.exclusiva),
+            baseMensual: baseMensual,
+            montoProporcional: proporcionalHoy, // si es upgrade: es el diff prorrateado
+            tipoVehiculo: formData.tipoVehiculo,
+            fecha: new Date().toISOString(),
+          };
+          const ticketRes = await fetch(`${BASE_URL}/api/tickets`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify(payloadTicketAbono),
+          });
+          const tj = await ticketRes.json().catch(() => null);
+          ticketNumber = tj?.ticket ?? tj?.data?.ticket ?? tj?.result?.ticket ?? tj?._id ?? null;
+        } catch (e) {
+          console.warn("⚠️ No se pudo crear/leer el ticket ABONO en DB:", e);
+        }
       }
 
-      // 3) Imprimir ticket de ABONO
-      try {
-        // recalculo acá para tener también los días
-        const tierName2 = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-        const baseMensual2 = getAbonoPrecioByMetodo(
-          formData.tipoVehiculo,
-          formData.metodoPago,
-          formData.cochera || "Móvil",
-          formData.cochera === "Fija" ? formData.exclusiva : false
-        );
-        const { proporcional: proporcional2, diasRestantes } = prorratearMontoFront(baseMensual2);
-
-        const printRes = await fetch(`${BASE_URL}/api/tickets/imprimir-abono`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({
-            proporcional: `${formatARS(proporcional2)}`,
-            valorMensual: `${formatARS(baseMensual2)}`,
-            baseMensual: baseMensual2,
-            proporcionalRaw: proporcional2,
-            nombreApellido: formData.nombreApellido,
-            metodoPago: formData.metodoPago,
-            tipoVehiculo: formData.tipoVehiculo,
-            marca: formData.marca,
-            modelo: formData.modelo,
-            patente: patente,
-            cochera: formData.cochera,
-            piso: formData.piso,
-            exclusiva: !!formData.exclusiva,
-            diasRestantes: diasRestantes
-          }),
-        });
-        if (!printRes.ok) {
-          const t = await printRes.text().catch(() => "");
-          console.warn("⚠️ Falló impresión de ABONO:", t || printRes.status);
+      // 3) (condicional) Imprimir ticket sólo si se cobra algo
+      if (debeCobrar && proporcionalHoy > 0) {
+        try {
+          await fetch(`${BASE_URL}/api/tickets/imprimir-abono`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({
+              proporcional: `${formatARS(proporcionalHoy)}`,
+              valorMensual: `${formatARS(baseMensual)}`,
+              baseMensual,
+              proporcionalRaw: proporcionalHoy,
+              nombreApellido: formData.nombreApellido,
+              metodoPago: formData.metodoPago,
+              tipoVehiculo: formData.tipoVehiculo,
+              marca: formData.marca,
+              modelo: formData.modelo,
+              patente,
+              cochera: formData.cochera,
+              piso: formData.piso,
+              exclusiva: !!formData.exclusiva,
+              diasRestantes,
+            }),
+          }).catch(() => {});
+        } catch (e) {
+          console.warn("⚠️ Impresión:", e);
         }
+      }
 
-        // 4) ✅ Registrar MOVIMIENTO (Alta abono) — usa proporcional del día
+      // 4) (condicional) Registrar movimiento
+      if (debeCobrar && proporcionalHoy > 0) {
+        const descripcion = clienteEsNuevo ? "Alta abono" : "Aumento de Precio";
         try {
           const movBody = {
             patente,
             tipoVehiculo: formData.tipoVehiculo,
             metodoPago: formData.metodoPago,
             factura: formData.factura,
-            monto: Number.isFinite(proporcional2) ? proporcional2 : proporcional, // backup
-            descripcion: "Alta abono",
+            monto: proporcionalHoy, // si es upgrade: diff prorrateado; si es nuevo: prorrateo base
+            descripcion,
             tipoTarifa: "abono",
             cliente: clienteId,
-            operador: user || null,                  
+            operador: user || null,
+            ...(ticketNumber ? { ticket: ticketNumber } : {}),
           };
-          if (ticketNumber) movBody.ticket = ticketNumber;
-
-          const movRes = await fetch(`${BASE_URL}/api/movimientos/registrar`, {
+          await fetch(`${BASE_URL}/api/movimientos/registrar`, {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify(movBody)
-          });
-
-          if (!movRes.ok) {
-            const txt = await movRes.text().catch(() => "");
-            console.warn("⚠️ Registrar movimiento ABONO respondió no-OK:", movRes.status, txt);
-          } else {
-            // opcionalmente podríamos leer json para logging
-            // const mj = await movRes.json().catch(() => null);
-            // console.log("Movimiento ABONO:", mj);
-          }
+            headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify(movBody),
+          }).catch(() => {});
         } catch (e) {
-          console.warn("⚠️ No se pudo registrar el MOVIMIENTO de ABONO:", e);
+          console.warn("⚠️ movimiento:", e);
         }
-      } catch (e) {
-        console.warn("⚠️ No se pudo imprimir o registrar movimiento:", e);
       }
 
-      await fetchClientes(); // refresco local
+      await fetchClientes();
       fetch(`${BASE_URL}/api/sync/run-now`, { method: "POST" }).catch(() => {});
 
-      showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
+      const msgOk = clienteEsNuevo
+        ? `Abono registrado y cobrado para ${patente} (cliente nuevo).`
+        : esUpgradeDecision
+          ? `Abono agregado y diferencia cobrada para ${patente} (aumento de precio).`
+          : `Abono agregado para ${patente} (sin cargos).`;
+
+      showModal("Éxito", msgOk);
 
       // Reset UI
       setFormData({
@@ -688,13 +813,15 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         fotoCedulaVerde: null,
         cochera: "",
         piso: "",
-        exclusiva: false
+        exclusiva: false,
       });
       setFileUploaded({
         fotoSeguro: false,
         fotoDNI: false,
         fotoCedulaVerde: false,
       });
+      setIsUpgrade(false);
+      setLastPreview(null);
     } catch (error) {
       console.error(error);
       showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
@@ -705,72 +832,110 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     setConfirmAbono((s) => ({ ...s, open: false }));
     setLoading(true);
     try {
+      // ¿El DNI corresponde a un cliente existente?
       const dni = (formData.dniCuitCuil || "").trim();
       const clienteExistente = (clientes || []).find(
         (c) => String(c.dniCuitCuil || "").trim() === dni
       );
+      const esClienteNuevo = !clienteExistente;
 
-      // 🔎 Preview “más caro” (ahora el back considera tier)
-      const params = new URLSearchParams({
-        tipoVehiculo: String(formData.tipoVehiculo || ""),
-        metodoPago: String(formData.metodoPago || "Efectivo"),
-        cochera: String(formData.cochera || "Móvil"),
-        exclusiva: formData.cochera === "Fija" && formData.exclusiva ? "true" : "false",
-      });
-      if (clienteExistente?._id) {
-        params.set("clienteId", clienteExistente._id);
-      } else {
-        const dni2 = (formData.dniCuitCuil || "").trim();
-        if (dni2) params.set("dniCuitCuil", dni2);
-      }
-
-      let diffBase = 0;
-      let montoHoy = 0;
-      let baseActual = 0;
-      let baseNuevo = 0;
-
+      // 1) Intentamos preview del back (más preciso)
+      let preview = null;
       try {
-        const r = await fetch(`${BASE_URL}/api/abonos/preview?${params.toString()}`, { cache: "no-store" });
-        const pj = await r.json();
-        if (r.ok && pj) {
-          diffBase = Number(pj?.diffBase || 0);
-          montoHoy = Number(pj?.monto || 0);
-          baseActual = Number(pj?.baseActual || 0);
-          baseNuevo = Number(pj?.baseNuevo || 0);
-        } else {
-          throw new Error(pj?.error || "No se pudo calcular la preview.");
-        }
+        preview = await fetchPreviewAbono();
       } catch (e) {
-        setLoading(false);
-        return showModal("Error", e?.message || "No se pudo calcular la preview (precios). Revisá el catálogo.");
+        console.warn("⚠️ preview back falló, uso cálculo local si puedo:", e?.message || e);
       }
 
-      if (baseActual > 0 && diffBase > 0) {
-        const tierNuevo = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+      // Regla: JAMÁS mostrar modal de aumento si estoy creando cliente nuevo
+      const upgradePorBack = !esClienteNuevo &&
+        preview &&
+        Number(preview.baseActual) > 0 &&
+        Number(preview.diffBase) > 0;
+
+      if (upgradePorBack) {
+        const vehiculoPretty = (() => {
+          const s = String(formData.tipoVehiculo || "").trim();
+          return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+        })();
 
         setConfirmModal({
           open: true,
           titulo: "Vehículo más caro",
           mensaje:
-            `Estás pasando a tier "${tierNuevo}".\n\n` +
-            `• Diferencia mensual: $${formatARS(baseNuevo - baseActual)}\n` +
-            `• A cobrar HOY: $${formatARS(montoHoy)}\n\n` +
+            `Estás pasando a "${vehiculoPretty}".\n\n` +
+            `• Base actual: $${formatARS(preview.baseActual)}\n` +
+            `• Base nueva: $${formatARS(preview.baseNuevo)}\n` +
+            `• Diferencia mensual: $${formatARS(preview.diffBase)}\n` +
+            `• A cobrar HOY: $${formatARS(preview.proporcionalMesActual)}\n\n` +
             `¿Deseás continuar?`,
           onConfirm: async () => {
             setConfirmModal((s) => ({ ...s, open: false }));
             setLoading(true);
-            await finalizarSubmit();
+            await finalizarSubmit(preview, { isNew: esClienteNuevo, upgrade: true });
             setLoading(false);
           },
           onCancel: () => {
             setConfirmModal((s) => ({ ...s, open: false }));
+            setIsUpgrade(false);
+            setLastPreview(null);
             setLoading(false);
           },
         });
         return;
       }
 
-      await finalizarSubmit();
+      // 2) Si el back no pudo o no marcó upgrade, intentamos heurística local (sólo si NO es cliente nuevo)
+      if (!esClienteNuevo) {
+        const { baseActual, baseNuevo, diffBase, montoHoy, diasRestantes, totalDiasMes } =
+          calcularUpgradeLocal(clienteExistente);
+
+        if (baseActual > 0 && diffBase > 0) {
+          setIsUpgrade(true);
+          const vehiculoPretty = (() => {
+            const s = String(formData.tipoVehiculo || "").trim();
+            return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+          })();
+          const previewLike = {
+            baseActual,
+            baseNuevo,
+            diffBase,
+            proporcionalMesActual: montoHoy,
+            diasRestantes,
+            totalDiasMes
+          };
+
+          setConfirmModal({
+            open: true,
+            titulo: "Vehículo más caro",
+            mensaje:
+              `Estás pasando a "${vehiculoPretty}".\n\n` +
+              `• Base actual: $${formatARS(baseActual)}\n` +
+              `• Base nueva: $${formatARS(baseNuevo)}\n` +
+              `• Diferencia mensual: $${formatARS(diffBase)}\n` +
+              `• A cobrar HOY: $${formatARS(montoHoy)}\n\n` +
+              `¿Deseás continuar?`,
+            onConfirm: async () => {
+              setConfirmModal((s) => ({ ...s, open: false }));
+              setLoading(true);
+              await finalizarSubmit(previewLike, { isNew: esClienteNuevo, upgrade: true });
+              setLoading(false);
+            },
+            onCancel: () => {
+              setConfirmModal((s) => ({ ...s, open: false }));
+              setIsUpgrade(false);
+              setLastPreview(null);
+              setLoading(false);
+            },
+          });
+          return;
+        }
+      }
+
+      // 3) No es upgrade: alta normal
+      setIsUpgrade(false);
+      setLastPreview(null);
+      await finalizarSubmit(preview || null, { isNew: esClienteNuevo, upgrade: false });
     } catch (error) {
       console.error(error);
       showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
@@ -782,7 +947,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1) Validaciones locales rápidas (SIN validar formato de patente)
+    // 1) Validaciones locales rápidas
     try {
       const patente = (formData.patente || "").trim();
       if (!patente) throw new Error("Debe ingresar la patente.");
@@ -797,7 +962,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       return showModal("Error", err.message);
     }
 
-    // 2) Confirmación GENERAL
+    // 2) Confirmación GENERAL (informativa)
     try {
       const patente = (formData.patente || "").toUpperCase();
       const tipo = formData.tipoVehiculo;
@@ -815,8 +980,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       if (!Number.isFinite(baseMensual)) {
         return showModal(
           "Error",
-          `No hay precio cargado para "${(tipo||'').toLowerCase()}" en tier "${tierName}" (${metodo}). ` +
-          `Actualizá el catálogo en ${metodo === 'Efectivo' ? '/api/precios' : '/api/precios?metodo=otros'}.`
+          `No hay precio cargado para "${(tipo || "").toLowerCase()}" en tier "${tierName}" (${metodo}). `
         );
       }
 
@@ -825,7 +989,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       const detalleCochera = [
         `Cochera: ${formData.cochera || "-"}`,
         `N° de Cochera: ${formData.piso || "-"}`,
-        `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`
+        `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`,
       ].join("\n");
 
       const ucfirst = (s) => {
@@ -865,7 +1029,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     const { name, value, files, type, checked } = e.target;
 
     if (name === "cochera") {
-      setFormData(prev => {
+      setFormData((prev) => {
         const next = { ...prev, cochera: value };
         if (normCocheraFront(value) !== "Fija") {
           next.exclusiva = false;
@@ -876,7 +1040,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
     }
     if (name === "exclusiva" && type === "checkbox") {
       if (normCocheraFront(formData.cochera) === "Fija") {
-        setFormData(prev => ({ ...prev, exclusiva: Boolean(checked) }));
+        setFormData((prev) => ({ ...prev, exclusiva: Boolean(checked) }));
       }
       return;
     }
@@ -934,7 +1098,6 @@ function DatosAutoAbono({ datosVehiculo, user }) {
   return (
     <div className="abono-container">
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
-
         {/* ===== FILA DE COCHERA / PISO / EXCLUSIVA ===== */}
         <div className="cochera-row">
           <div className="fullwidth">
@@ -1144,7 +1307,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
           </div>
 
           {/* ====== Select Tipo de Vehículo (ABONO) ====== */}
-          <div>
+  <div>
             <label>Tipo de Vehículo</label>
             <select
               name="tipoVehiculo"
@@ -1189,7 +1352,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
       {/* Modal informativo */}
       <ModalMensaje titulo={modal.titulo} mensaje={modal.mensaje} onClose={closeModal} />
 
-      {/* Modal confirmación GENERAL (stackeado línea por línea) */}
+      {/* Modal confirmación GENERAL */}
       <InlineConfirmModal
         open={confirmAbono.open}
         titulo={confirmAbono.titulo}
@@ -1198,7 +1361,7 @@ function DatosAutoAbono({ datosVehiculo, user }) {
         onCancel={confirmAbono.onCancel}
       />
 
-      {/* Modal confirmación “más caro” (se mantiene igual) */}
+      {/* Modal confirmación “más caro” */}
       {confirmModal.open && (
         <ModalMensaje
           titulo={confirmModal.titulo}
