@@ -1,3 +1,4 @@
+// src/Operador/Operador/DatosPago/DatosPago.jsx
 import React, { useState, useEffect, useRef } from "react";
 import "./DatosPago.css";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
@@ -342,12 +343,12 @@ function DatosPago({
   };
 
   // ==== NUEVO: helper para imprimir ticket de salida ====
-  const imprimirTicketSalida = async () => {
+  const imprimirTicketSalida = async (salidaFinalISO) => {
     try {
       const payload = {
         ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
         ingreso: vehiculoLocal?.estadiaActual?.entrada,
-        egreso: horaSalida || new Date().toISOString(),
+        egreso: salidaFinalISO,
         totalConDescuento,  // number
         patente: vehiculoLocal?.patente,
         tipoVehiculo: vehiculoLocal?.tipoVehiculo,
@@ -391,6 +392,18 @@ function DatosPago({
     }
 
     const token = localStorage.getItem('token') || '';
+
+    // Tiempos (MISMA salida para todo el flujo)
+    const entradaFinalISO = vehiculoLocal?.estadiaActual?.entrada
+      ? new Date(vehiculoLocal.estadiaActual.entrada).toISOString()
+      : null;
+
+    const salidaFinalISO =
+      (horaSalida ? new Date(horaSalida).toISOString()
+      : (vehiculoLocal?.estadiaActual?.salida ? new Date(vehiculoLocal.estadiaActual.salida).toISOString()
+      : new Date().toISOString()));
+
+    // Texto
     const horas = tiempoEstadiaHoras || 1;
     const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
@@ -401,8 +414,10 @@ function DatosPago({
     log("monto final (con promos):", totalConDescuento);
     log("tarifaAplicada:", tarifaAplicada);
     log("tiempoHoras:", horas);
+    log("entradaFinalISO:", entradaFinalISO, "salidaFinalISO:", salidaFinalISO);
     groupEnd();
 
+    // 1) Registrar salida en vehiculo con la misma salidaFinalISO
     fetch(`${BASE_URL}/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
       method: "PUT",
       headers: {
@@ -410,7 +425,7 @@ function DatosPago({
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        salida: horaSalida || new Date().toISOString(),
+        salida: salidaFinalISO,
         costo: totalConDescuento,
         tarifa: tarifaAplicada || null,
         tiempoHoras: horas,
@@ -431,6 +446,7 @@ function DatosPago({
           _id: user._id || user.id
         } : undefined;
 
+        // 2) POST movimiento con horarios explícitos
         const datosMovimiento = {
           patente: vehiculoLocal.patente,
           tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
@@ -442,11 +458,19 @@ function DatosPago({
           ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
           fotoUrl: fotoMovimiento || undefined,
 
-          // 👇 Incluimos operador en todas las variantes que tu backend entiende
+          // ⏰ NUEVO: enviar horarios explícitos
+          entrada: entradaFinalISO || undefined,
+          salida:  salidaFinalISO,
+
+          // Extra informativo para tu grid/back
+          tiempoHoras: horas,
+
+          // Operador
           ...(operadorPayload ? { operador: operadorPayload } : {}),
           ...(user?.username ? { operadorUsername: user.username } : {}),
           ...(user?._id || user?.id ? { operadorId: (user._id || user.id).toString() } : {}),
 
+          // Promo (si hay)
           ...(promoSeleccionada ? {
             promo: {
               _id: promoSeleccionada._id,
@@ -475,8 +499,8 @@ function DatosPago({
         return json;
       })
       .then(async () => {
-        // ⬅️ NUEVO: imprimir ticket de salida ANTES de limpiar/abrir barrera
-        await imprimirTicketSalida();
+        // 3) Imprimir ticket usando la MISMA salida
+        await imprimirTicketSalida(salidaFinalISO);
 
         setMensajeModal({
           tipo: "exito",

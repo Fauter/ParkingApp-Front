@@ -15,7 +15,6 @@
   line-height: 1.25;
   color: var(--text);
 
-  /* >>> Fix: que el scope ocupe toda la altura de la ventana y pinte el fondo */
   min-height: 100vh;
   background: var(--bg);
   display: flex;
@@ -25,7 +24,6 @@
 
 /* ——— Layout general ——— */
 .cm-page-cargamensuales {
-  /* >>> Fix: no centres verticalmente; estirá a 100vh */
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -51,16 +49,42 @@
   background:#0b1521; border:1px solid var(--stroke);
   padding:2px 8px; border-radius:999px;
 }
-.cm-top-right-cargamensuales { display:flex; gap:6px; }
+.cm-top-right-cargamensuales { display:flex; gap:6px; align-items:center; }
+
+/* ===== NAV Tabs ===== */
+.cm-navtabs-cargamensuales{
+  display:inline-flex; gap:6px; align-items:center; background:rgba(16,26,40,0.6);
+  border:1px solid var(--stroke); border-radius:12px; padding:4px;
+}
+.cm-tab-cargamensuales{
+  cursor:pointer;
+  border:1px solid transparent;
+  background:transparent;
+  color: var(--muted);
+  padding:6px 10px;
+  border-radius:10px;
+  font-size:13px;
+  line-height:1;
+}
+.cm-tab-cargamensuales:hover{
+  color:#cfe6ff;
+  background:#0f1a26;
+  border-color:#243247;
+}
+.cm-tab-cargamensuales.is-active{
+  color:#eaf4ff;
+  background:linear-gradient(0deg,#18314a,#1e3b58);
+  border-color:#1f3e5c;
+  font-weight:600;
+}
 
 /* Contenedor sin scroll global */
 .cm-container-cargamensuales {
-  /* >>> Fix: ocupar todo el remanente y evitar huecos */
   flex: 1 1 auto;
   min-height: 0;
   display:flex; justify-content:center;
   padding: 10px 12px;
-  overflow: hidden; /* evita scroll global */
+  overflow: hidden;
 }
 
 /* Grid 2 columnas */
@@ -70,7 +94,6 @@
   display:grid;
   grid-template-columns: 0.40fr 0.60fr;
   gap:12px;
-  /* >>> Fix: que el grid se estire verticalmente */
   align-items: stretch;
 }
 
@@ -78,10 +101,10 @@
 .cm-left-cargamensuales, .cm-right-cargamensuales{
   background:var(--panel); border:1px solid var(--stroke);
   border-radius:12px; padding:10px;
-  min-height: 0; /* importante para contención en Flex/Grid */
+  min-height: 0;
 }
 
-/* ===================== LEFT (NO TOCAR LISTA) ===================== */
+/* ===================== LEFT (LISTA) ===================== */
 .cm-left-cargamensuales{ display:flex; flex-direction:column; min-height:0; }
 .cm-left-static-cargamensuales{ display:flex; flex-direction:column; gap:8px; min-height:0; }
 .cm-left-scrollbox-cargamensuales{
@@ -93,7 +116,7 @@
   border: 0;
   padding: 0;
 }
-/* custom scrollbar discreto */
+/* custom scrollbar */
 .cm-left-scrollbox-cargamensuales{ scrollbar-width: thin; scrollbar-color: #27507a transparent; }
 .cm-left-scrollbox-cargamensuales::-webkit-scrollbar{ width: 10px; }
 .cm-left-scrollbox-cargamensuales::-webkit-scrollbar-track{ background: transparent; }
@@ -102,6 +125,11 @@
   border-radius: 8px;
 }
 .cm-search-cargamensuales{ display:flex; gap:8px; align-items:center; }
+.input-wide-cargamensuales{
+  background:var(--panel-2); border:1px solid var(--stroke);
+  color:var(--text); border-radius:10px;
+  padding:5px 10px; outline:none; width:100%; font-size:14px;
+}
 .cm-empty-cargamensuales{
   margin:8px;
   padding:14px; text-align:center; color:var(--muted);
@@ -122,7 +150,7 @@
 .cm-table-cargamensuales tbody tr.is-selected{ background:#0d2135; }
 .cm-email-cargamensuales{ max-width:240px; }
 
-/* Skeleton rows (para evitar flash al refrescar) */
+/* Skeleton rows */
 .cm-skel-row-cargamensuales td { height: 34px; }
 .cm-skel{
   display:block; width:100%; height:12px; border-radius:6px;
@@ -134,20 +162,18 @@
 .cm-skel--w50{ width:50%; }
 .cm-skel--w60{ width:60%; }
 .cm-skel--w70{ width:70%; }
-.cm-skel--circle{ width:18px; height:18px; border-radius:999px; margin-left:auto; margin-right:auto; }
 @keyframes cmskel-move {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
 
-/* ===================== RIGHT (sin scroll, comprimido) ===================== */
+/* ===================== RIGHT ===================== */
 .cm-right-cargamensuales{
   display:flex;
   flex-direction:column;
   min-height:0;
   overflow:hidden;
 }
-
 .cm-right-static-cargamensuales{
   flex:1 1 auto;
   min-height:0;
@@ -155,8 +181,6 @@
   flex-direction:column;
   overflow:hidden;
 }
-
-/* El form reusa la clase de "page", anular tamaño dentro de la derecha */
 .cm-right-static-cargamensuales .cm-page-cargamensuales{
   height:auto;
   min-height:0;
@@ -169,7 +193,7 @@
   flex-direction:column;
 }
 
-/* Inputs/labels (COMPRIMIDOS) */
+/* Inputs/labels (base) */
 .cm-page-cargamensuales input,
 .cm-page-cargamensuales select{
   background:var(--panel-2); border:1px solid var(--stroke);
@@ -183,7 +207,7 @@
   font-size:12.25px; color:var(--muted);
 }
 
-/* Botones (ligeramente más bajos) */
+/* Botones */
 .cm-btn-cargamensuales{
   border:1px solid var(--stroke); background:var(--panel-2); color:var(--text);
   border-radius:10px; padding:7px 38px;
@@ -195,7 +219,7 @@
 .cm-btn--danger-cargamensuales{ background:#2a1820; border-color:#4a2230; color:#ffdbe1; padding:7px 10px; }
 .cm-btn--icon-cargamensuales{ padding:6px 8px; display:grid; place-items:center; }
 
-/* Refrescar: spinner + estados */
+/* Refrescar */
 .cm-btn--refresh-cargamensuales{ min-width: 118px; gap:6px; }
 .cm-btn--refresh-cargamensuales.is-busy{ cursor:progress; }
 .cm-btn--refresh-cargamensuales:disabled{
@@ -211,14 +235,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* Filas/grids (COMPRIMIDOS) */
-.cm-right-static-cargamensuales .cm-row-3-cargamensuales,
-.cm-right-static-cargamensuales .cm-grid-3-cargamensuales,
-.cm-right-static-cargamensuales .cm-photos-cargamensuales{
-  flex:0 0 auto;
-  min-height:0;
-}
-
+/* Grids base */
 .cm-row-3-cargamensuales{
   display:grid; grid-template-columns: 1fr 1fr auto;
   gap:8px;
@@ -228,19 +245,17 @@
 .cm-field--toggle-cargamensuales{ align-items:center; justify-content:flex-end; }
 .cm-field--toggle-cargamensuales .lbl{ margin:0 0 2px; }
 
-/* Grids */
 .cm-grid-3-cargamensuales{
   display:grid; grid-template-columns: repeat(3, 1fr);
   gap:6px 10px;
   margin-bottom:8px;
 }
 
-/* ===== Fotos (comprimidas + centrado de ícono + texto en una sola línea) ===== */
+/* ===== Fotos (mensuales) ===== */
 .cm-photos-cargamensuales .cm-file-input-wrapper-cargamensuales{
   display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center; width:100%;
 }
 .cm-file-visible-label-cargamensuales{ color:var(--muted); font-size:12.25px; text-align:center; }
-
 .cm-file-label-cargamensuales{
   background:var(--panel-2); border:1px dashed var(--stroke); border-radius:12px;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -253,8 +268,6 @@
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
 .cm-file-label-cargamensuales:hover{ border-color:#2e4a6b; transform: translateY(-1px); box-shadow: 0 0 0 2px rgba(134,189,244,0.12); }
-
-/* Ícono bien centrado horizontalmente */
 .cm-icon-wrapper-cargamensuales{
   width:26px; height:26px;
   display:grid; place-items:center;
@@ -262,23 +275,19 @@
   margin:0 auto;
 }
 .cm-icon-cargamensuales{ color:var(--accent); font-size:1rem; }
-
-/* Texto en una sola línea: “Sacar Foto” */
 .cm-file-text-cargamensuales{
   display:flex; flex-direction:row; align-items:center; justify-content:center;
   gap:6px; line-height:1; font-size:12px; color:var(--muted); text-align:center;
   white-space:nowrap;
 }
-
-/* Estado “subido” */
 .cm-file-uploaded-cargamensuales{ color:var(--ok); display:flex; align-items:center; gap:6px; }
 
-/* ===== Acciones + Meses (inline) ===== */
+/* ===== Acciones + Meses (mensuales) ===== */
 .cm-actions-cargamensuales{
   display:flex; gap:10px;
   align-items:center; justify-content:center;
   margin-top:10px;
-  flex-wrap:wrap; /* si no entra, baja prolijo */
+  flex-wrap:wrap;
 }
 .cm-months-inline-cargamensuales{
   display:inline-flex; align-items:center; gap:8px;
@@ -296,7 +305,7 @@
   border-radius:10px; padding:6px 10px; font-size:13.5px;
 }
 
-/* ===== Tipo de Vehículo: COMPRIMIDO + CENTRADO ===== */
+/* ===== Tipo de Vehículo (mensuales) ===== */
 .cm-type-center-wrapper{
   display:flex;
   justify-content:center;
@@ -311,8 +320,8 @@
 .cm-type-center-field .select-cargamensuales{
   width:100%;
   max-width:100%;
-  padding:6px 10px;       /* un toque más alto que inputs estándar */
-  font-size:13.75px;      /* levemente comprimido pero legible */
+  padding:6px 10px;
+  font-size:13.75px;
   border-radius:10px;
 }
 
@@ -326,7 +335,7 @@
 @media (max-width: 1180px){
   .cm-grid-cargamensuales{ grid-template-columns: 1fr; max-width: 1000px; }
   .cm-email-cargamensuales{ max-width: unset; }
-  .cm-type-center-field{ width:min(520px, 100%); } /* un poco más ancho en 1 columna */
+  .cm-type-center-field{ width:min(520px, 100%); }
 }
 @media (max-width: 640px){
   .cm-months-select-cargamensuales{ min-width: 100px; }
@@ -334,7 +343,7 @@
   .cm-type-center-field{ width:100%; }
 }
 
-/* ===== Modal de Confirmación (custom) ===== */
+/* ===== Modal Confirmación (compartido) ===== */
 .cm-confirm-overlay-cargamensuales{
   position: fixed; inset: 0;
   background: rgba(5,12,20,0.65);
@@ -352,27 +361,23 @@
 .cm-confirm-header-cargamensuales{ padding: 12px 14px; border-bottom: 1px solid var(--stroke); }
 .cm-confirm-header-cargamensuales h3{ margin: 0; font-size: 16px; font-weight: 600; }
 
-/* Cuerpo con “secciones” y total destacado */
 .cm-confirm-body-cargamensuales{
   padding: 12px 14px;
   max-height: 60vh;
-  overflow: auto;
+  overflow:  auto;
   display: flex;
   flex-direction: column;
-  gap: 8px; /* separación entre bloques */
+  gap: 8px;
 }
 .cm-confirm-list-cargamensuales{ margin: 0; padding-left: 18px; }
 .cm-confirm-list-cargamensuales li{ margin: 6px 0; color: var(--text); }
 
-/* Caja sutil para cada sección detectada por dobles saltos */
 .cm-confirm-section-cargamensuales{
   background: #0f1a26;
   border: 1px solid var(--stroke);
   border-radius: 8px;
   padding: 8px 10px;
 }
-
-/* Franja final para el TOTAL */
 .cm-confirm-total-cargamensuales{
   margin-top: 2px;
   padding: 10px 12px;
@@ -395,8 +400,201 @@
   color: #ffffff;
   font-size: 15px;
 }
-
 .cm-confirm-actions-cargamensuales{
   display:flex; gap:8px; justify-content:flex-end;
   padding: 12px 14px; border-top:1px solid var(--stroke);
+}
+
+/* ===========================================================
+   ========== ESPECÍFICO PARA CARGA DE ESTADÍAS ==========
+   =========================================================== */
+
+/* Tabla de Estadías: 3 columnas (sin acciones) */
+.cm-table-cargamensuales.cm-table-cargaestadias thead th:nth-child(1){ width: 140px; }
+.cm-table-cargamensuales.cm-table-cargaestadias thead th:nth-child(2){ width: 160px; }
+.cm-table-cargamensuales.cm-table-cargaestadias thead th:nth-child(3){ width: 140px; }
+
+/* Celda de fecha/hora apilada */
+.ce-datecell{
+  display:flex; flex-direction:column; align-items:flex-start; line-height:1.1;
+}
+.ce-date{ font-weight:700; color:#eaf4ff; }
+.ce-time{ font-size:12px; color:#b9cadd; margin-top:3px; }
+
+/* Form centrado */
+.ce-formpage{
+  flex: 1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap: 8px;
+}
+
+/* Patente */
+.ce-row-plate{
+  display:flex;
+  width:100%;
+  justify-content:center;
+  margin-bottom:6px;
+}
+.ce-platefield{ width:auto; }
+.ce-plate{
+  width:160px;
+  text-align:center;
+  letter-spacing:.5px;
+  font-weight:600;
+  text-transform:uppercase;
+}
+
+/* FILA Entrada / Salida — más separación entre bloques y controles más chicos */
+.ce-row-times{
+  display:grid;
+  grid-template-columns: auto auto;      /* dos columnas ajustadas */
+  column-gap: 24px;                       /* separación entre Entrada y Salida */
+  align-items:start;
+  justify-content:center;
+  width:100%;
+  margin-bottom:12px;
+}
+.ce-row-times .cm-field-cargamensuales{ width:max-content; }
+
+/* Inputs CE (compactos) */
+.ce-input{
+  background: linear-gradient(180deg, rgba(18,32,51,0.9), rgba(15,26,38,0.9));
+  border:1px solid #223146;
+  border-radius:12px;
+  padding:6px 10px;
+  font-size:13.25px;
+  transition: box-shadow .15s ease, border-color .15s ease, transform .02s ease;
+}
+.ce-input:focus{
+  border-color:#2e5a8b;
+  box-shadow: 0 0 0 2px rgba(134,189,244,0.18);
+}
+
+/* Grupo Fecha + Hora (angosto) */
+.ce-datetimegroup{
+  display:grid;
+  grid-template-columns: 130px 100px;  /* ↓ reduce ancho horizontal */
+  gap:8px;
+}
+.ce-timeinp{
+  text-align:center;
+  width:100px;                          /* asegura ancho */
+}
+
+/* ===== Fecha “dd / mm” (nativo invisible, overlay visible) ===== */
+.ce-datebox{
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  width:130px;                           /* consistente con el grid */
+  cursor: pointer;                       /* ← deja claro que es clickeable */
+}
+.ce-dateoverlay{
+  pointer-events: none;                  /* no bloquea el click */
+  font-weight:600;
+  letter-spacing:.3px;
+  line-height: 1;
+  position: relative;
+  z-index: 1;                            /* debajo del input */
+}
+.ce-date-native{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  opacity:0;                             /* se ve el overlay, pero sigue siendo seleccionable */
+  cursor:pointer;
+  z-index: 2;                             /* ← garantiza que recibe el click */
+}
+.ce-date-native::-webkit-calendar-picker-indicator{ opacity:1; }
+
+/* Bloque total/promo */
+.dp-cargaestadias{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  background: rgba(22,34,50,0.5);
+  border:1px solid var(--stroke);
+  border-radius:12px;
+  padding:12px;
+}
+.dp-precioTotal-cargaestadias{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  font-size: 40px;
+  font-weight: 700;
+  color: #fff;
+  width: 100%;
+}
+.dp-precioContainer-cargaestadias{ padding-right:0; }
+
+.dp-promo-cargaestadias{
+  display:flex; align-items:center; gap:10px;
+}
+.dp-promo--onlyselect{ justify-content:center; }
+.dp-promoSelect-cargaestadias{
+  background-color: var(--panel-2);
+  border: 1px solid var(--stroke);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 15px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+/* Chips centrados */
+.dp-row--center-ce{ justify-content:center; }
+
+.dp-especificaciones-cargaestadias{
+  display:flex; flex-direction:row; gap:30px; color:#cfd8dc;
+}
+.dp-title-cargaestadias{
+  font-size: 15px;
+  font-weight: 700;
+  color: #e7f3ff;
+  margin-bottom: 10px;
+  position: relative;
+}
+.dp-title-cargaestadias::after{
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 0%;
+  width: 80%;
+  height: 2px;
+  background-color: rgba(90, 153, 215, 0.53);
+  border-radius: 2px;
+}
+.dp-row-cargaestadias{ display:flex; flex-wrap:wrap; gap:10px; }
+.dp-chip-cargaestadias{
+  padding: 7px 12px;
+  border-radius: 8px;
+  background-color: #444a5a;
+  color: white;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  text-align: center;
+  cursor: default;
+  border: 1px solid transparent;
+}
+.dp-chip-cargaestadias:hover{ background-color:#5a6073; }
+
+/* Acciones */
+.dp-actions-cargaestadias{
+  display:flex; gap:10px; align-items:center; justify-content:center; margin-top:4px;
+}
+
+/* Responsivo */
+@media (max-width: 820px){
+  .dp-precioTotal-cargaestadias{ font-size: 32px; }
+  .dp-especificaciones-cargaestadias{ flex-direction:column; gap:16px; }
+  .ce-row-times{ grid-template-columns: 1fr; justify-content:center; }
 }

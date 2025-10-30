@@ -1,9 +1,11 @@
+// App.jsx
 import './App.css';
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Interfaz from './components/Interfaz/Interfaz';
 import Login from './components/Login/Login.jsx';
 import CargaMensuales from './components/CargaMensuales/CargaMensuales.jsx';
+import CargaEstadias from './components/CargaMensuales/CargaEstadias.jsx';
 
 const TOKEN_KEY = 'token';
 const REDIRECT_KEY = 'redirectAfterLogin';
@@ -71,12 +73,16 @@ function RedirectIfAuth({ children }) {
   return <Navigate to={redirectTo} replace />;
 }
 
-/** Si el rol es cargaMensuales, lo lleva a /carga-mensuales */
+/** Si el rol es cargaMensuales, lo lleva a /operador/carga-mensuales */
 function RoleGate({ children }) {
   const location = useLocation();
   const op = readOperador();
-  if (op?.role === 'cargaMensuales' && location.pathname !== '/carga-mensuales') {
-    return <Navigate to="/carga-mensuales" replace />;
+  if (
+    op?.role === 'cargaMensuales' &&
+    location.pathname !== '/operador/carga-mensuales' &&
+    location.pathname !== '/operador/carga-estadias'
+  ) {
+    return <Navigate to="/operador/carga-mensuales" replace />;
   }
   return children;
 }
@@ -84,6 +90,7 @@ function RoleGate({ children }) {
 export default function App() {
   return (
     <Routes>
+      {/* Login (público con redirección si ya está logueado) */}
       <Route
         path="/login"
         element={
@@ -93,7 +100,25 @@ export default function App() {
         }
       />
 
-      {/* Ruta exclusiva para el rol cargaMensuales */}
+      {/* ===== Área Operador - coincide con los navigate('/operador/...') que ya tenés ===== */}
+      <Route
+        path="/operador/carga-mensuales"
+        element={
+          <RequireAuth>
+            <CargaMensuales />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/operador/carga-estadias"
+        element={
+          <RequireAuth>
+            <CargaEstadias />
+          </RequireAuth>
+        }
+      />
+
+      {/* ===== Alias de compatibilidad (no rompe marcadores previos) ===== */}
       <Route
         path="/carga-mensuales"
         element={
@@ -102,8 +127,16 @@ export default function App() {
           </RequireAuth>
         }
       />
+      <Route
+        path="/carga-estadias"
+        element={
+          <RequireAuth>
+            <CargaEstadias />
+          </RequireAuth>
+        }
+      />
 
-      {/* Todas las demás rutas son privadas */}
+      {/* Todas las demás rutas son privadas y pasan por RoleGate */}
       <Route
         path="/*"
         element={

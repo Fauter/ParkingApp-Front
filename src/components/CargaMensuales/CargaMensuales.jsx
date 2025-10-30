@@ -707,6 +707,7 @@ export default function CargaMensuales() {
       await softRefreshClientes();
       showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
 
+      // 🔧 Resetear formularios y limpiar selección de la fila
       setFormData((prev) => ({
         ...prev,
         nombreApellido: "",
@@ -734,6 +735,9 @@ export default function CargaMensuales() {
         mesesAbonar: 1,
       }));
       setFileUploaded({ fotoSeguro:false, fotoDNI:false, fotoCedulaVerde:false });
+
+      // 👇 ESTE ES EL FIX: quitar el highlight de la lista
+      setSelectedCliente(null);
     } catch (err) {
       console.error(err);
       showModal("Error", err?.message || "Ocurrió un error al guardar el abono.");
@@ -810,6 +814,40 @@ export default function CargaMensuales() {
   if (detalleClienteId) {
     return (
       <div className="cm-scope-cargamensuales">
+        <div className="cm-topbar-cargamensuales">
+          <div className="cm-top-left-cargamensuales">
+            <h1 className="cm-title-cargamensuales">Carga de Mensuales</h1>
+            <span className="cm-role-cargamensuales">{operador?.role || "rol"}</span>
+          </div>
+          <div className="cm-top-right-cargamensuales">
+            {/* NAV: Tabs */}
+            <nav className="cm-navtabs-cargamensuales" aria-label="Secciones">
+              <button
+                type="button"
+                className="cm-tab-cargamensuales is-active"
+                onClick={() => navigate("/operador/carga-mensuales")}
+                aria-current="page"
+              >
+                Mensuales
+              </button>
+              <button
+                type="button"
+                className="cm-tab-cargamensuales"
+                onClick={() => navigate("/operador/carga-estadias")}
+              >
+                Estadías
+              </button>
+            </nav>
+            <button
+              className="cm-btn-cargamensuales cm-btn--danger-cargamensuales"
+              type="button"
+              onClick={logout}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
         <CargaMensualesDetalle
           clienteId={detalleClienteId}
           volver={() => setDetalleClienteId(null)}
@@ -828,13 +866,26 @@ export default function CargaMensuales() {
             <span className="cm-role-cargamensuales">{operador?.role || "rol"}</span>
           </div>
           <div className="cm-top-right-cargamensuales">
-            <button
-              className="cm-btn-cargamensuales cm-btn--ghost-cargamensuales"
-              type="button"
-              onClick={() => navigate("/", { replace: true })}
-            >
-              Operador
-            </button>
+            {/* NAV: Tabs */}
+            <nav className="cm-navtabs-cargamensuales" aria-label="Secciones">
+              <button
+                type="button"
+                className="cm-tab-cargamensuales is-active"
+                onClick={() => navigate("/operador/carga-mensuales")}
+                aria-current="page"
+              >
+                Mensuales
+              </button>
+              <button
+                type="button"
+                className="cm-tab-cargamensuales"
+                onClick={() => navigate("/operador/carga-estadias")}
+              >
+                Estadías
+              </button>
+            </nav>
+
+            {/* Botón Logout */}
             <button
               className="cm-btn-cargamensuales cm-btn--danger-cargamensuales"
               type="button"

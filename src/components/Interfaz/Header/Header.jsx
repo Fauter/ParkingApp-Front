@@ -26,7 +26,7 @@ function Header({
   const menuRef = useRef();
   const navigate = useNavigate();
 
-  // ⏱️ Timer de auto-impresión si no confirman en 20s
+  // ⏱️ (REMOVIDO: lógica de auto-impresión a los 20s)
   const autoPrintTimerRef = useRef(null);
 
   // 👉 Cierra sesión (logout)
@@ -106,44 +106,11 @@ function Header({
     Promise.resolve(onEjecutarBot()).catch(() => {}); // Fire & forget
   };
 
-  // 🚨 Auto-impresión si no confirman en 20s
-  useEffect(() => {
-    if (autoPrintTimerRef.current) {
-      clearTimeout(autoPrintTimerRef.current);
-      autoPrintTimerRef.current = null;
-    }
-
-    if (mostrarModalEntrada && ticketPendiente?.ticket) {
-      autoPrintTimerRef.current = setTimeout(async () => {
-        try {
-          if (mostrarModalEntrada) {
-            const ticketNumFormateado = String(ticketPendiente.ticket).padStart(6, '0');
-            await fetch('http://localhost:5000/api/ticket/imprimir', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                texto: ticketNumFormateado,
-                ticketNumero: ticketNumFormateado
-              }),
-            });
-          }
-        } catch (e) {
-          console.error('Auto-impresión fallida:', e);
-        } finally {
-          autoPrintTimerRef.current = null;
-        }
-      }, 20000); // 20s
-    }
-
-    return () => {
-      if (autoPrintTimerRef.current) {
-        clearTimeout(autoPrintTimerRef.current);
-        autoPrintTimerRef.current = null;
-      }
-    };
-  }, [mostrarModalEntrada, ticketPendiente]);
+  // 🚫 REMOVIDO: efecto que auto-imprimía a los 20s si no confirmaban.
+  // (Se mantiene la API de funciones para no romper props/calls)
 
   const cancelarAutoImpresion = () => {
+    // ya no hay temporizador que cancelar; se deja no-op por compatibilidad
     if (autoPrintTimerRef.current) {
       clearTimeout(autoPrintTimerRef.current);
       autoPrintTimerRef.current = null;
@@ -151,6 +118,7 @@ function Header({
   };
 
   const handleEntradaConfirmada = () => {
+    // no-op (compatibilidad). Antes cancelaba el timer.
     cancelarAutoImpresion();
   };
 
@@ -159,11 +127,11 @@ function Header({
       <h1>Parking</h1>
       <div className="menu" ref={menuRef}>
         {/* 🔘 Botón cuadrado para Logout (sin texto) */}
-        <button
+        {/* <button
           className="boton-logout"
           title="Cerrar sesión"
           onClick={handleLogout}
-        ></button>
+        ></button> */}
 
         <button className={getButtonClass('operador')} onClick={() => manejarCambioVista('operador')} disabled={modalActivo !== null}>Operador</button>
         <button className={getButtonClass('vehiculos')} onClick={() => manejarCambioVista('vehiculos')} disabled={modalActivo !== null}>Auditoría</button>

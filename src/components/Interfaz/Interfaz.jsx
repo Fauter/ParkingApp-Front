@@ -221,10 +221,29 @@ function Interfaz() {
     return { _id, username, nombre, apellido, role };
   };
 
-  // ✅ NUEVO: para CIERRE DE CAJA mandamos SOLO el _id
+  // ✅ NUEVO: para CIERRE DE CAJA mandamos SOLO el _id a la API de cierres
   const getOperadorId = () => {
     return user?._id || readOperador()?._id || null;
   };
+
+  // ============ NUEVO: soltar ticket (impresión) como el BOT pero para cierres ============
+  const imprimirCierre = async (payload) => {
+    try {
+      // Solo disparamos, sin bloquear el flujo de la UI (similar al BOT)
+      fetch('http://localhost:5000/api/tickets/imprimir-cierredecaja', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY) || ''}`,
+        },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } catch (e) {
+      // No bloqueamos nada si falla
+      console.error('No se pudo disparar impresión de cierre:', e);
+    }
+  };
+  // =========================================================================================
 
   const enviarCierreDeCaja = async () => {
     const operadorId = getOperadorId();
@@ -241,7 +260,7 @@ function Interfaz() {
       totalRecaudado,
       dejoEnCaja: efectivoEnCaja,
       totalRendido,
-      operador: operadorId, // 👈 SOLO el ObjectId
+      operador: operadorId, // 👈 SOLO el ObjectId en la colección de cierres
     };
 
     try {
@@ -257,6 +276,22 @@ function Interfaz() {
       const content = await res.json();
 
       if (res.ok) {
+        // 🔔 Disparamos impresión ANTES de limpiar token, usando datos locales + operador legible
+        const opHuman = operadorPayload();
+        imprimirCierre({
+          tipo: 'cierreDeCaja',
+          cierre: {
+            fecha,
+            hora,
+            totalRecaudado,
+            dejoEnCaja: efectivoEnCaja,
+            totalRendido,
+          },
+          operador: opHuman, // para imprimir nombre/usuario
+          _idCierre: content?._id || null
+        });
+
+        // Deslogueo
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(OPERADOR_KEY);
 
@@ -282,7 +317,7 @@ function Interfaz() {
         console.error('Error al rendir caja:', content);
         setMensajeModal({
           titulo: 'Error',
-          mensaje: 'Error al rendir caja: ' + (content.message || JSON.stringify(content)),
+          mensaje: 'Error al rendir caja: ' + (content?.message || JSON.stringify(content)),
           onClose: () => setMensajeModal(null)
         });
       }
@@ -356,6 +391,18 @@ function Interfaz() {
         });
         return;
       }
+
+      // 🔔 Disparamos impresión del CIERRE PARCIAL (sin descripción, solo monto y nombre si hay)
+      imprimirCierre({
+        tipo: 'cierreParcial',
+        parcial: {
+          fecha,
+          hora,
+          monto,
+          nombre: nombreParcial || ''
+        },
+        operador: op
+      });
 
       setMensajeModal({
         titulo: 'Éxito',
