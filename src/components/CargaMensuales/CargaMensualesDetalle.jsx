@@ -574,13 +574,13 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                                 >
                                   <FaEdit /> <span>Editar</span>
                                 </button>
-                                {/* <button
+                                <button
                                   className="cmdet-btn-action del"
                                   onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
                                   title="Eliminar vehículo"
                                 >
                                   <FaTrashAlt /> <span>Eliminar</span>
-                                </button> */}
+                                </button>
                               </div>
                             </div>
                           </div>

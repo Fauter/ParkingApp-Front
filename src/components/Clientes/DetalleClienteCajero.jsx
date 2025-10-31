@@ -747,13 +747,13 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                 >
                                   <FaEdit /> <span>Editar</span>
                                 </button>
-                                {/* <button
+                                <button
                                   className="btn-vehiculo eliminar"
                                   onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
                                   title="Eliminar vehículo"
                                 >
                                   <FaTrashAlt /> <span>Eliminar</span>
-                                </button> */}
+                                </button>
                               </div>
                             </div>
                           </div>
