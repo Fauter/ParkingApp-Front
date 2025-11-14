@@ -856,6 +856,8 @@ export default function CargaMensuales() {
     );
   }
 
+  const isCocheraFija = normCocheraFront(formData.cochera) === "Fija";
+
   return (
     <div className="cm-scope-cargamensuales">
       <div className="cm-page-cargamensuales">
@@ -1029,6 +1031,17 @@ export default function CargaMensuales() {
                         value={formData.piso}
                         onChange={handleChange}
                         className="input-wide-cargamensuales"
+                        disabled={!isCocheraFija}
+                        style={
+                          !isCocheraFija
+                            ? {
+                                opacity: 0.6,
+                                cursor: "not-allowed",
+                                backgroundColor: "#1b1b22",
+                                borderColor: "#3a3f4d",
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                     <div className="cm-field-cargamensuales cm-field--toggle-cargamensuales">
@@ -1039,7 +1052,7 @@ export default function CargaMensuales() {
                         name="exclusiva"
                         checked={Boolean(formData.exclusiva)}
                         onChange={handleChange}
-                        disabled={normCocheraFront(formData.cochera) !== "Fija"}
+                        disabled={!isCocheraFija}
                       />
                     </div>
                   </div>

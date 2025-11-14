@@ -1,4 +1,4 @@
-// src/Operador/CargaMensuales/DatosAutoAbono.jsx
+// src/components/CargaMensuales/DatosAutoAbono.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
@@ -310,7 +310,7 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
   const fetchClientes = async () => {
     try {
       const res = await fetch(`${BASE_URL}/api/clientes`, { cache: "no-store" });
-    if (res.ok) {
+      if (res.ok) {
         const data = await res.json();
         setClientes(Array.isArray(data) ? data : []);
       } else {
@@ -601,6 +601,72 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     return { baseActual, baseNuevo, diffBase, montoHoy: proporcional, diasRestantes, totalDiasMes };
   };
 
+  /* ===========================================================
+     🔗 Sincronización Vehículo ↔ Cochera (Front)
+     Reglas:
+     - Si el cliente tiene cocheras[] (nuevo modelo):
+         • Selecciona por coincidencia exacta de piso con formData.piso (cuando haya).
+         • Si no hay match, usa la primera cochera.
+       POST /api/clientes/asignarVehiculoACochera { clienteId, cocheraId, vehiculoId }
+     - Si NO tiene cocheras[] (modelo histórico):
+       POST /api/clientes/asignarVehiculoACochera { clienteId, cocheraId:null, vehiculoId, cochera:{tipo,exclusiva,piso} }
+     - Silencioso: no rompe el flujo si falla.
+  =========================================================== */
+  const asignarVehiculoACocheraFront = async (clienteId, vehiculoId) => {
+    try {
+      if (!clienteId || !vehiculoId) return;
+      const cliente = (clientes || []).find((c) => c._id === clienteId);
+      const token = localStorage.getItem("token");
+      const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+      // 1) Nuevo modelo: array cocheras
+      if (cliente && Array.isArray(cliente.cocheras) && cliente.cocheras.length > 0) {
+        let cocheraDestino = null;
+
+        if (formData.piso) {
+          cocheraDestino = cliente.cocheras.find(
+            (k) =>
+              String(k?.piso || "").trim().toLowerCase() === String(formData.piso).trim().toLowerCase()
+          ) || null;
+        }
+        if (!cocheraDestino) cocheraDestino = cliente.cocheras[0];
+
+        if (cocheraDestino && cocheraDestino._id) {
+          await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeaders },
+            body: JSON.stringify({
+              clienteId,
+              cocheraId: cocheraDestino._id,
+              vehiculoId,
+            }),
+          }).catch(() => {});
+          return;
+        }
+      }
+
+      // 2) Modelo histórico: snapshot desde formData
+      const cocheraSimple = {
+        tipo: normCocheraFront(formData.cochera) || "",
+        exclusiva: normExclusivaFront(formData.exclusiva, formData.cochera),
+        piso: String(formData.piso || "").trim(),
+      };
+
+      await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          clienteId,
+          cocheraId: null,
+          vehiculoId,
+          cochera: cocheraSimple,
+        }),
+      }).catch(() => {});
+    } catch (err) {
+      console.warn("⚠️ asignarVehiculoACocheraFront:", err?.message || err);
+    }
+  };
+
   // ====== Flujo de guardado con dos confirmaciones ======
   const finalizarSubmit = async (previewOverride = null, decision = null) => {
     try {
@@ -650,7 +716,7 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
           diasRestantes = Number(previewOverride.diasRestantes);
           totalDiasMes = Number(previewOverride.totalDiasMes);
         } else {
-          // fallback defensivo (ya casi no debería ocurrir)
+          // fallback defensivo
           const pr = prorratearMontoFront(
             Math.max(0, (previewOverride?.baseNuevo || baseMensual) - (previewOverride?.baseActual || 0))
           );
@@ -707,7 +773,7 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
             factura: formData.factura,
             tierAbono: getTierName(formData.cochera || "Móvil", formData.exclusiva),
             baseMensual: baseMensual,
-            montoProporcional: proporcionalHoy, // si es upgrade: es el diff prorrateado
+            montoProporcional: proporcionalHoy, // si es upgrade: diff prorrateado
             tipoVehiculo: formData.tipoVehiculo,
             fecha: new Date().toISOString(),
           };
@@ -777,14 +843,44 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         }
       }
 
+      // 5) 🔗 Vincular Vehículo ↔ Cochera (robusto y silencioso)
+      try {
+        // Primero intento obtener el vehiculoId por endpoint directo
+        let vehiculoId = null;
+        try {
+          const r = await fetch(`${BASE_URL}/api/vehiculos/patente/${encodeURIComponent(patente)}`, { cache: "no-store" });
+          if (r.ok) {
+            const v = await r.json().catch(() => null);
+            if (v && (v._id || v?.data?._id)) vehiculoId = v._id || v?.data?._id;
+          }
+        } catch {}
+
+        // Fallback: por si el endpoint devuelve array
+        if (!vehiculoId) {
+          try {
+            const r2 = await fetch(`${BASE_URL}/api/vehiculos?patente=${encodeURIComponent(patente)}`, { cache: "no-store" });
+            if (r2.ok) {
+              const arr = await r2.json().catch(() => null);
+              if (Array.isArray(arr) && arr.length) vehiculoId = arr[0]?._id || null;
+            }
+          } catch {}
+        }
+
+        if (vehiculoId) {
+          await asignarVehiculoACocheraFront(clienteId, vehiculoId);
+        }
+      } catch (errLink) {
+        console.warn("⚠️ Vinculación vehículo↔cochera:", errLink?.message || errLink);
+      }
+
       await fetchClientes();
       fetch(`${BASE_URL}/api/sync/run-now`, { method: "POST" }).catch(() => {});
 
       const msgOk = clienteEsNuevo
-        ? `Abono registrado y cobrado para ${patente} (cliente nuevo).`
+        ? `Abono registrado y cobrado para ${patente} (cliente nuevo). Sincronizado con cochera.`
         : esUpgradeDecision
-          ? `Abono agregado y diferencia cobrada para ${patente} (aumento de precio).`
-          : `Abono agregado para ${patente} (sin cargos).`;
+          ? `Abono agregado y diferencia cobrada para ${patente} (aumento de precio). Sincronizado con cochera.`
+          : `Abono agregado para ${patente} (sin cargos). Sincronizado con cochera.`;
 
       showModal("Éxito", msgOk);
 
@@ -1095,6 +1191,9 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     </div>
   );
 
+  // ====== UI state derived ======
+  const isCocheraFija = normCocheraFront(formData.cochera) === "Fija";
+
   return (
     <div className="abono-container">
       <form className="abono-form" onSubmit={handleSubmit} encType="multipart/form-data">
@@ -1123,6 +1222,13 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
               value={formData.piso}
               onChange={handleChange}
               className="input-style-wide"
+              disabled={!isCocheraFija}
+              style={{
+                opacity: !isCocheraFija ? 0.55 : 1,
+                cursor: !isCocheraFija ? "not-allowed" : "text",
+                backgroundColor: !isCocheraFija ? "#191a22" : undefined,
+                borderColor: !isCocheraFija ? "#3b4050" : undefined,
+              }}
             />
           </div>
 
@@ -1307,7 +1413,7 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
           </div>
 
           {/* ====== Select Tipo de Vehículo (ABONO) ====== */}
-  <div>
+          <div>
             <label>Tipo de Vehículo</label>
             <select
               name="tipoVehiculo"
