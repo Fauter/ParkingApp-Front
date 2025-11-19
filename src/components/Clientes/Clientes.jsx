@@ -76,7 +76,6 @@ function Clientes({ onSeleccionarCliente }) {
               <th>Nombre y Apellido</th>
               <th>DNI/CUIT/CUIL</th>
               <th>Vehículos</th>
-              <th>N° Cochera</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -90,7 +89,6 @@ function Clientes({ onSeleccionarCliente }) {
                 <td>{cliente.nombreApellido || '—'}</td>
                 <td>{formatearDNI(cliente.dniCuitCuil) || '—'}</td>
                 <td>{(cliente.vehiculos || []).map(v => v.patente).join(', ') || '—'}</td>
-                <td>{getPiso(cliente)}</td>
                 <td>
                   {cliente.abonado ? (
                     <span className="estado-abonado">ABONADO</span>
@@ -104,7 +102,6 @@ function Clientes({ onSeleccionarCliente }) {
             {/* FILAS VACÍAS PARA COMPLETAR 10 */}
             {Array.from({ length: Math.max(0, ITEMS_POR_PAGINA - clientesPaginados.length) }).map((_, i) => (
               <tr key={`empty-${i}`} className="fila-vacia" style={{ color: '#888' }}>
-                <td>—</td>
                 <td>—</td>
                 <td>—</td>
                 <td>—</td>

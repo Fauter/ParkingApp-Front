@@ -1,5 +1,4 @@
 /* DatosClientesAbonos.css */
-/* Mantiene estética oscura y ajusta alto completo del panel izquierdo */
 
 .dca-wrap {
   display: flex;
@@ -10,13 +9,11 @@
   border-radius: 6px;
   padding: 10px;
   gap: 10px;
-
-  /* ⬇️ ocupa todo el alto disponible del contenedor izquierdo */
   height: 100%;
   min-height: 100%;
 }
 
-/* Header: buscador + botón refresh */
+/* Header */
 .dca-header {
   display: flex;
   gap: 8px;
@@ -33,34 +30,36 @@
   outline: none;
   transition: border-color 0.2s ease;
 }
-.dca-search:focus { border-color: rgb(100, 108, 133); }
+.dca-search:focus {
+  border-color: rgb(100, 108, 133);
+}
 
-/* Botón con cian (no verde) */
 .dca-refresh {
-  background-color: #00bcd4;           /* cyan */
+  background-color: #00bcd4;
   border: none;
   border-radius: 4px;
   padding: 0.5rem 0.7rem;
   color: white;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s ease, opacity 0.2s ease;
   min-width: 110px;
 }
-.dca-refresh:hover { background-color: #00a0b3; }
-.dca-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
-.dca-refresh.is-busy { opacity: 0.85; }
+.dca-refresh:hover {
+  background-color: #00a0b3;
+}
+.dca-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
-/* Tabla scrollable: que crezca y pegue arriba */
+/* Tabla */
 .dca-tablebox {
   background: #2a2a38;
   border: 1px solid #444a5a;
   border-radius: 6px;
   overflow: hidden;
-
-  /* ⬇️ ocupar el espacio disponible entre header y meta */
   flex: 1;
-  min-height: 0; /* imprescindible para que el overflow funcione en flex */
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -77,60 +76,63 @@
   color: #ddd;
   font-weight: 700;
   font-size: 0.85rem;
-  text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid #3a3f50;
 }
 
 .dca-table tbody td {
-  padding: 8px 10px;
+  padding: 7px 8px;
   font-size: 0.9rem;
   color: #eee;
   border-bottom: 1px solid #3a3f50;
-  vertical-align: middle;
 }
 
-.dca-ellipsis {
-  max-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* Hover */
 .dca-table tbody tr:hover {
   background: #343445;
 }
 
-/* Botón flecha (cian) */
+/* Fila cochera */
+.dca-cochera-row td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #333645;
+  box-shadow: inset 0 0.6px 0px rgba(0,0,0,0.35);
+}
+
+/* Variante vacío */
+.dca-cochera-row-empty td {
+  padding: 4px 10px;
+  background: #20202a;
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.4);
+  border-bottom: 1px solid #333645;
+}
+
+/* Botón flecha */
 .dca-pick {
   background-color: #00bcd4;
   border: none;
   border-radius: 6px;
-  width: 38px;
-  height: 34px;
+  width: 34px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: #fff;
   cursor: pointer;
+  font-size: 0.8rem;
   transition: background-color 0.2s ease, transform 0.05s ease;
 }
-.dca-pick:hover { background-color: #00a0b3; }
-.dca-pick:active { transform: translateY(1px); }
-
-/* Empty state */
-.dca-empty {
-  text-align: center;
-  color: #ccc;
-  padding: 16px 0;
+.dca-pick:hover {
+  background-color: #00a0b3;
+}
+.dca-pick:active {
+  transform: translateY(1px);
 }
 
-/* Meta inferior */
-.dca-meta {
-  color: #bbb;
-  font-size: 0.85rem;
-  text-align: right;
-  padding-top: 2px;
+.dca-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Skeletons */
@@ -141,6 +143,7 @@
   border-radius: 4px;
   height: 12px;
 }
+
 .dca-w20 { width: 20px; }
 .dca-w30 { width: 30px; }
 .dca-w40 { width: 40px; }
@@ -152,9 +155,31 @@
   100% { background-position: 200% 50%; }
 }
 
-/* Ajuste si la altura de viewport es chica */
-@media (max-height: 700px) {
-  .dca-tablebox { /* el flex:1 ya se adapta; este es por si necesitás cap */
-    max-height: none;
-  }
+/* Empty state */
+.dca-empty {
+  text-align: center;
+  padding: 16px 0;
+  color: #ccc;
+}
+
+/* Alinear */
+.dca-table td,
+.dca-table th {
+  vertical-align: middle;
+}
+
+/* EMAIL — NUEVO  
+   No cortar salvo que sea exageradamente largo */
+.dca-email {
+  min-width: 180px;     /* antes 260px fijo */
+  max-width: 50%;       /* dinámico, mucho más flexible */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Cochera: multilinea */
+.dca-cochera-label,
+.dca-cochera-label-empty {
+  white-space: normal !important;
 }

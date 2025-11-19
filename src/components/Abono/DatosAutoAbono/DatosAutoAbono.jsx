@@ -631,17 +631,21 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         }
         if (!cocheraDestino) cocheraDestino = cliente.cocheras[0];
 
-        if (cocheraDestino && cocheraDestino._id) {
-          await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders },
-            body: JSON.stringify({
-              clienteId,
-              cocheraId: cocheraDestino._id,
-              vehiculoId,
-            }),
-          }).catch(() => {});
-          return;
+        // 🩹 FIX: usar cocheraId (ID real de la cochera) o _id como fallback
+        if (cocheraDestino) {
+          const cocheraIdPayload = cocheraDestino.cocheraId || cocheraDestino._id || null;
+          if (cocheraIdPayload) {
+            await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...authHeaders },
+              body: JSON.stringify({
+                clienteId,
+                cocheraId: cocheraIdPayload,
+                vehiculoId,
+              }),
+            }).catch(() => {});
+            return;
+          }
         }
       }
 
@@ -1040,6 +1044,72 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     }
   };
 
+  // === FUNCIÓN AUXILIAR NUEVA (debe ir arriba del handleSubmit) ===
+  const abrirConfirmacionDeAbono = () => {
+    const patente = (formData.patente || "").toUpperCase();
+    const tipo = formData.tipoVehiculo;
+    const metodo = formData.metodoPago;
+    const factura = formData.factura;
+
+    const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+    const baseMensual = getAbonoPrecioByMetodo(
+      tipo,
+      metodo,
+      formData.cochera || "Móvil",
+      formData.cochera === "Fija" ? formData.exclusiva : false
+    );
+
+    if (!Number.isFinite(baseMensual)) {
+      return showModal(
+        "Error",
+        `No hay precio cargado para "${(tipo || "").toLowerCase()}" en tier "${tierName}" (${metodo}). `
+      );
+    }
+
+    const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(baseMensual);
+
+    const detalleCochera = [
+      `Cochera: ${formData.cochera || "-"}`,
+      `N° de Cochera: ${formData.piso || "-"}`,
+      `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`,
+    ].join("\n");
+
+    const ucfirst = (s) => {
+      const str = String(s || "").trim();
+      return str ? str.charAt(0).toLocaleUpperCase("es-AR") + str.slice(1) : "";
+    };
+
+    const tierPretty = ucfirst(tierName);
+    const metodoCatalogo = ucfirst(metodo === "Efectivo" ? "efectivo" : "otros");
+
+    const msg =
+      `Vas a hacer un Abono\n` +
+      `\n` +
+      `Patente: ${patente}\n` +
+      `Tipo: ${tipo}\n` +
+      `Método de pago: ${metodo}\n` +
+      `Factura: ${factura}\n` +
+      `\n` +
+      `[${tierPretty}] (Precio Completo: ${metodoCatalogo}): $${formatARS(baseMensual)}\n` +
+      `A cobrar HOY (${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n` +
+      `\n` +
+      `${detalleCochera}`;
+
+    setConfirmAbono({
+      open: true,
+      titulo: "Confirmar alta de Abono",
+      mensaje: msg,
+      onConfirm: continuarFlujoDespuesDeConfirmacion,
+      onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+    });
+  };
+
+
+
+  /* ========================================================================
+    HANDLE SUBMIT COMPLETO CON modal DNI existente
+  ========================================================================= */
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -1058,64 +1128,36 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
       return showModal("Error", err.message);
     }
 
-    // 2) Confirmación GENERAL (informativa)
+    // 2) Nuevo: detectar si el DNI ya existe, mostrar modal antes de seguir
     try {
-      const patente = (formData.patente || "").toUpperCase();
-      const tipo = formData.tipoVehiculo;
-      const metodo = formData.metodoPago;
-      const factura = formData.factura;
-
-      const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-      const baseMensual = getAbonoPrecioByMetodo(
-        tipo,
-        metodo,
-        formData.cochera || "Móvil",
-        formData.cochera === "Fija" ? formData.exclusiva : false
+      const dni = (formData.dniCuitCuil || "").trim();
+      const clienteExistente = (clientes || []).find(
+        (c) => String(c.dniCuitCuil || "").trim() === dni
       );
 
-      if (!Number.isFinite(baseMensual)) {
-        return showModal(
-          "Error",
-          `No hay precio cargado para "${(tipo || "").toLowerCase()}" en tier "${tierName}" (${metodo}). `
-        );
+      if (clienteExistente) {
+        setConfirmAbono({
+          open: true,
+          titulo: "DNI ya existente",
+          mensaje:
+            `El DNI ${dni} ya está registrado a nombre de:\n\n` +
+            `${clienteExistente.nombreApellido}\n\n` +
+            `¿Deseás continuar y actualizar su información / agregar vehículo?`,
+          onConfirm: () => {
+            setConfirmAbono((s) => ({ ...s, open: false }));
+            abrirConfirmacionDeAbono(); // << después sigue al modal de abono original
+          },
+          onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+        });
+        return; // esperamos confirmación
       }
+    } catch (err) {
+      return showModal("Error", err?.message || "No se pudo verificar el DNI.");
+    }
 
-      const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(baseMensual);
-
-      const detalleCochera = [
-        `Cochera: ${formData.cochera || "-"}`,
-        `N° de Cochera: ${formData.piso || "-"}`,
-        `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`,
-      ].join("\n");
-
-      const ucfirst = (s) => {
-        const str = String(s || "").trim();
-        return str ? str.charAt(0).toLocaleUpperCase("es-AR") + str.slice(1) : "";
-      };
-
-      const tierPretty = ucfirst(tierName);
-      const metodoCatalogo = ucfirst(metodo === "Efectivo" ? "efectivo" : "otros");
-
-      const msg =
-        `Vas a hacer un Abono\n` +
-        `\n` +
-        `Patente: ${patente}\n` +
-        `Tipo: ${tipo}\n` +
-        `Método de pago: ${metodo}\n` +
-        `Factura: ${factura}\n` +
-        `\n` +
-        `[${tierPretty}] (Precio Completo: ${metodoCatalogo}): $${formatARS(baseMensual)}\n` +
-        `A cobrar HOY (${diasRestantes}/${totalDiasMes}): $${formatARS(proporcional)}\n` +
-        `\n` +
-        `${detalleCochera}`;
-
-      setConfirmAbono({
-        open: true,
-        titulo: "Confirmar alta de Abono",
-        mensaje: msg,
-        onConfirm: continuarFlujoDespuesDeConfirmacion,
-        onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
-      });
+    // 3) Si NO existe, abrimos directamente el modal de confirmación del abono
+    try {
+      abrirConfirmacionDeAbono();
     } catch (err) {
       return showModal("Error", err?.message || "No se pudo preparar la confirmación.");
     }

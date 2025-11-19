@@ -1,5 +1,12 @@
 // DatosClientesAbonos.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  Fragment,
+} from "react";
 import { FaArrowRight } from "react-icons/fa";
 import "./DatosClientesAbonos.css";
 
@@ -13,15 +20,34 @@ const normCocheraFront = (raw) => {
   return "";
 };
 
-export default function DatosClientesAbonos({
-  onPickCliente, // callback(cliente)
-}) {
+// Formateador DNI con puntos
+const formatDNI = (raw) => {
+  const v = String(raw || "").replace(/\D/g, "");
+  if (!v) return "";
+  if (v.length <= 3) return v;
+
+  const len = v.length;
+  let firstGroupLen = len % 3;
+  if (firstGroupLen === 0) firstGroupLen = 3;
+
+  let result = v.slice(0, firstGroupLen);
+  for (let i = firstGroupLen; i < len; i += 3) {
+    result += "." + v.slice(i, i + 3);
+  }
+  return result;
+};
+
+export default function DatosClientesAbonos({ onPickCliente }) {
   const [clientes, setClientes] = useState([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
+
+  const [cocherasMap, setCocherasMap] = useState({});
+  const [cocherasLoading, setCocherasLoading] = useState({});
+
   const cooldownTimerRef = useRef(null);
 
   const startCooldown = useCallback(() => {
@@ -59,16 +85,44 @@ export default function DatosClientesAbonos({
     }
   }, []);
 
-  const softRefresh = useCallback(async () => {
-    if (isRefreshing || cooldownLeft > 0) return;
-    setIsRefreshing(true);
+  const fetchCocherasByCliente = useCallback(async (clienteId) => {
+    if (!clienteId) return;
+
+    // Si ya cargamos las cocheras antes, no repetimos
+    if (cocherasMap[clienteId]) return;
+
+    setCocherasLoading((prev) => ({ ...prev, [clienteId]: true }));
+
     try {
-      await fetchClientes();
+      const res = await fetch(`${BASE_URL}/api/cocheras/cliente/${clienteId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCocherasMap((prev) => ({ ...prev, [clienteId]: data }));
+      } else {
+        setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
+      }
+    } catch (e) {
+      console.error(e);
+      setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
     } finally {
-      setIsRefreshing(false);
-      startCooldown();
+      setCocherasLoading((prev) => ({ ...prev, [clienteId]: false }));
     }
-  }, [fetchClientes, isRefreshing, cooldownLeft, startCooldown]);
+  }, [cocherasMap]);
+
+  const softRefresh = useCallback(
+    async () => {
+      if (isRefreshing || cooldownLeft > 0) return;
+      setIsRefreshing(true);
+      try {
+        await fetchClientes();
+        setCocherasMap({});
+      } finally {
+        setIsRefreshing(false);
+        startCooldown();
+      }
+    },
+    [fetchClientes, isRefreshing, cooldownLeft, startCooldown]
+  );
 
   useEffect(() => {
     fetchClientes();
@@ -93,6 +147,26 @@ export default function DatosClientesAbonos({
 
   const showSkeleton = loading || isRefreshing;
 
+  const buildCocheraLabel = (k) => {
+    const tipo = normCocheraFront(k?.tipo) || "—";
+    const piso = k?.piso ? ` • N° ${k.piso}` : "";
+    const exclusiva = k?.exclusiva ? " • Exclusiva" : "";
+    return `${tipo}${piso}${exclusiva}`;
+  };
+
+  const handlePickCochera = (cliente, cocheraSnap) => {
+    if (!onPickCliente) return;
+    const cocheraNorm = normCocheraFront(cocheraSnap?.tipo);
+    const payload = {
+      ...cliente,
+      cochera: cocheraNorm,
+      piso: cocheraSnap?.piso || "",
+      exclusiva: !!cocheraSnap?.exclusiva,
+      cocheraSeleccionadaId: cocheraSnap?._id || null,
+    };
+    onPickCliente(payload);
+  };
+
   return (
     <div className="dca-wrap">
       <div className="dca-header">
@@ -106,24 +180,33 @@ export default function DatosClientesAbonos({
           className={`dca-refresh ${isRefreshing ? "is-busy" : ""}`}
           onClick={softRefresh}
           disabled={isRefreshing || cooldownLeft > 0}
-          title="Refrescar lista"
         >
-          {isRefreshing ? "Actualizando…" : cooldownLeft > 0 ? `Refrescar (${cooldownLeft})` : "Refrescar"}
+          {isRefreshing
+            ? "Actualizando…"
+            : cooldownLeft > 0
+            ? `Refrescar (${cooldownLeft})`
+            : "Refrescar"}
         </button>
       </div>
 
       <div className="dca-tablebox">
         <table className="dca-table">
+          <colgroup>
+            <col style={{ width: "34%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "38%" }} />
+            <col style={{ width: "10%" }} />
+          </colgroup>
+
           <thead>
             <tr>
               <th>Nombre</th>
               <th>DNI/CUIT</th>
               <th>Email</th>
-              <th>Cochera</th>
-              {/* ⛔ columna Patente removida */}
-              <th style={{ width: 64 }}></th>
+              <th></th>
             </tr>
           </thead>
+
           <tbody>
             {showSkeleton ? (
               Array.from({ length: 8 }).map((_, i) => (
@@ -131,38 +214,78 @@ export default function DatosClientesAbonos({
                   <td><div className="dca-skel dca-w60" /></td>
                   <td><div className="dca-skel dca-w40" /></td>
                   <td><div className="dca-skel dca-w70" /></td>
-                  <td><div className="dca-skel dca-w40" /></td>
                   <td><div className="dca-skel dca-w20" /></td>
                 </tr>
               ))
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5}>
+                <td colSpan={4}>
                   <div className="dca-empty">No hay clientes que coincidan.</div>
                 </td>
               </tr>
             ) : (
               filtered.map((c) => {
-                const cochera = normCocheraFront(c?.cochera) || "—";
-                const piso = c?.piso ? ` • N° ${c.piso}` : "";
-                const exclusiva = c?.exclusiva ? " • Exclusiva" : "";
+                const clienteId = c._id;
+                const keyCliente = clienteId || `${c.dniCuitCuil}-${c.email}`;
+
+                // Lazy load obligatorio para cada cliente
+                if (!cocherasMap[clienteId] && !cocherasLoading[clienteId]) {
+                  fetchCocherasByCliente(clienteId);
+                }
+
+                const cocheras = cocherasMap[clienteId] || [];
+                const isCocheraLoading = cocherasLoading[clienteId];
+
                 return (
-                  <tr key={c._id || `${c.dniCuitCuil}-${c.email}`}>
-                    <td>{c?.nombreApellido || "—"}</td>
-                    <td>{c?.dniCuitCuil || "—"}</td>
-                    <td className="dca-ellipsis">{c?.email || "—"}</td>
-                    <td>{cochera}{piso}{exclusiva}</td>
-                    <td>
-                      <button
-                        className="dca-pick"
-                        onClick={() => onPickCliente && onPickCliente(c)}
-                        title="Enviar a la derecha"
-                        aria-label="Enviar a la derecha"
-                      >
-                        <FaArrowRight />
-                      </button>
-                    </td>
-                  </tr>
+                  <Fragment key={keyCliente}>
+                    <tr className="dca-client-row">
+                      <td>{c?.nombreApellido || "—"}</td>
+                      <td>{formatDNI(c?.dniCuitCuil)}</td>
+                      <td className="dca-email">{c?.email || "—"}</td>
+                      <td></td>
+                    </tr>
+
+                    {isCocheraLoading ? (
+                      <tr className="dca-cochera-row-empty">
+                        <td></td>
+                        <td></td>
+                        <td className="dca-ellipsis dca-cochera-label-empty">
+                          (Cargando cocheras…)
+                        </td>
+                        <td></td>
+                      </tr>
+                    ) : cocheras.length === 0 ? (
+                      <tr className="dca-cochera-row-empty">
+                        <td></td>
+                        <td></td>
+                        <td className="dca-ellipsis dca-cochera-label-empty">
+                          (Sin cocheras registradas)
+                        </td>
+                        <td></td>
+                      </tr>
+                    ) : (
+                      cocheras.map((k, idx) => {
+                        const rowKey = k._id || `${keyCliente}-co-${idx}`;
+                        return (
+                          <tr key={rowKey} className="dca-cochera-row">
+                            <td></td>
+                            <td></td>
+                            <td className="dca-ellipsis dca-cochera-label">
+                              {buildCocheraLabel(k)}
+                            </td>
+                            <td>
+                              <button
+                                className="dca-pick"
+                                onClick={() => handlePickCochera(c, k)}
+                              >
+                                <FaArrowRight />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </Fragment>
                 );
               })
             )}

@@ -1,6 +1,6 @@
 // DetalleClienteCajero.jsx
 import React, { useEffect, useState } from 'react';
-import { FaArrowLeft, FaPlus, FaTrashAlt, FaEdit } from 'react-icons/fa';
+import { FaArrowLeft, FaPlus, FaTrashAlt, FaEdit, FaCheck, FaTimes } from 'react-icons/fa';
 import './DetalleClienteCajero.css';
 import ModalVehiculoCajero from './ModalVehiculoCajero';
 import ModalMensaje from '../ModalMensaje/ModalMensaje';
@@ -9,7 +9,8 @@ const API_BASE = 'http://localhost:5000';
 const API_PRECIOS = `${API_BASE}/api/precios`;
 const API_CLIENTES = `${API_BASE}/api/clientes`;
 const API_ABONOS = `${API_BASE}/api/abonos`;
-const API_VEHICULOS = `${API_BASE}/api/vehiculos`; // 👈 ya lo tenías
+const API_VEHICULOS = `${API_BASE}/api/vehiculos`;
+const API_COCHERAS = `${API_BASE}/api/cocheras`; // 👈 nuevo: endpoint de cocheras
 
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
@@ -64,6 +65,16 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   // Modal confirmación eliminar vehículo
   const [confirmDel, setConfirmDel] = useState(null); // { abonoId, patente }
+
+  // Cocheras + vehículos agrupados por cochera
+  const [cocherasConVehiculos, setCocherasConVehiculos] = useState([]); // [{ cocheraId, tipo, piso, exclusiva, vehiculos:[abonos...] }]
+  const [cocherasLoading, setCocherasLoading] = useState(false);
+
+  // Edición inline del número de cochera (piso)
+  const [editingCocheraId, setEditingCocheraId] = useState(null);
+  const [editingCocheraPiso, setEditingCocheraPiso] = useState('');
+  const [editingCocheraSaving, setEditingCocheraSaving] = useState(false);
+  const [editingCocheraError, setEditingCocheraError] = useState('');
 
   // Form alta vehículo (lo usás en ModalVehiculoCajero)
   const [formData, setFormData] = useState({
@@ -137,12 +148,74 @@ function DetalleClienteCajero({ clienteId, volver }) {
     cargarCliente();
   }, [clienteId]);
 
+  /* =================== Carga cocheras del cliente =================== */
   useEffect(() => {
-    const interval = setInterval(() => {
-      cargarCliente();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    const fetchCocherasCliente = async () => {
+      if (!cliente || !Array.isArray(cliente.cocheras) || cliente.cocheras.length === 0) {
+        setCocherasConVehiculos([]);
+        return;
+      }
+      try {
+        setCocherasLoading(true);
+
+        const abonosActivosLocal = Array.isArray(cliente.abonos)
+          ? cliente.abonos.filter(a => a && a.activo !== false)
+          : [];
+
+        const resultado = [];
+
+        for (const c of cliente.cocheras) {
+          if (!c || !c.cocheraId) continue;
+          try {
+            const res = await fetch(`${API_COCHERAS}/${c.cocheraId}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              }
+            });
+            if (!res.ok) continue;
+            const cocheraData = await res.json();
+
+            const vehiculosCochera = Array.isArray(cocheraData.vehiculos) ? cocheraData.vehiculos : [];
+            const vehiculosAbonos = [];
+
+            for (const v of vehiculosCochera) {
+              const patenteUpper = (v?.patente || '').toUpperCase();
+              const abonoMatch = abonosActivosLocal.find(
+                a => String(a.patente || '').toUpperCase() === patenteUpper
+              );
+              if (abonoMatch) {
+                vehiculosAbonos.push(abonoMatch);
+              } else {
+                console.warn(
+                  '[DetalleClienteCajero] Vehículo en cochera sin abono activo asociado:',
+                  patenteUpper
+                );
+              }
+            }
+
+            resultado.push({
+              cocheraId: cocheraData._id || c.cocheraId,
+              tipo: cocheraData.tipo ?? c.cochera,
+              piso: cocheraData.piso ?? c.piso,
+              exclusiva: typeof cocheraData.exclusiva === 'boolean'
+                ? cocheraData.exclusiva
+                : !!c.exclusiva,
+              vehiculos: vehiculosAbonos,
+            });
+          } catch (err) {
+            console.error('Error cargando cochera cliente:', c.cocheraId, err);
+          }
+        }
+
+        setCocherasConVehiculos(resultado);
+      } finally {
+        setCocherasLoading(false);
+      }
+    };
+
+    fetchCocherasCliente();
+  }, [cliente]);
 
   /* =================== Formateos y labels =================== */
   const formatearFechaCorta = (fechaISO) => {
@@ -184,6 +257,78 @@ function DetalleClienteCajero({ clienteId, volver }) {
       if (withPiso) return String(withPiso.piso);
     }
     return null;
+  };
+
+  const buildCocheraHeaderLabel = (tipo, piso, exclusiva) => {
+    const t = (tipo || '').toString().trim().toLowerCase();
+    let base;
+    if (t === 'móvil' || t === 'movil') base = 'Cochera Móvil';
+    else if (t === 'fija') base = exclusiva ? 'Cochera Exclusiva' : 'Cochera Fija';
+    else base = 'Cochera';
+    if (piso !== undefined && piso !== null && piso !== '') {
+      return `${base} • N° ${piso}`;
+    }
+    return base;
+  };
+
+  /* =================== Edición número de cochera (piso) =================== */
+  const startEditCochera = (coch) => {
+    if (!coch || !coch.cocheraId) return;
+    setEditingCocheraError('');
+    setEditingCocheraId(coch.cocheraId);
+    setEditingCocheraPiso(coch.piso ?? '');
+  };
+
+  const cancelEditCochera = () => {
+    setEditingCocheraId(null);
+    setEditingCocheraPiso('');
+    setEditingCocheraError('');
+  };
+
+  const saveCocheraPiso = async () => {
+    const nuevo = (editingCocheraPiso || '').trim();
+    if (!nuevo) {
+      setEditingCocheraError('El número de cochera no puede estar vacío.');
+      return;
+    }
+    if (!editingCocheraId) {
+      setEditingCocheraError('No se pudo identificar la cochera a editar.');
+      return;
+    }
+    try {
+      setEditingCocheraSaving(true);
+      setEditingCocheraError('');
+
+      const res = await fetch(`${API_COCHERAS}/${editingCocheraId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ piso: nuevo }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.msg || data?.message || 'No se pudo actualizar la cochera');
+      }
+
+      // Actualizo el estado local para que el cambio se vea inmediato
+      setCocherasConVehiculos(prev =>
+        prev.map(c =>
+          c.cocheraId === editingCocheraId
+            ? { ...c, piso: nuevo }
+            : c
+        )
+      );
+
+      cancelEditCochera();
+    } catch (err) {
+      console.error('Error actualizando cochera:', err);
+      setEditingCocheraError(err.message || 'Error inesperado al actualizar la cochera');
+    } finally {
+      setEditingCocheraSaving(false);
+    }
   };
 
   /* =================== Fotos documentos =================== */
@@ -627,13 +772,27 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   const finDerivado = obtenerFinAbono(cliente);
   const abonoActivo = esAbonoActivo(cliente);
-  const cocheraLabel = getCocheraLabel(cliente);
-  const piso = getPisoFromCliente(cliente);
+
+  const clienteCocherasArr = Array.isArray(cliente.cocheras) ? cliente.cocheras : [];
+  const multipleCocheras = clienteCocherasArr.length > 1;
+
+  const cocheraLabel = multipleCocheras ? null : getCocheraLabel(cliente);
+  const piso = multipleCocheras ? null : getPisoFromCliente(cliente);
 
   // Solo listamos abonos activos
   const abonosActivos = Array.isArray(cliente.abonos)
     ? cliente.abonos.filter(a => a && a.activo !== false)
     : [];
+
+  // Abonos activos que ya están asignados a alguna cochera (por cocheraId)
+  const abonosEnCocherasIds = new Set();
+  cocherasConVehiculos.forEach(c => {
+    (c.vehiculos || []).forEach(v => {
+      if (v && v._id) abonosEnCocherasIds.add(String(v._id));
+    });
+  });
+
+  const abonosSinCochera = abonosActivos.filter(a => !abonosEnCocherasIds.has(String(a._id)));
 
   return (
     <div className="detalle-cliente-cajero">
@@ -641,11 +800,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
         <div className="header-left">
           <button onClick={volver} className="btn-volver"><FaArrowLeft /></button>
           <h2 className="titulo-cliente">{cliente.nombreApellido}</h2>
-          {piso && (
-            <span className="piso-square" title={`Piso ${piso}`} aria-label={`Piso ${piso}`}>
-              N° de Cochera: {piso}
-            </span>
-          )}
         </div>
         <div className="header-actions">
           <button className="btn-editar" onClick={openEditModal} title="Editar datos del cliente">
@@ -673,16 +827,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
       <div className="vehiculos-header">
         <div className="vehiculos-title">
           <h3>Vehículos ({abonosActivos.length})</h3>
-          {cocheraLabel && (
-            <span
-              className={
-                `cochera-badge ` +
-                (cocheraLabel.includes('EXCLUSIVA') ? 'exclusiva' :
-                 cocheraLabel.includes('FIJA') ? 'fija' : 'movil')
-              }
-              title={cocheraLabel}
-            >
-              {cocheraLabel}
+          {multipleCocheras && clienteCocherasArr.length > 0 && (
+            <span className="cocheras-count">
+              ({clienteCocherasArr.length} cocheras)
             </span>
           )}
         </div>
@@ -697,78 +844,326 @@ function DetalleClienteCajero({ clienteId, volver }) {
       </div>
 
       <div className="vehiculos-section">
-        {abonosActivos.length > 0 ? (
-          <table className="tabla-vehiculos">
-            <thead>
-              <tr>
-                <th>Patente</th>
-                <th>Marca</th>
-                <th>Modelo</th>
-                <th>Año</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {abonosActivos.map((abono) => {
-                const expandido = vehiculoExpandido === abono._id;
-                return (
-                  <React.Fragment key={abono._id}>
-                    <tr
-                      onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
-                      className="fila-vehiculo"
-                    >
-                      <td>{abono.patente?.toUpperCase() || '---'}</td>
-                      <td>{capitalizeFirstLetter(abono.marca)}</td>
-                      <td>{capitalizeFirstLetter(abono.modelo)}</td>
-                      <td>{abono.anio || '---'}</td>
-                      <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
+        {cocherasLoading && (
+          <div className="cocheras-loading">Cargando cocheras...</div>
+        )}
+
+        {clienteCocherasArr.length > 0 ? (
+          <>
+            {/* Vehículos agrupados por cochera */}
+            {cocherasConVehiculos.map(coch => {
+              const tipoNorm = (coch.tipo || '').toString().trim().toLowerCase();
+              const badgeClass = coch.exclusiva
+                ? 'exclusiva'
+                : tipoNorm === 'fija'
+                  ? 'fija'
+                  : 'movil';
+
+              // Para el título, usamos solo la parte "Cochera Fija / Móvil / Exclusiva"
+              const headerLabel = buildCocheraHeaderLabel(coch.tipo, null, coch.exclusiva);
+              const vehiculos = coch.vehiculos || [];
+              const isEditingThis = editingCocheraId === coch.cocheraId;
+
+              return (
+                <div key={coch.cocheraId} className="cochera-group">
+                  <div className="cochera-group-header">
+                    <h4 className={`cochera-title ${badgeClass}`}>
+                      {headerLabel}{' '}
+                      {isEditingThis ? (
+                        <span className="cochera-piso-edit">
+                          N°{' '}
+                          <input
+                            type="text"
+                            value={editingCocheraPiso}
+                            onChange={(e) => setEditingCocheraPiso(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveCocheraPiso();
+                              if (e.key === 'Escape') cancelEditCochera();
+                            }}
+                            className="cochera-piso-input"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            className="btn-icono btn-cochera-guardar"
+                            onClick={saveCocheraPiso}
+                            disabled={editingCocheraSaving}
+                            title="Guardar número de cochera"
+                          >
+                            <FaCheck />
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-icono btn-cochera-cancelar"
+                            onClick={cancelEditCochera}
+                            disabled={editingCocheraSaving}
+                            title="Cancelar edición"
+                          >
+                            <FaTimes />
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="cochera-piso-label">
+                          {coch.piso !== undefined && coch.piso !== null && coch.piso !== '' ? (
+                            <>
+                              • N° {coch.piso}
+                            </>
+                          ) : (
+                            ''
+                          )}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-icono btn-editar-cochera"
+                        onClick={() => startEditCochera(coch)}
+                        disabled={editingCocheraSaving && isEditingThis}
+                        title="Editar número de cochera"
+                      >
+                        <FaEdit />
+                      </button>
+                    </h4>
+                  </div>
+                  {isEditingThis && editingCocheraError && (
+                    <div className="cochera-edit-error">{editingCocheraError}</div>
+                  )}
+
+                  {vehiculos.length > 0 ? (
+                    <table className="tabla-vehiculos">
+                      <thead>
+                        <tr>
+                          <th>Patente</th>
+                          <th>Marca</th>
+                          <th>Modelo</th>
+                          <th>Año</th>
+                          <th>Tipo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vehiculos.map((abono) => {
+                          const expandido = vehiculoExpandido === abono._id;
+                          return (
+                            <React.Fragment key={abono._id}>
+                              <tr
+                                onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
+                                className="fila-vehiculo"
+                              >
+                                <td>{abono.patente?.toUpperCase() || '---'}</td>
+                                <td>{capitalizeFirstLetter(abono.marca)}</td>
+                                <td>{capitalizeFirstLetter(abono.modelo)}</td>
+                                <td>{abono.anio || '---'}</td>
+                                <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
+                              </tr>
+                              {expandido && (
+                                <tr className="fila-expandida">
+                                  <td colSpan="5">
+                                    <div className="expandido-contenido">
+                                      <div className="expandido-left">
+                                        <div className="detalles-adicionales">
+                                          <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
+                                          <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
+                                        </div>
+                                        <div className="botones-documentos">
+                                          <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
+                                          <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
+                                          <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
+                                        </div>
+                                      </div>
+                                      <div className="expandido-right">
+                                        <div className="vehiculo-actions">
+                                          <button
+                                            className="btn-vehiculo editar"
+                                            onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
+                                            title="Editar vehículo"
+                                          >
+                                            <FaEdit /> <span>Editar</span>
+                                          </button>
+                                          <button
+                                            className="btn-vehiculo eliminar"
+                                            onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
+                                            title="Eliminar vehículo"
+                                          >
+                                            <FaTrashAlt /> <span>Eliminar</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="sin-vehiculos">
+                      <p>No hay vehículos registrados para esta cochera.</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Vehículos activos que no están en ninguna cochera (ej: móviles / legacy) */}
+            {abonosSinCochera.length > 0 && (
+              <div className="cochera-group cochera-sin-asignar">
+                <div className="cochera-group-header">
+                  <h4>Vehículos sin cochera asignada</h4>
+                </div>
+                <table className="tabla-vehiculos">
+                  <thead>
+                    <tr>
+                      <th>Patente</th>
+                      <th>Marca</th>
+                      <th>Modelo</th>
+                      <th>Año</th>
+                      <th>Tipo</th>
                     </tr>
-                    {expandido && (
-                      <tr className="fila-expandida">
-                        <td colSpan="5">
-                          <div className="expandido-contenido">
-                            <div className="expandido-left">
-                              <div className="detalles-adicionales">
-                                <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
-                                <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
-                              </div>
-                              <div className="botones-documentos">
-                                <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
-                                <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
-                                <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
-                              </div>
-                            </div>
-                            <div className="expandido-right">
-                              <div className="vehiculo-actions">
-                                <button
-                                  className="btn-vehiculo editar"
-                                  onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
-                                  title="Editar vehículo"
-                                >
-                                  <FaEdit /> <span>Editar</span>
-                                </button>
-                                <button
-                                  className="btn-vehiculo eliminar"
-                                  onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
-                                  title="Eliminar vehículo"
-                                >
-                                  <FaTrashAlt /> <span>Eliminar</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                  </thead>
+                  <tbody>
+                    {abonosSinCochera.map((abono) => {
+                      const expandido = vehiculoExpandido === abono._id;
+                      return (
+                        <React.Fragment key={abono._id}>
+                          <tr
+                            onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
+                            className="fila-vehiculo"
+                          >
+                            <td>{abono.patente?.toUpperCase() || '---'}</td>
+                            <td>{capitalizeFirstLetter(abono.marca)}</td>
+                            <td>{capitalizeFirstLetter(abono.modelo)}</td>
+                            <td>{abono.anio || '---'}</td>
+                            <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
+                          </tr>
+                          {expandido && (
+                            <tr className="fila-expandida">
+                              <td colSpan="5">
+                                <div className="expandido-contenido">
+                                  <div className="expandido-left">
+                                    <div className="detalles-adicionales">
+                                      <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
+                                      <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
+                                    </div>
+                                    <div className="botones-documentos">
+                                      <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
+                                      <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
+                                      <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
+                                    </div>
+                                  </div>
+                                  <div className="expandido-right">
+                                    <div className="vehiculo-actions">
+                                      <button
+                                        className="btn-vehiculo editar"
+                                        onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
+                                        title="Editar vehículo"
+                                      >
+                                        <FaEdit /> <span>Editar</span>
+                                      </button>
+                                      <button
+                                        className="btn-vehiculo eliminar"
+                                        onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
+                                        title="Eliminar vehículo"
+                                      >
+                                        <FaTrashAlt /> <span>Eliminar</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {cocherasConVehiculos.length === 0 && abonosActivos.length === 0 && (
+              <div className="sin-vehiculos">
+                <p>No hay vehículos registrados para este cliente.</p>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="sin-vehiculos">
-            <p>No hay vehículos registrados para este cliente.</p>
-          </div>
+          // Fallback legacy: sin cocheras[] en cliente, muestro todo junto como antes
+          <>
+            {abonosActivos.length > 0 ? (
+              <table className="tabla-vehiculos">
+                <thead>
+                  <tr>
+                    <th>Patente</th>
+                    <th>Marca</th>
+                    <th>Modelo</th>
+                    <th>Año</th>
+                    <th>Tipo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {abonosActivos.map((abono) => {
+                    const expandido = vehiculoExpandido === abono._id;
+                    return (
+                      <React.Fragment key={abono._id}>
+                        <tr
+                          onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
+                          className="fila-vehiculo"
+                        >
+                          <td>{abono.patente?.toUpperCase() || '---'}</td>
+                          <td>{capitalizeFirstLetter(abono.marca)}</td>
+                          <td>{capitalizeFirstLetter(abono.modelo)}</td>
+                          <td>{abono.anio || '---'}</td>
+                          <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
+                        </tr>
+                        {expandido && (
+                          <tr className="fila-expandida">
+                            <td colSpan="5">
+                              <div className="expandido-contenido">
+                                <div className="expandido-left">
+                                  <div className="detalles-adicionales">
+                                    <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
+                                    <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
+                                  </div>
+                                  <div className="botones-documentos">
+                                    <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
+                                    <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
+                                    <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
+                                  </div>
+                                </div>
+                                <div className="expandido-right">
+                                  <div className="vehiculo-actions">
+                                    <button
+                                      className="btn-vehiculo editar"
+                                      onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
+                                      title="Editar vehículo"
+                                    >
+                                      <FaEdit /> <span>Editar</span>
+                                    </button>
+                                    <button
+                                      className="btn-vehiculo eliminar"
+                                      onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
+                                      title="Eliminar vehículo"
+                                    >
+                                      <FaTrashAlt /> <span>Eliminar</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="sin-vehiculos">
+                <p>No hay vehículos registrados para este cliente.</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -876,7 +1271,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
         >
           <div className="edit-form">
             <div className="grid-2">
-              {/* ...campos... */}
               <div className="form-item">
                 <label>Nombre y Apellido</label>
                 <input name="nombreApellido" type="text" value={editForm.nombreApellido} onChange={handleEditChange} autoFocus />
@@ -934,7 +1328,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
         >
           <div className="edit-form">
             <div className="grid-2">
-              {/* ...campos... */}
               <div className="form-item">
                 <label>Patente</label>
                 <input name="patente" type="text" value={vehEditForm.patente} onChange={handleVehEditChange} />
@@ -954,10 +1347,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
               <div className="form-item">
                 <label>Color</label>
                 <input name="color" type="text" value={vehEditForm.color} onChange={handleVehEditChange} />
-              </div>
-              <div className="form-item">
-                <label>Tipo de Vehículo</label>
-                <input name="tipoVehiculo" type="text" value={vehEditForm.tipoVehiculo} onChange={handleVehEditChange} placeholder="Auto / Camioneta / Moto" />
               </div>
               <div className="form-item">
                 <label>Compañía de Seguro</label>

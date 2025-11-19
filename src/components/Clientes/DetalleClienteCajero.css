@@ -5,7 +5,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 0px 20px;
 }
 
 .header-detalle {
@@ -111,12 +111,46 @@
   transform: scale(1.1);
 }
 
+/* ===== Scroll custom SOLO para la sección de vehículos ===== */
 .vehiculos-section {
   width: 100%;
   background-color: #2a2a38;
   border-radius: 8px;
-  padding: 15px;
+  padding: 20px 15px;
   box-sizing: border-box;
+  max-height: 64%;    
+  min-height: 64%;     
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #555 #2a2a38;
+}
+
+.vehiculos-section::-webkit-scrollbar {
+  width: 8px;
+}
+
+.vehiculos-section::-webkit-scrollbar-track {
+  background: #2a2a38;
+  border-radius: 10px;
+}
+
+.vehiculos-section::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 10px;
+  border: 2px solid #2a2a38;
+}
+
+.vehiculos-section::-webkit-scrollbar-thumb:hover {
+  background: #777;
+}
+
+/* ===== Separación entre grupos de cocheras ===== */
+.vehiculos-section .cochera-group {
+  margin-bottom: 40px;    /* ajustá a gusto (10–18 queda bien) */
+}
+
+.vehiculos-section .cochera-group:last-child {
+  margin-bottom: 4px;     /* para que el último no quede con demasiado fondo */
 }
 
 .tabla-vehiculos {
@@ -569,11 +603,20 @@
   background: rgba(139, 92, 246, 0.18);
   color: #c4b5fd;
   border-color: rgba(139, 92, 246, 0.45);
+  margin-left: 5px;
 }
 .cochera-badge.exclusiva {
   background: rgba(16, 185, 129, 0.18);
   color: #86efac;
   border-color: rgba(16, 185, 129, 0.45);
+}
+/* Reduce separación entre "Cochera Fija • N° 32" y la tabla */
+.cochera-group-header {
+}
+
+.cochera-group-header h4 {
+  margin: 0;
+  padding: 0;
 }
 
 /* --- Badge para piso --- */
@@ -618,4 +661,101 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ===== Editar número de cochera (input + ok/cancel compactos) ===== */
+
+.cochera-piso-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cochera-piso-input {
+  width: 38px;
+  height: 15px;
+  padding: 2px 4px;
+  font-size: 0.80rem;
+  text-align: center;
+
+  background-color: #1f1f28;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  color: #e0e0e0;
+
+  outline: none !important;
+  box-shadow: none !important;
+}
+.cochera-piso-input:focus {
+  border-color: #4a4a5a;
+  background-color: #24242f;
+}
+
+/* ===== Botones OK / Cancelar compactos y en línea ===== */
+.btn-icono.btn-cochera-guardar,
+.btn-icono.btn-cochera-cancelar {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+
+  padding: 0;
+  border-radius: 4px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background-color: #2c2f3d;
+  border: 1px solid #454b5f;
+  color: #d1d5db;
+
+  cursor: pointer;
+  transition: background-color .18s, border-color .18s, transform .05s;
+}
+
+.btn-icono.btn-cochera-guardar:hover {
+  background-color: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.55);
+  color: #86efac;
+}
+
+.btn-icono.btn-cochera-cancelar:hover {
+  background-color: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.50);
+  color: #fca5a5;
+}
+
+.btn-icono.btn-cochera-guardar:active,
+.btn-icono.btn-cochera-cancelar:active {
+  transform: translateY(1px);
+}
+
+/* El botón del lápiz normal (fuera de edición) más compacto */
+.btn-editar-cochera {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+
+  padding: 0 !important;
+  margin-left: 5px;
+  border-radius: 4px !important;
+
+  background-color: #2c2f3d !important;
+  border: 1px solid #454b5f !important;
+  color: #cdd2e0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.75rem !important;
+  cursor: pointer;
+  transition: background-color .18s, border-color .18s;
+}
+
+.btn-editar-cochera:hover {
+  background-color: #3a3a4a !important;
+  border-color: #555a6a !important;
+  color: #ffffff !important;
 }
