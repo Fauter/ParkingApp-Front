@@ -1,8 +1,21 @@
 // src/Operador/CargaMensuales/CargaMensuales.jsx
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  Fragment,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import ModalMensaje from "../ModalMensaje/ModalMensaje";
-import { FaCamera, FaCheckCircle, FaArrowRight, FaSyncAlt, FaEye } from "react-icons/fa";
+import {
+  FaCamera,
+  FaCheckCircle,
+  FaArrowRight,
+  FaSyncAlt,
+  FaEye,
+} from "react-icons/fa";
 import "./CargaMensuales.css";
 import CargaMensualesDetalle from "./CargaMensualesDetalle";
 
@@ -10,6 +23,7 @@ const TOKEN_KEY = "token";
 const OPERADOR_KEY = "operador";
 const BASE_URL = "http://localhost:5000";
 const CATALOG_POLL_MS = 180000;
+const DEFAULT_METODO_PAGO = "Efectivo";
 
 /* ========= Utils ========= */
 function readOperador() {
@@ -65,7 +79,7 @@ const getUltimoDiaMesFront = (hoy = new Date()) => {
   return d;
 };
 
-// NUEVO: con offset de meses (0 = mes actual, 1 = mes siguiente, etc.)
+// Offset de meses (0 = mes actual, 1 = mes siguiente, etc.)
 const getUltimoDiaMesOffsetFront = (base = new Date(), offset = 0) => {
   const d = new Date(base.getFullYear(), base.getMonth() + 1 + offset, 0);
   d.setHours(23, 59, 59, 999);
@@ -86,7 +100,7 @@ const prorratearMontoFront = (base, hoy = new Date()) => {
   };
 };
 
-// NUEVO: formatear DNI/CUIT/CUIL con puntos (simple "thousands")
+// formatear DNI/CUIT/CUIL con puntos (simple "thousands")
 const formatDNI = (v) => {
   const digits = String(v || "").replace(/\D+/g, "");
   if (!digits) return "—";
@@ -94,19 +108,22 @@ const formatDNI = (v) => {
 };
 
 /* ======= Modal de Confirmación (custom) ======= */
+/* ======= Modal de Confirmación (custom) ======= */
 function ConfirmDialog({ open, titulo, mensaje, onConfirm, onCancel }) {
   if (!open) return null;
 
-  // Parseo dirigido por etiquetas para ordenar las secciones como pediste
-  const lines = String(mensaje || "")
+  const rawLines = String(mensaje || "")
     .split("\n")
+    .map((s) => s.trimEnd());
+
+  const lines = rawLines
     .map((s) => s.trim())
     .filter(Boolean);
 
   let totalLine = null;
-  const top = [];       // Patente / Tipo / Meses a abonar
-  const cochera = [];   // Cochera / N° de Cochera / Exclusiva
-  const precios = [];   // [tier] Precio mensual / Proporcional / Meses completos / Vence el
+  const top = [];
+  const cochera = [];
+  const precios = [];
 
   const isTop = (l) =>
     /^Patente:/i.test(l) ||
@@ -132,9 +149,18 @@ function ConfirmDialog({ open, titulo, mensaje, onConfirm, onCancel }) {
       totalLine = l;
       return;
     }
-    if (isTop(l)) { top.push(l); return; }
-    if (isCochera(l)) { cochera.push(l); return; }
-    if (isPrecio(l)) { precios.push(l); return; }
+    if (isTop(l)) {
+      top.push(l);
+      return;
+    }
+    if (isCochera(l)) {
+      cochera.push(l);
+      return;
+    }
+    if (isPrecio(l)) {
+      precios.push(l);
+      return;
+    }
   });
 
   const totalValue =
@@ -142,55 +168,96 @@ function ConfirmDialog({ open, titulo, mensaje, onConfirm, onCancel }) {
       ? totalLine.split(":").slice(1).join(":").trim()
       : null;
 
+  // 👇 clave: si NO hay bloques estructurados, mostramos el mensaje crudo (como InlineConfirmModal)
+  const hasStructuredBlocks =
+    top.length > 0 || cochera.length > 0 || precios.length > 0 || !!totalValue;
+
   return (
-    <div className="cm-confirm-overlay-cargamensuales" role="dialog" aria-modal="true">
+    <div
+      className="cm-confirm-overlay-cargamensuales"
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="cm-confirm-card-cargamensuales">
         <div className="cm-confirm-header-cargamensuales">
           <h3>{titulo || "Confirmar"}</h3>
         </div>
 
         <div className="cm-confirm-body-cargamensuales">
-          {/* Bloque superior: datos clave */}
-          {top.length > 0 && (
-            <div className="cm-confirm-block-cargamensuales cm-confirm-block--top-cargamensuales">
-              {top.map((l, i) => (
-                <div className="cm-line-cargamensuales" key={`top-${i}`}>{l}</div>
-              ))}
-            </div>
-          )}
+          {hasStructuredBlocks ? (
+            <>
+              {top.length > 0 && (
+                <div className="cm-confirm-block-cargamensuales cm-confirm-block--top-cargamensuales">
+                  {top.map((l, i) => (
+                    <div className="cm-line-cargamensuales" key={`top-${i}`}>
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          {/* Bloque intermedio: cochera */}
-          {cochera.length > 0 && (
-            <div className="cm-confirm-block-cargamensuales cm-confirm-block--cochera-cargamensuales">
-              {cochera.map((l, i) => (
-                <div className="cm-line-cargamensuales" key={`coch-${i}`}>{l}</div>
-              ))}
-            </div>
-          )}
+              {cochera.length > 0 && (
+                <div className="cm-confirm-block-cargamensuales cm-confirm-block--cochera-cargamensuales">
+                  {cochera.map((l, i) => (
+                    <div className="cm-line-cargamensuales" key={`coch-${i}`}>
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          {/* Bloque inferior: precios + vence (si existieran) */}
-          {precios.length > 0 && (
-            <div className="cm-confirm-block-cargamensuales cm-confirm-block--precios-cargamensuales">
-              {precios.map((l, i) => (
-                <div className="cm-line-cargamensuales" key={`pre-${i}`}>{l}</div>
-              ))}
-            </div>
-          )}
+              {precios.length > 0 && (
+                <div className="cm-confirm-block-cargamensuales cm-confirm-block--precios-cargamensuales">
+                  {precios.map((l, i) => (
+                    <div className="cm-line-cargamensuales" key={`pre-${i}`}>
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              )}
 
-          {/* TOTAL al fondo, “pegadito” al bloque de precios */}
-          {totalValue && (
-            <div className="cm-confirm-total-cargamensuales" aria-live="polite">
-              <span className="cm-total-label-cargamensuales">TOTAL a cobrar</span>
-              <span className="cm-total-value-cargamensuales">{totalValue}</span>
+              {totalValue && (
+                <div
+                  className="cm-confirm-total-cargamensuales"
+                  aria-live="polite"
+                >
+                  <span className="cm-total-label-cargamensuales">
+                    TOTAL a cobrar
+                  </span>
+                  <span className="cm-total-value-cargamensuales">
+                    {totalValue}
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="cm-confirm-block-cargamensuales">
+              {rawLines.map((line, i) => (
+                <div
+                  key={i}
+                  className="cm-line-cargamensuales"
+                  style={{ whiteSpace: "pre-wrap" }}
+                >
+                  {line}
+                </div>
+              ))}
             </div>
           )}
         </div>
 
         <div className="cm-confirm-actions-cargamensuales">
-          <button type="button" className="cm-btn-cargamensuales cm-btn--ghost-cargamensuales" onClick={onCancel}>
+          <button
+            type="button"
+            className="cm-btn-cargamensuales cm-btn--ghost-cargamensuales"
+            onClick={onCancel}
+          >
             Cancelar
           </button>
-          <button type="button" className="cm-btn-cargamensuales cm-btn--primary-cargamensuales" onClick={onConfirm}>
+          <button
+            type="button"
+            className="cm-btn-cargamensuales cm-btn--primary-cargamensuales"
+            onClick={onConfirm}
+          >
             Confirmar
           </button>
         </div>
@@ -221,10 +288,11 @@ export default function CargaMensuales() {
   const [loadingClientes, setLoadingClientes] = useState(false);
   const [selectedCliente, setSelectedCliente] = useState(null);
 
-  // NUEVO: id del cliente para ver detalle en la misma vista
+  const [selectedCocheraSnap, setSelectedCocheraSnap] = useState(null);
+
   const [detalleClienteId, setDetalleClienteId] = useState(null);
 
-  // 🔄 Refrescar (soft + cooldown)
+  // Refresh + cooldown
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const COOLDOWN_SECONDS = 5;
@@ -269,16 +337,17 @@ export default function CargaMensuales() {
   }, [authHeaders]);
 
   const softRefreshClientes = useCallback(async () => {
-    if (isRefreshing) return;
+    if (isRefreshing || cooldownLeft > 0) return;
     setIsRefreshing(true);
     try {
-      await fetchClientes();
+      setCocherasMap({});      // 🔥 RESETEA COCHERAS CACHEADAS
+      await fetchClientes();   // 🔥 Vuelve a pedir clientes
     } finally {
       setIsRefreshing(false);
       startCooldown();
     }
-  }, [fetchClientes, isRefreshing, startCooldown]);
-
+  }, [fetchClientes, isRefreshing, cooldownLeft, startCooldown]);
+  
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
@@ -298,6 +367,44 @@ export default function CargaMensuales() {
     });
   }, [clientes, q]);
 
+  /* —— Cocheras por cliente (modelo nuevo) —— */
+  const [cocherasMap, setCocherasMap] = useState({});
+  const [cocherasLoading, setCocherasLoading] = useState({});
+
+  const fetchCocherasByCliente = useCallback(
+    async (clienteId) => {
+      if (!clienteId) return;
+
+      if (cocherasMap[clienteId]) return; // ya cargadas
+
+      setCocherasLoading((prev) => ({ ...prev, [clienteId]: true }));
+      try {
+        const res = await fetch(`${BASE_URL}/api/cocheras/cliente/${clienteId}`, {
+          headers: authHeaders,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCocherasMap((prev) => ({ ...prev, [clienteId]: data }));
+        } else {
+          setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
+        }
+      } catch (e) {
+        console.error(e);
+        setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
+      } finally {
+        setCocherasLoading((prev) => ({ ...prev, [clienteId]: false }));
+      }
+    },
+    [cocherasMap, authHeaders]
+  );
+
+  const buildCocheraLabel = (k) => {
+    const tipo = normCocheraFront(k?.tipo) || "—";
+    const piso = k?.piso ? ` • N° ${k.piso}` : "";
+    const exclusiva = k?.exclusiva ? " • Exclusiva" : "";
+    return `${tipo}${piso}${exclusiva}`;
+  };
+
   /* —— Catálogos —— */
   const [tiposVehiculo, setTiposVehiculo] = useState([]);
   const [preciosEfectivo, setPreciosEfectivo] = useState({});
@@ -312,7 +419,8 @@ export default function CargaMensuales() {
           headers: authHeaders,
         });
         if (!tiposRes.ok) throw new Error();
-        setTiposVehiculo(await tiposRes.json());
+        const dataTipos = await tiposRes.json();
+        setTiposVehiculo(Array.isArray(dataTipos) ? dataTipos : []);
 
         let cash = {};
         try {
@@ -391,15 +499,13 @@ export default function CargaMensuales() {
     color: "",
     anio: "",
     companiaSeguro: "",
-    // (Eliminado) metodoPago
-    // (Eliminado) factura
     fotoSeguro: null,
     fotoDNI: null,
     fotoCedulaVerde: null,
     cochera: "",
     piso: "",
     exclusiva: false,
-    mesesAbonar: 1, // controlado 1..12
+    mesesAbonar: 1,
   });
 
   const [fileUploaded, setFileUploaded] = useState({
@@ -414,25 +520,42 @@ export default function CargaMensuales() {
     fotoCedulaVerde: useRef(null),
   };
 
-  const patchFormFromCliente = useCallback((cli) => {
+  const patchFormFromCliente = useCallback((cli, cocheraSnap = null) => {
     if (!cli) return;
+
     setSelectedCliente(cli);
+
+    const cocheraNorm = cocheraSnap
+      ? normCocheraFront(cocheraSnap.tipo)
+      : normCocheraFront(cli?.cochera);
+
+    const exclusivaNorm = cocheraSnap
+      ? normExclusivaFront(cocheraSnap.exclusiva, cocheraSnap.tipo)
+      : normExclusivaFront(cli?.exclusiva, cli?.cochera);
+
+    const pisoVal = cocheraSnap?.piso || cli?.piso || "";
+
     setFormData((prev) => ({
       ...prev,
-      nombreApellido: cli?.nombreApellido || prev.nombreApellido,
-      dniCuitCuil: cli?.dniCuitCuil || prev.dniCuitCuil,
-      email: cli?.email || prev.email,
-      domicilio: cli?.domicilio || prev.domicilio,
-      localidad: cli?.localidad || prev.localidad,
-      telefonoParticular: cli?.telefonoParticular || prev.telefonoParticular,
-      telefonoEmergencia: cli?.telefonoEmergencia || prev.telefonoEmergencia,
-      domicilioTrabajo: cli?.domicilioTrabajo || prev.domicilioTrabajo,
-      telefonoTrabajo: cli?.telefonoTrabajo || prev.telefonoTrabajo,
-      cochera: normCocheraFront(cli?.cochera) || prev.cochera,
-      exclusiva: normExclusivaFront(cli?.exclusiva, cli?.cochera) || false,
-      piso: cli?.piso || prev.piso,
+      nombreApellido: cli?.nombreApellido ?? prev.nombreApellido,
+      dniCuitCuil: cli?.dniCuitCuil ?? prev.dniCuitCuil,
+      email: cli?.email ?? prev.email,
+      domicilio: cli?.domicilio ?? prev.domicilio,
+      localidad: cli?.localidad ?? prev.localidad,
+      telefonoParticular: cli?.telefonoParticular ?? prev.telefonoParticular,
+      telefonoEmergencia: cli?.telefonoEmergencia ?? prev.telefonoEmergencia,
+      domicilioTrabajo: cli?.domicilioTrabajo ?? prev.domicilioTrabajo,
+      telefonoTrabajo: cli?.telefonoTrabajo ?? prev.telefonoTrabajo,
+      cochera: cocheraNorm,
+      exclusiva: exclusivaNorm,
+      piso: pisoVal,
     }));
   }, []);
+
+  const handlePickCochera = (cliente, cocheraSnap) => {
+    setSelectedCocheraSnap(cocheraSnap || null);
+    patchFormFromCliente(cliente, cocheraSnap);
+  };
 
   /* —— Modales & cam —— */
   const [modal, setModal] = useState({ titulo: "", mensaje: "" });
@@ -491,8 +614,11 @@ export default function CargaMensuales() {
     ].filter(Boolean);
     let lastErr = null;
     for (const constraints of tryList) {
-      try { return await navigator.mediaDevices.getUserMedia(constraints); }
-      catch (e) { lastErr = e; }
+      try {
+        return await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (e) {
+        lastErr = e;
+      }
     }
     throw lastErr || new Error("No se pudo abrir ninguna cámara");
   };
@@ -539,9 +665,11 @@ export default function CargaMensuales() {
     const res = await fetch(fotoPreview);
     const blob = await res.blob();
     const patente = (formData.patente || "SINPATENTE").replace(/\s+/g, "");
-    const file = new File([blob], `${patente}_${capturingField}_${Date.now()}.png`, {
-      type: "image/png",
-    });
+    const file = new File(
+      [blob],
+      `${patente}_${capturingField}_${Date.now()}.png`,
+      { type: "image/png" }
+    );
     setFormData((p) => ({ ...p, [capturingField]: file }));
     setFileUploaded((p) => ({ ...p, [capturingField]: true }));
     cerrarModalCam();
@@ -552,7 +680,9 @@ export default function CargaMensuales() {
     setCapturingField(null);
     setFotoPreview(null);
     if (videoStream) {
-      try { videoStream.getTracks().forEach((t) => t.stop()); } catch {}
+      try {
+        videoStream.getTracks().forEach((t) => t.stop());
+      } catch {}
       setVideoStream(null);
     }
   };
@@ -561,11 +691,16 @@ export default function CargaMensuales() {
     if (videoRef.current && videoStream) videoRef.current.srcObject = videoStream;
   }, [videoStream]);
 
-  useEffect(() => () => {
-    if (videoStream) {
-      try { videoStream.getTracks().forEach((t) => t.stop()); } catch {}
-    }
-  }, [videoStream]);
+  useEffect(
+    () => () => {
+      if (videoStream) {
+        try {
+          videoStream.getTracks().forEach((t) => t.stop());
+        } catch {}
+      }
+    },
+    [videoStream]
+  );
 
   /* —— Validaciones & guardar —— */
   const validarDNI = (dni) => {
@@ -574,67 +709,143 @@ export default function CargaMensuales() {
   };
 
   const ensureCliente = async () => {
-    const dni = (formData.dniCuitCuil || "").trim();
+    const dni = String(formData.dniCuitCuil || "").trim();
     if (!validarDNI(dni)) throw new Error("DNI/CUIT/CUIL inválido");
 
     const cocheraNorm = normCocheraFront(formData.cochera);
     const exclusivaNorm = normExclusivaFront(formData.exclusiva, cocheraNorm);
     const pisoVal = String(formData.piso || "").trim();
 
-    const encontrado = (clientes || []).find(
+    const existente = clientes.find(
       (c) => String(c.dniCuitCuil || "").trim() === dni
     );
 
-    if (encontrado && encontrado._id) {
-      try {
-        await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", ...authHeaders },
-          body: JSON.stringify({
-            nombreApellido: formData.nombreApellido,
-            dniCuitCuil: formData.dniCuitCuil,
-            domicilio: formData.domicilio,
-            localidad: formData.localidad,
-            telefonoParticular: formData.telefonoParticular,
-            telefonoEmergencia: formData.telefonoEmergencia,
-            domicilioTrabajo: formData.domicilioTrabajo,
-            telefonoTrabajo: formData.telefonoTrabajo,
-            email: formData.email,
-            cochera: cocheraNorm,
-            exclusiva: exclusivaNorm,
-            piso: pisoVal,
-          }),
-        }).catch(() => {});
-      } catch {}
-      return encontrado._id;
+    const buildCocheraPayload = () => {
+      if (selectedCocheraSnap && (selectedCocheraSnap._id || selectedCocheraSnap.cocheraId)) {
+        return [{
+          cocheraId: selectedCocheraSnap.cocheraId || selectedCocheraSnap._id,
+          tipo: cocheraNorm,
+          piso: pisoVal,
+          exclusiva: exclusivaNorm,
+        }];
+      }
+      return [{
+        tipo: cocheraNorm,
+        piso: pisoVal,
+        exclusiva: exclusivaNorm,
+      }];
+    };
+
+    const cocherasPayload = buildCocheraPayload();
+
+    if (existente && existente._id) {
+      await fetch(`${BASE_URL}/api/clientes/${existente._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({
+          nombreApellido: formData.nombreApellido,
+          dniCuitCuil: dni,
+          email: formData.email,
+          domicilio: formData.domicilio,
+          localidad: formData.localidad,
+          telefonoParticular: formData.telefonoParticular,
+          telefonoEmergencia: formData.telefonoEmergencia,
+          domicilioTrabajo: formData.domicilioTrabajo,
+          telefonoTrabajo: formData.telefonoTrabajo,
+          cocheras: cocherasPayload,
+        }),
+      }).catch(() => {});
+      return existente._id;
     }
 
-    const nuevoClienteRes = await fetch(`${BASE_URL}/api/clientes`, {
+    const res = await fetch(`${BASE_URL}/api/clientes`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({
         nombreApellido: formData.nombreApellido,
-        dniCuitCuil: formData.dniCuitCuil,
+        dniCuitCuil: dni,
+        email: formData.email,
         domicilio: formData.domicilio,
         localidad: formData.localidad,
         telefonoParticular: formData.telefonoParticular,
         telefonoEmergencia: formData.telefonoEmergencia,
         domicilioTrabajo: formData.domicilioTrabajo,
         telefonoTrabajo: formData.telefonoTrabajo,
-        email: formData.email,
-        precioAbono: formData.tipoVehiculo || "",
-        cochera: cocheraNorm,
-        exclusiva: exclusivaNorm,
-        piso: pisoVal,
+        cocheras: cocherasPayload,
       }),
     });
-    if (!nuevoClienteRes.ok) {
-      const err = await nuevoClienteRes.json().catch(() => ({}));
-      throw new Error(err?.message || "Error al crear cliente");
+
+    if (!res.ok) throw new Error("Error creando cliente");
+    const nuevo = await res.json();
+    if (!nuevo._id) throw new Error("Cliente sin _id");
+
+    return nuevo._id;
+  };
+
+  // vinculación vehículo ↔ cochera (igual que Abonos, sin romper flujo)
+  const asignarVehiculoACocheraFront = async (clienteId, vehiculoId) => {
+    try {
+      if (!clienteId || !vehiculoId) return;
+      const cliente = (clientes || []).find((c) => c._id === clienteId);
+
+      // 1) Nuevo modelo: array cocheras
+      if (cliente && Array.isArray(cliente.cocheras) && cliente.cocheras.length > 0) {
+        let cocheraDestino = null;
+
+        if (formData.piso) {
+          cocheraDestino =
+            cliente.cocheras.find(
+              (k) =>
+                String(k?.piso || "").trim().toLowerCase() ===
+                String(formData.piso || "").trim().toLowerCase()
+            ) || null;
+        }
+        if (!cocheraDestino) cocheraDestino = cliente.cocheras[0];
+
+        if (cocheraDestino) {
+          const cocheraIdPayload =
+            cocheraDestino.cocheraId || cocheraDestino._id || null;
+          if (cocheraIdPayload) {
+            await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...authHeaders,
+              },
+              body: JSON.stringify({
+                clienteId,
+                cocheraId: cocheraIdPayload,
+                vehiculoId,
+              }),
+            }).catch(() => {});
+            return;
+          }
+        }
+      }
+
+      // 2) Modelo histórico: snapshot desde el form
+      const cocheraSimple = {
+        tipo: normCocheraFront(formData.cochera) || "",
+        exclusiva: normExclusivaFront(formData.exclusiva, formData.cochera),
+        piso: String(formData.piso || "").trim(),
+      };
+
+      await fetch(`${BASE_URL}/api/clientes/asignarVehiculoACochera`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        body: JSON.stringify({
+          clienteId,
+          cocheraId: null,
+          vehiculoId,
+          cochera: cocheraSimple,
+        }),
+      }).catch(() => {});
+    } catch (err) {
+      console.warn("⚠️ asignarVehiculoACocheraFront:", err?.message || err);
     }
-    const nuevoCliente = await nuevoClienteRes.json();
-    if (!nuevoCliente._id) throw new Error("No se pudo crear cliente");
-    return nuevoCliente._id;
   };
 
   const [loadingSave, setLoadingSave] = useState(false);
@@ -663,7 +874,10 @@ export default function CargaMensuales() {
       return;
     }
     if (name === "mesesAbonar") {
-      setFormData((prev) => ({ ...prev, mesesAbonar: Math.max(1, Math.min(12, Number(value) || 1)) }));
+      setFormData((prev) => ({
+        ...prev,
+        mesesAbonar: Math.max(1, Math.min(12, Number(value) || 1)),
+      }));
       return;
     }
     if (files && files.length > 0) {
@@ -674,6 +888,80 @@ export default function CargaMensuales() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // abre el modal de confirmación de abono con info de precios / prorrateos
+  const abrirConfirmacionDeAbono = () => {
+    const patente = (formData.patente || "").toUpperCase();
+    const tipo = formData.tipoVehiculo;
+    const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+
+    const baseMensual = getAbonoPrecioByMetodo(
+      tipo,
+      DEFAULT_METODO_PAGO,
+      formData.cochera || "Móvil",
+      formData.cochera === "Fija" ? formData.exclusiva : false
+    );
+
+    if (!Number.isFinite(baseMensual) || baseMensual <= 0) {
+      return showModal(
+        "Error",
+        `No hay precio cargado para "${(tipo || "").toLowerCase()}" en tier "${tierName}" (${DEFAULT_METODO_PAGO}).`
+      );
+    }
+
+    const { proporcional, diasRestantes, totalDiasMes } =
+      prorratearMontoFront(baseMensual);
+
+    const meses = Math.max(
+      1,
+      Math.min(12, Number(formData.mesesAbonar) || 1)
+    );
+    const mesesCompletos = meses > 1 ? meses - 1 : 0;
+    const montoMesesCompletos = mesesCompletos * baseMensual;
+    const totalCobrar = proporcional + montoMesesCompletos;
+
+    const hoy = new Date();
+    const venceEl = getUltimoDiaMesOffsetFront(hoy, meses - 1);
+    const dd = String(venceEl.getDate()).padStart(2, "0");
+    const mm = String(venceEl.getMonth() + 1).padStart(2, "0");
+    const yyyy = venceEl.getFullYear();
+
+    const ucfirst = (s) => {
+      const str = String(s || "").trim();
+      return str
+        ? str.charAt(0).toLocaleUpperCase("es-AR") + str.slice(1)
+        : "";
+    };
+
+    const tierPretty = ucfirst(tierName);
+
+    const msg =
+      `Patente: ${patente}\n` +
+      `Tipo: ${tipo}\n` +
+      `Meses a abonar: ${meses}\n\n` +
+      `Cochera: ${formData.cochera || "-"}\n` +
+      `N° de Cochera: ${formData.piso || "-"}\n` +
+      `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
+      `[${tierPretty}] Precio mensual: $${formatARS(baseMensual)}\n` +
+      `Mes actual (proporcional ${diasRestantes}/${totalDiasMes}): $${formatARS(
+        proporcional
+      )}\n` +
+      (mesesCompletos > 0
+        ? `Meses completos siguientes (${mesesCompletos}): $${formatARS(
+            montoMesesCompletos
+          )}\n`
+        : "") +
+      `Vence el: ${dd}/${mm}/${yyyy}\n\n` +
+      `TOTAL a cobrar: $${formatARS(totalCobrar)}`;
+
+    setConfirmAbono({
+      open: true,
+      titulo: "Confirmar alta de Abono",
+      mensaje: msg,
+      onConfirm: confirmarYGuardar,
+      onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+    });
+  };
+
   const confirmarYGuardar = async () => {
     setConfirmAbono((s) => ({ ...s, open: false }));
     setLoadingSave(true);
@@ -681,7 +969,24 @@ export default function CargaMensuales() {
       const patente = (formData.patente || "").toUpperCase();
       const clienteId = await ensureCliente();
 
-      const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+      const tierName = getTierName(
+        formData.cochera || "Móvil",
+        formData.exclusiva
+      );
+      const baseMensual = getAbonoPrecioByMetodo(
+        formData.tipoVehiculo,
+        DEFAULT_METODO_PAGO,
+        formData.cochera || "Móvil",
+        formData.cochera === "Fija" ? formData.exclusiva : false
+      );
+
+      if (!Number.isFinite(baseMensual) || baseMensual <= 0) {
+        throw new Error(
+          `No hay precio cargado para "${(formData.tipoVehiculo || "").toLowerCase()}" en tier "${tierName}" (${DEFAULT_METODO_PAGO}).`
+        );
+      }
+
+      const { proporcional } = prorratearMontoFront(baseMensual);
 
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
@@ -690,9 +995,14 @@ export default function CargaMensuales() {
       fd.set("mesesAbonar", String(formData.mesesAbonar || 1));
       fd.set("patente", patente);
       fd.set("cliente", clienteId);
-      fd.set("operador", operador?.username || operador?.nombre || "Sistema");
+      fd.set(
+        "operador",
+        operador?.username || operador?.nombre || "Sistema"
+      );
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
       fd.set("tierAbono", tierName);
+      fd.set("precio", String(baseMensual));
+      fd.set("precioProrrateadoHoy", String(proporcional));
 
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
@@ -701,13 +1011,77 @@ export default function CargaMensuales() {
       });
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.error || err?.message || "Error al registrar abono.");
+        throw new Error(
+          err?.error || err?.message || "Error al registrar abono."
+        );
       }
 
-      await softRefreshClientes();
-      showModal("Éxito", `Abono registrado correctamente para ${patente}.`);
+      // Vincular Vehículo ↔ Cochera (como Abonos, pero sin tickets/movimientos)
+      try {
+        let vehiculoId = null;
 
-      // 🔧 Resetear formularios y limpiar selección de la fila
+        try {
+          const r = await fetch(
+            `${BASE_URL}/api/vehiculos/patente/${encodeURIComponent(
+              patente
+            )}`,
+            {
+              cache: "no-store",
+              headers: authHeaders,
+            }
+          );
+          if (r.ok) {
+            const v = await r.json().catch(() => null);
+            if (v && (v._id || v?.data?._id)) {
+              vehiculoId = v._id || v?.data?._id;
+            }
+          }
+        } catch {}
+
+        if (!vehiculoId) {
+          try {
+            const r2 = await fetch(
+              `${BASE_URL}/api/vehiculos?patente=${encodeURIComponent(
+                patente
+              )}`,
+              { cache: "no-store", headers: authHeaders }
+            );
+            if (r2.ok) {
+              const arr = await r2.json().catch(() => null);
+              if (Array.isArray(arr) && arr.length) {
+                vehiculoId = arr[0]?._id || null;
+              }
+            }
+          } catch {}
+        }
+
+        if (vehiculoId) {
+          await asignarVehiculoACocheraFront(clienteId, vehiculoId);
+        }
+      } catch (errLink) {
+        console.warn(
+          "⚠️ Vinculación vehículo↔cochera:",
+          errLink?.message || errLink
+        );
+      }
+
+      // Ejecutar sync (igual que Abonos)
+      fetch(`${BASE_URL}/api/sync/run-now`, {
+        method: "POST",
+        headers: authHeaders,
+      }).catch(() => {});
+
+      await softRefreshClientes();
+      // 🔥 Limpio cocheras cacheadas, así se recargan correctamente
+      setCocherasMap({});
+      setSelectedCliente(null);
+      setSelectedCocheraSnap(null);
+
+      showModal(
+        "Éxito",
+        `Abono registrado correctamente para ${patente}. (Sin movimiento / sin ticket)`
+      );
+
       setFormData((prev) => ({
         ...prev,
         nombreApellido: "",
@@ -734,13 +1108,18 @@ export default function CargaMensuales() {
         exclusiva: false,
         mesesAbonar: 1,
       }));
-      setFileUploaded({ fotoSeguro:false, fotoDNI:false, fotoCedulaVerde:false });
-
-      // 👇 ESTE ES EL FIX: quitar el highlight de la lista
+      setFileUploaded({
+        fotoSeguro: false,
+        fotoDNI: false,
+        fotoCedulaVerde: false,
+      });
       setSelectedCliente(null);
     } catch (err) {
       console.error(err);
-      showModal("Error", err?.message || "Ocurrió un error al guardar el abono.");
+      showModal(
+        "Error",
+        err?.message || "Ocurrió un error al guardar el abono."
+      );
     } finally {
       setLoadingSave(false);
     }
@@ -748,40 +1127,64 @@ export default function CargaMensuales() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Validaciones rápidas
     try {
       const patente = (formData.patente || "").trim();
       if (!patente) throw new Error("Debe ingresar la patente.");
-      if (!formData.tipoVehiculo) throw new Error("Debe seleccionar el tipo de vehículo.");
-      if (!formData.nombreApellido?.trim()) throw new Error("Debe ingresar el nombre y apellido.");
-      if (!validarDNI(formData.dniCuitCuil)) throw new Error("DNI/CUIT/CUIL inválido.");
-      if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
-      if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
-    } catch (err) { return showModal("Error", err.message); }
+      if (!formData.tipoVehiculo)
+        throw new Error("Debe seleccionar el tipo de vehículo.");
+      if (!formData.nombreApellido?.trim())
+        throw new Error("Debe ingresar el nombre y apellido.");
+      if (!validarDNI(formData.dniCuitCuil))
+        throw new Error("DNI/CUIT/CUIL inválido.");
+      if (!formData.email?.trim())
+        throw new Error("Debe ingresar un email.");
+      if (!formData.cochera)
+        throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
+    } catch (err) {
+      return showModal("Error", err.message);
+    }
 
-    const hoy = new Date();
-    const meses = Math.max(1, Math.min(12, Number(formData.mesesAbonar) || 1));
-    const venceEl = getUltimoDiaMesOffsetFront(hoy, meses - 1);
+    // Modal previo si el DNI ya existe
+    try {
+      const dni = (formData.dniCuitCuil || "").trim();
+      const clienteExistente = (clientes || []).find(
+        (c) => String(c.dniCuitCuil || "").trim() === dni
+      );
 
-    const dd = String(venceEl.getDate()).padStart(2, "0");
-    const mm = String(venceEl.getMonth() + 1).padStart(2, "0");
-    const yyyy = venceEl.getFullYear();
+      if (clienteExistente) {
+        setConfirmAbono({
+          open: true,
+          titulo: "DNI ya existente",
+          mensaje:
+            `El DNI ${dni} ya está registrado a nombre de:\n\n` +
+            `${clienteExistente.nombreApellido}\n\n` +
+            `¿Deseás continuar y actualizar su información / agregar abono?`,
+          onConfirm: () => {
+            setConfirmAbono((s) => ({ ...s, open: false }));
+            abrirConfirmacionDeAbono();
+          },
+          onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+        });
+        return;
+      }
+    } catch (err) {
+      return showModal(
+        "Error",
+        err?.message || "No se pudo verificar el DNI."
+      );
+    }
 
-    const msg =
-      `Patente: ${formData.patente.toUpperCase()}\n` +
-      `Tipo: ${formData.tipoVehiculo}\n` +
-      `Meses a abonar: ${meses}\n\n` +
-      `Cochera: ${formData.cochera || "-"}\n` +
-      `N° de Cochera: ${formData.piso || "-"}\n` +
-      `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
-      `Vence el: ${dd}/${mm}/${yyyy}`;
-
-    setConfirmAbono({
-      open: true,
-      titulo: "Confirmar alta de Abono",
-      mensaje: msg,
-      onConfirm: confirmarYGuardar,
-      onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
-    });
+    // Si el DNI no existe, directamente confirmación de abono
+    try {
+      abrirConfirmacionDeAbono();
+    } catch (err) {
+      return showModal(
+        "Error",
+        err?.message || "No se pudo preparar la confirmación."
+      );
+    }
   };
 
   const renderFileInput = (label, name) => (
@@ -789,12 +1192,24 @@ export default function CargaMensuales() {
       <label className="cm-file-visible-label-cargamensuales">{label}</label>
       <label
         className="cm-file-label-cargamensuales"
-        onClick={(e) => { e.preventDefault(); abrirCamParaCampo(name); }}
+        onClick={(e) => {
+          e.preventDefault();
+          abrirCamParaCampo(name);
+        }}
       >
-        <div className="cm-icon-wrapper-cargamensuales"><FaCamera className="cm-icon-cargamensuales" /></div>
-        {fileUploaded[name]
-          ? <div className="cm-file-uploaded-cargamensuales"><FaCheckCircle size={16} /></div>
-          : <div className="cm-file-text-cargamensuales"><span>Sacar</span><span>Foto</span></div>}
+        <div className="cm-icon-wrapper-cargamensuales">
+          <FaCamera className="cm-icon-cargamensuales" />
+        </div>
+        {fileUploaded[name] ? (
+          <div className="cm-file-uploaded-cargamensuales">
+            <FaCheckCircle size={16} />
+          </div>
+        ) : (
+          <div className="cm-file-text-cargamensuales">
+            <span>Sacar</span>
+            <span>Foto</span>
+          </div>
+        )}
         <input
           ref={inputRefs[name]}
           type="file"
@@ -809,19 +1224,24 @@ export default function CargaMensuales() {
 
   /* ================== UI ================== */
   const showSkeleton = loadingClientes || isRefreshing;
+  const isCocheraFija = normCocheraFront(formData.cochera) === "Fija";
 
-  // NUEVO: cuando hay un cliente elegido para ver detalle, muestro el detalle full-page dentro del scope
+  // Vista detalle cliente
   if (detalleClienteId) {
     return (
       <div className="cm-scope-cargamensuales">
         <div className="cm-topbar-cargamensuales">
           <div className="cm-top-left-cargamensuales">
             <h1 className="cm-title-cargamensuales">Carga de Mensuales</h1>
-            <span className="cm-role-cargamensuales">{operador?.role || "rol"}</span>
+            <span className="cm-role-cargamensuales">
+              {operador?.role || "rol"}
+            </span>
           </div>
           <div className="cm-top-right-cargamensuales">
-            {/* NAV: Tabs */}
-            <nav className="cm-navtabs-cargamensuales" aria-label="Secciones">
+            <nav
+              className="cm-navtabs-cargamensuales"
+              aria-label="Secciones"
+            >
               <button
                 type="button"
                 className="cm-tab-cargamensuales is-active"
@@ -856,8 +1276,6 @@ export default function CargaMensuales() {
     );
   }
 
-  const isCocheraFija = normCocheraFront(formData.cochera) === "Fija";
-
   return (
     <div className="cm-scope-cargamensuales">
       <div className="cm-page-cargamensuales">
@@ -865,11 +1283,15 @@ export default function CargaMensuales() {
         <div className="cm-topbar-cargamensuales">
           <div className="cm-top-left-cargamensuales">
             <h1 className="cm-title-cargamensuales">Carga de Mensuales</h1>
-            <span className="cm-role-cargamensuales">{operador?.role || "rol"}</span>
+            <span className="cm-role-cargamensuales">
+              {operador?.role || "rol"}
+            </span>
           </div>
           <div className="cm-top-right-cargamensuales">
-            {/* NAV: Tabs */}
-            <nav className="cm-navtabs-cargamensuales" aria-label="Secciones">
+            <nav
+              className="cm-navtabs-cargamensuales"
+              aria-label="Secciones"
+            >
               <button
                 type="button"
                 className="cm-tab-cargamensuales is-active"
@@ -886,8 +1308,6 @@ export default function CargaMensuales() {
                 Estadías
               </button>
             </nav>
-
-            {/* Botón Logout */}
             <button
               className="cm-btn-cargamensuales cm-btn--danger-cargamensuales"
               type="button"
@@ -911,7 +1331,9 @@ export default function CargaMensuales() {
                   onChange={(e) => setQ(e.target.value)}
                 />
                 <button
-                  className={`cm-btn-cargamensuales cm-btn--ghost-cargamensuales cm-btn--refresh-cargamensuales ${isRefreshing ? "is-busy" : ""}`}
+                  className={`cm-btn-cargamensuales cm-btn--ghost-cargamensuales cm-btn--refresh-cargamensuales ${
+                    isRefreshing ? "is-busy" : ""
+                  }`}
                   onClick={() => {
                     if (!isRefreshing && cooldownLeft === 0) {
                       softRefreshClientes();
@@ -922,7 +1344,10 @@ export default function CargaMensuales() {
                   aria-busy={isRefreshing ? "true" : "false"}
                   title="Refrescar"
                 >
-                  <FaSyncAlt className={isRefreshing ? "cm-spin-cargamensuales" : ""} size={12} />
+                  <FaSyncAlt
+                    className={isRefreshing ? "cm-spin-cargamensuales" : ""}
+                    size={12}
+                  />
                   <span style={{ marginLeft: 6 }}>Refrescar</span>
                 </button>
               </div>
@@ -935,17 +1360,32 @@ export default function CargaMensuales() {
                         <th>Nombre</th>
                         <th>DNI/CUIT</th>
                         <th>Cochera</th>
-                        <th style={{ width: 56 }} />
+                        <th style={{ width: 72 }} />
                       </tr>
                     </thead>
                     <tbody>
                       {showSkeleton ? (
                         Array.from({ length: 8 }).map((_, i) => (
-                          <tr key={`sk-${i}`} className="cm-skel-row-cargamensuales">
-                            <td><div className="cm-skel cm-skel--w60" /></td>
-                            <td><div className="cm-skel cm-skel--w40" /></td>
-                            <td><div className="cm-skel cm-skel--w50" /></td>
-                            <td style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                          <tr
+                            key={`sk-${i}`}
+                            className="cm-skel-row-cargamensuales"
+                          >
+                            <td>
+                              <div className="cm-skel cm-skel--w60" />
+                            </td>
+                            <td>
+                              <div className="cm-skel cm-skel--w40" />
+                            </td>
+                            <td>
+                              <div className="cm-skel cm-skel--w50" />
+                            </td>
+                            <td
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1fr",
+                                gap: 6,
+                              }}
+                            >
                               <div className="cm-skel cm-skel--circle" />
                               <div className="cm-skel cm-skel--circle" />
                             </td>
@@ -954,51 +1394,125 @@ export default function CargaMensuales() {
                       ) : filteredClientes.length === 0 ? (
                         <tr>
                           <td colSpan={4}>
-                            <div className="cm-empty-cargamensuales">No hay clientes que coincidan.</div>
+                            <div className="cm-empty-cargamensuales">
+                              No hay clientes que coincidan.
+                            </div>
                           </td>
                         </tr>
                       ) : (
-                        filteredClientes.map((c) => (
-                          <tr
-                            key={c._id || `${c.dniCuitCuil}-${c.nombreApellido}`}
-                            className={selectedCliente?._id === c._id ? "is-selected" : undefined}
-                          >
-                            <td>{c?.nombreApellido || "—"}</td>
-                            <td>{formatDNI(c?.dniCuitCuil)}</td>
-                            <td>
-                              {normCocheraFront(c?.cochera) || "—"}
-                              {c?.piso ? ` • N° ${c.piso}` : ""}
-                              {c?.exclusiva ? " • Exclusiva" : ""}
-                            </td>
-                            <td style={{ display:"flex", gap:6, justifyContent:"flex-end" }}>
-                              {/* NUEVO: ver detalle en la misma vista */}
-                              <button
-                                className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
-                                type="button"
-                                title="Ver detalle del cliente"
-                                onClick={() => setDetalleClienteId(c._id)}
+                        filteredClientes.map((c) => {
+                          const clienteId = c._id;
+                          const keyCliente =
+                            clienteId ||
+                            `${c.dniCuitCuil}-${c.nombreApellido}`;
+
+                          if (
+                            clienteId &&
+                            !cocherasMap[clienteId] &&
+                            !cocherasLoading[clienteId]
+                          ) {
+                            fetchCocherasByCliente(clienteId);
+                          }
+
+                          const cocheras = cocherasMap[clienteId] || [];
+                          const isCocheraLoading =
+                            cocherasLoading[clienteId] || false;
+
+                          return (
+                            <Fragment key={keyCliente}>
+                              <tr
+                                className={
+                                  selectedCliente?._id === c._id
+                                    ? "is-selected"
+                                    : undefined
+                                }
                               >
-                                <FaEye size={12} />
-                              </button>
-                              {/* EXISTENTE: cargar datos al form */}
-                              <button
-                                className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
-                                type="button"
-                                title="Cargar datos en el formulario"
-                                onClick={() => patchFormFromCliente(c)}
-                              >
-                                <FaArrowRight size={12} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                                <td>{c?.nombreApellido || "—"}</td>
+                                <td>{formatDNI(c?.dniCuitCuil)}</td>
+                                <td>
+                                </td>
+                                <td
+                                  style={{
+                                    display: "flex",
+                                    gap: 6,
+                                    justifyContent: "flex-end",
+                                  }}
+                                >
+                                  <button
+                                    className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
+                                    type="button"
+                                    title="Ver detalle del cliente"
+                                    onClick={() => setDetalleClienteId(c._id)}
+                                  >
+                                    <FaEye size={12} />
+                                  </button>
+                                </td>
+                              </tr>
+
+                              {isCocheraLoading ? (
+                                <tr className="cm-cochera-row-empty-cargamensuales">
+                                  <td />
+                                  <td />
+                                  <td className="cm-cochera-label-empty-cargamensuales">
+                                    (Cargando cocheras…)
+                                  </td>
+                                  <td />
+                                </tr>
+                              ) : cocheras.length === 0 ? (
+                                <tr className="cm-cochera-row-empty-cargamensuales">
+                                  <td />
+                                  <td />
+                                  <td className="cm-cochera-label-empty-cargamensuales">
+                                    (Sin cocheras registradas)
+                                  </td>
+                                  <td />
+                                </tr>
+                              ) : (
+                                cocheras.map((k, idx) => {
+                                  const rowKey =
+                                    k._id || `${keyCliente}-co-${idx}`;
+                                  return (
+                                    <tr
+                                      key={rowKey}
+                                      className="cm-cochera-row-cargamensuales"
+                                    >
+                                      <td />
+                                      <td />
+                                      <td className="cm-cochera-label-cargamensuales">
+                                        {buildCocheraLabel(k)}
+                                      </td>
+                                      <td
+                                        style={{
+                                          display: "flex",
+                                          justifyContent: "flex-end",
+                                        }}
+                                      >
+                                        <button
+                                          className="cm-btn-cargamensuales cm-btn--icon-cargamensuales"
+                                          type="button"
+                                          title="Usar esta cochera para el abono"
+                                          onClick={() =>
+                                            handlePickCochera(c, k)
+                                          }
+                                        >
+                                          <FaArrowRight size={12} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
                 </div>
 
                 <div className="cm-meta-cargamensuales">
-                  Total: {clientes.length} · Filtrados: {filteredClientes.length}
+                  Total: {clientes.length} · Filtrados:{" "}
+                  {filteredClientes.length}
                 </div>
               </div>
             </section>
@@ -1006,7 +1520,11 @@ export default function CargaMensuales() {
             {/* Right */}
             <section className="cm-right-cargamensuales">
               <div className="cm-right-static-cargamensuales">
-                <form onSubmit={handleSubmit} encType="multipart/form-data" className="cm-page-cargamensuales">
+                <form
+                  onSubmit={handleSubmit}
+                  encType="multipart/form-data"
+                  className="cm-page-cargamensuales"
+                >
                   {/* Cochera / Piso / Exclusiva */}
                   <div className="cm-row-3-cargamensuales">
                     <div className="cm-field-cargamensuales">
@@ -1059,15 +1577,93 @@ export default function CargaMensuales() {
 
                   {/* Datos cliente */}
                   <div className="cm-grid-3-cargamensuales">
-                    <div className="cm-field-cargamensuales"><label>Nombre y Apellido</label><input type="text" name="nombreApellido" value={formData.nombreApellido} onChange={handleChange} autoComplete="off" required /></div>
-                    <div className="cm-field-cargamensuales"><label>DNI/CUIT/CUIL</label><input type="text" name="dniCuitCuil" value={formData.dniCuitCuil} onChange={handleChange} required /></div>
-                    <div className="cm-field-cargamensuales"><label>Email</label><input type="email" name="email" value={formData.email} onChange={handleChange} required /></div>
-                    <div className="cm-field-cargamensuales"><label>Domicilio</label><input type="text" name="domicilio" value={formData.domicilio} onChange={handleChange} required /></div>
-                    <div className="cm-field-cargamensuales"><label>Localidad</label><input type="text" name="localidad" value={formData.localidad} onChange={handleChange} required /></div>
-                    <div className="cm-field-cargamensuales"><label>Domicilio Trabajo</label><input type="text" name="domicilioTrabajo" value={formData.domicilioTrabajo} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Tel. Particular</label><input type="text" name="telefonoParticular" value={formData.telefonoParticular} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Tel. Emergencia</label><input type="text" name="telefonoEmergencia" value={formData.telefonoEmergencia} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Tel. Trabajo</label><input type="text" name="telefonoTrabajo" value={formData.telefonoTrabajo} onChange={handleChange} /></div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Nombre y Apellido</label>
+                      <input
+                        type="text"
+                        name="nombreApellido"
+                        value={formData.nombreApellido}
+                        onChange={handleChange}
+                        autoComplete="off"
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>DNI/CUIT/CUIL</label>
+                      <input
+                        type="text"
+                        name="dniCuitCuil"
+                        value={formData.dniCuitCuil}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Domicilio</label>
+                      <input
+                        type="text"
+                        name="domicilio"
+                        value={formData.domicilio}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Localidad</label>
+                      <input
+                        type="text"
+                        name="localidad"
+                        value={formData.localidad}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Domicilio Trabajo</label>
+                      <input
+                        type="text"
+                        name="domicilioTrabajo"
+                        value={formData.domicilioTrabajo}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Tel. Particular</label>
+                      <input
+                        type="text"
+                        name="telefonoParticular"
+                        value={formData.telefonoParticular}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Tel. Emergencia</label>
+                      <input
+                        type="text"
+                        name="telefonoEmergencia"
+                        value={formData.telefonoEmergencia}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Tel. Trabajo</label>
+                      <input
+                        type="text"
+                        name="telefonoTrabajo"
+                        value={formData.telefonoTrabajo}
+                        onChange={handleChange}
+                      />
+                    </div>
                   </div>
 
                   {/* Fotos */}
@@ -1079,15 +1675,65 @@ export default function CargaMensuales() {
 
                   {/* Vehículo */}
                   <div className="cm-grid-3-cargamensuales">
-                    <div className="cm-field-cargamensuales"><label>Patente</label><input type="text" name="patente" value={formData.patente} onChange={handleChange} maxLength={10} required /></div>
-                    <div className="cm-field-cargamensuales"><label>Marca</label><input type="text" name="marca" value={formData.marca} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Modelo</label><input type="text" name="modelo" value={formData.modelo} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Color</label><input type="text" name="color" value={formData.color} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Año</label><input type="number" name="anio" value={formData.anio} onChange={handleChange} /></div>
-                    <div className="cm-field-cargamensuales"><label>Compañía Seguro</label><input type="text" name="companiaSeguro" value={formData.companiaSeguro} onChange={handleChange} /></div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Patente</label>
+                      <input
+                        type="text"
+                        name="patente"
+                        value={formData.patente}
+                        onChange={handleChange}
+                        maxLength={10}
+                        required
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Marca</label>
+                      <input
+                        type="text"
+                        name="marca"
+                        value={formData.marca}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Modelo</label>
+                      <input
+                        type="text"
+                        name="modelo"
+                        value={formData.modelo}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Color</label>
+                      <input
+                        type="text"
+                        name="color"
+                        value={formData.color}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Año</label>
+                      <input
+                        type="number"
+                        name="anio"
+                        value={formData.anio}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="cm-field-cargamensuales">
+                      <label>Compañía Seguro</label>
+                      <input
+                        type="text"
+                        name="companiaSeguro"
+                        value={formData.companiaSeguro}
+                        onChange={handleChange}
+                      />
+                    </div>
                   </div>
 
-                  {/* Solo Tipo de Vehículo (centrado) */}
+                  {/* Tipo de Vehículo */}
                   <div className="cm-type-center-wrapper">
                     <div className="cm-field-cargamensuales cm-type-center-field">
                       <label>Tipo de Vehículo</label>
@@ -1103,7 +1749,8 @@ export default function CargaMensuales() {
                           .filter((t) => t?.mensual === true)
                           .map((tipo) => {
                             const capitalized = tipo.nombre
-                              ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
+                              ? tipo.nombre.charAt(0).toUpperCase() +
+                                tipo.nombre.slice(1)
                               : "";
                             return (
                               <option key={tipo.nombre} value={tipo.nombre}>
@@ -1126,14 +1773,24 @@ export default function CargaMensuales() {
                         onChange={handleChange}
                         className="cm-months-select-cargamensuales"
                       >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>{n} {n === 1 ? "mes" : "meses"}</option>
-                        ))}
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(
+                          (n) => (
+                            <option key={n} value={n}>
+                              {n} {n === 1 ? "mes" : "meses"}
+                            </option>
+                          )
+                        )}
                       </select>
                     </div>
 
-                    <button className="cm-btn-cargamensuales cm-btn--primary-cargamensuales" type="submit" disabled={loadingSave}>
-                      {loadingSave ? "Guardando..." : "Guardar Abono (sin movimiento)"}
+                    <button
+                      className="cm-btn-cargamensuales cm-btn--primary-cargamensuales"
+                      type="submit"
+                      disabled={loadingSave}
+                    >
+                      {loadingSave
+                        ? "Guardando..."
+                        : "Guardar Abono (sin movimiento / sin ticket)"}
                     </button>
                   </div>
                 </form>
@@ -1143,7 +1800,11 @@ export default function CargaMensuales() {
         </div>
 
         {/* Modal informativo */}
-        <ModalMensaje titulo={modal.titulo} mensaje={modal.mensaje} onClose={closeModal} />
+        <ModalMensaje
+          titulo={modal.titulo}
+          mensaje={modal.mensaje}
+          onClose={closeModal}
+        />
 
         {/* Modal confirmación (custom) */}
         <ConfirmDialog
@@ -1158,21 +1819,65 @@ export default function CargaMensuales() {
         {modalCamAbierto && (
           <ModalMensaje
             titulo="Webcam"
-            mensaje={capturingField ? `Tomar foto para: ${capturingField.replace("foto","Foto ")}` : "Vista previa de la cámara"}
+            mensaje={
+              capturingField
+                ? `Tomar foto para: ${capturingField.replace(
+                    "foto",
+                    "Foto "
+                  )}`
+                : "Vista previa de la cámara"
+            }
             onClose={cerrarModalCam}
           >
-            <div style={{ textAlign:"center" }}>
+            <div style={{ textAlign: "center" }}>
               {!fotoPreview ? (
                 <>
-                  <video ref={videoRef} autoPlay playsInline style={{ width:320, height:210, borderRadius:6, background:"#222" }}/>
-                  <button className="guardarWebcamBtn" style={{ marginTop:8 }} onClick={tomarFoto}>Tomar Foto</button>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    style={{
+                      width: 320,
+                      height: 210,
+                      borderRadius: 6,
+                      background: "#222",
+                    }}
+                  />
+                  <button
+                    className="guardarWebcamBtn"
+                    style={{ marginTop: 8 }}
+                    onClick={tomarFoto}
+                  >
+                    Tomar Foto
+                  </button>
                 </>
               ) : (
                 <>
-                  <img src={fotoPreview} alt="Foto tomada" style={{ width:320, borderRadius:6 }}/>
-                  <div style={{ display:"flex", gap:8, justifyContent:"center", marginTop:8 }}>
-                    <button className="guardarWebcamBtn" onClick={repetirFoto}>Repetir</button>
-                    <button className="guardarWebcamBtn" onClick={confirmarFoto}>Confirmar</button>
+                  <img
+                    src={fotoPreview}
+                    alt="Foto tomada"
+                    style={{ width: 320, borderRadius: 6 }}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      justifyContent: "center",
+                      marginTop: 8,
+                    }}
+                  >
+                    <button
+                      className="guardarWebcamBtn"
+                      onClick={repetirFoto}
+                    >
+                      Repetir
+                    </button>
+                    <button
+                      className="guardarWebcamBtn"
+                      onClick={confirmarFoto}
+                    >
+                      Confirmar
+                    </button>
                   </div>
                 </>
               )}

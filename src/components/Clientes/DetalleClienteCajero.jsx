@@ -72,6 +72,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   // Edición inline del número de cochera (piso)
   const [editingCocheraId, setEditingCocheraId] = useState(null);
+  const [editingCocheraTipo, setEditingCocheraTipo] = useState('Fija');
+  const [editingCocheraExclusiva, setEditingCocheraExclusiva] = useState(false);
+  const [confirmDelCochera, setConfirmDelCochera] = useState(null);
   const [editingCocheraPiso, setEditingCocheraPiso] = useState('');
   const [editingCocheraSaving, setEditingCocheraSaving] = useState(false);
   const [editingCocheraError, setEditingCocheraError] = useState('');
@@ -277,60 +280,120 @@ function DetalleClienteCajero({ clienteId, volver }) {
     setEditingCocheraError('');
     setEditingCocheraId(coch.cocheraId);
     setEditingCocheraPiso(coch.piso ?? '');
+    setEditingCocheraTipo(coch.tipo || 'Fija');
+    setEditingCocheraExclusiva(!!coch.exclusiva);
   };
 
   const cancelEditCochera = () => {
     setEditingCocheraId(null);
     setEditingCocheraPiso('');
+    setEditingCocheraTipo('Fija');
+    setEditingCocheraExclusiva(false);
     setEditingCocheraError('');
   };
 
-  const saveCocheraPiso = async () => {
-    const nuevo = (editingCocheraPiso || '').trim();
-    if (!nuevo) {
-      setEditingCocheraError('El número de cochera no puede estar vacío.');
-      return;
-    }
+  const saveCocheraFull = async () => {
     if (!editingCocheraId) {
-      setEditingCocheraError('No se pudo identificar la cochera a editar.');
+      setEditingCocheraError("No se pudo identificar la cochera.");
       return;
     }
+
+    // Construcción correcta del payload según tipo
+    let payload;
+
+    if (editingCocheraTipo === "Móvil") {
+      payload = {
+        tipo: "Móvil",
+        piso: "",
+        exclusiva: false
+      };
+    } else {
+      const pisoTrim = (editingCocheraPiso || "").trim();
+      if (!pisoTrim) {
+        setEditingCocheraError("El número de cochera no puede estar vacío.");
+        return;
+      }
+
+      payload = {
+        tipo: "Fija",
+        piso: pisoTrim,
+        exclusiva: !!editingCocheraExclusiva
+      };
+    }
+
     try {
       setEditingCocheraSaving(true);
-      setEditingCocheraError('');
+      setEditingCocheraError("");
 
       const res = await fetch(`${API_COCHERAS}/${editingCocheraId}`, {
-        method: 'PATCH',
+        method: "PATCH",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ piso: nuevo }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.msg || data?.message || 'No se pudo actualizar la cochera');
-      }
+      if (!res.ok) throw new Error(data?.message || "No se pudo actualizar la cochera");
 
-      // Actualizo el estado local para que el cambio se vea inmediato
-      setCocherasConVehiculos(prev =>
-        prev.map(c =>
+      // actualizar UI local
+      setCocherasConVehiculos((prev) =>
+        prev.map((c) =>
           c.cocheraId === editingCocheraId
-            ? { ...c, piso: nuevo }
+            ? { ...c, ...payload }
             : c
         )
       );
 
       cancelEditCochera();
     } catch (err) {
-      console.error('Error actualizando cochera:', err);
-      setEditingCocheraError(err.message || 'Error inesperado al actualizar la cochera');
+      setEditingCocheraError(err.message);
     } finally {
       setEditingCocheraSaving(false);
     }
   };
 
+  const deleteCochera = async () => {
+    if (!confirmDelCochera?.cocheraId) return;
+
+    try {
+      setLoading(true);
+
+      // DELETE /api/cocheras/:id
+      const res = await fetch(`${API_COCHERAS}/${confirmDelCochera.cocheraId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.message || 'No se pudo eliminar la cochera');
+      }
+
+      // Refrescar cliente y sus cocheras
+      await cargarCliente();
+
+      setConfirmDelCochera(null);
+      setMensajeModal({
+        titulo: 'Cochera eliminada',
+        mensaje: 'La cochera fue eliminada correctamente.',
+        onClose: () => setMensajeModal(null)
+      });
+    } catch (err) {
+      console.error('Error al eliminar cochera:', err);
+      setMensajeModal({
+        titulo: 'Error',
+        mensaje: err.message || 'Error inesperado al eliminar cochera',
+        onClose: () => setMensajeModal(null)
+      });
+    } finally {
+      setLoading(false);
+    }
+  };  
   /* =================== Fotos documentos =================== */
   const abrirFoto = (abono, tipoFoto) => {
     const camposValidos = {
@@ -868,60 +931,89 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 <div key={coch.cocheraId} className="cochera-group">
                   <div className="cochera-group-header">
                     <h4 className={`cochera-title ${badgeClass}`}>
-                      {headerLabel}{' '}
+                      {!isEditingThis && (
+                        <span className="cochera-piso-label">
+                          {/* headerLabel YA contiene "Cochera Fija" o "Cochera Exclusiva" */}
+                          {coch.tipo === "Fija"
+                            ? coch.exclusiva
+                              ? "Cochera Exclusiva"
+                              : "Cochera Fija"
+                            : "Cochera Móvil"
+                          }
+
+                          {coch.piso ? ` • N° ${coch.piso}` : ""}
+                        </span>
+                      )}
+
                       {isEditingThis ? (
-                        <span className="cochera-piso-edit">
-                          N°{' '}
+                        <span className="cochera-edit-wrapper">
+                          {/* Select tipo */}
+                          <select
+                            className="cochera-edit-select"
+                            value={editingCocheraTipo}
+                            onChange={(e) => setEditingCocheraTipo(e.target.value)}
+                          >
+                            <option value="Fija">Fija</option>
+                            <option value="Móvil">Móvil</option>
+                          </select>
+
+                          {/* Input piso: solo habilitado si es Fija */}
                           <input
                             type="text"
-                            value={editingCocheraPiso}
+                            className="cochera-edit-input"
+                            placeholder="N°"
+                            value={editingCocheraTipo === "Fija" ? editingCocheraPiso : ""}
+                            disabled={editingCocheraTipo !== "Fija"}
                             onChange={(e) => setEditingCocheraPiso(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') saveCocheraPiso();
-                              if (e.key === 'Escape') cancelEditCochera();
+                              if (e.key === "Enter") saveCocheraFull();
+                              if (e.key === "Escape") cancelEditCochera();
                             }}
-                            className="cochera-piso-input"
-                            autoFocus
                           />
-                          <button
-                            type="button"
-                            className="btn-icono btn-cochera-guardar"
-                            onClick={saveCocheraPiso}
-                            disabled={editingCocheraSaving}
-                            title="Guardar número de cochera"
+
+                          {/* Checkbox Exclusiva SOLO si es Fija */}
+                          <label
+                            className={`cochera-edit-exc-label ${
+                              editingCocheraTipo !== "Fija" ? "disabled" : ""
+                            }`}
                           >
+                            <input
+                              type="checkbox"
+                              disabled={editingCocheraTipo !== "Fija"}
+                              checked={editingCocheraTipo === "Fija" ? editingCocheraExclusiva : false}
+                              onChange={(e) => setEditingCocheraExclusiva(e.target.checked)}
+                            />
+                            Exclusiva
+                          </label>
+
+                          <button className="btn-icono btn-cochera-guardar" onClick={saveCocheraFull}>
                             <FaCheck />
                           </button>
-                          <button
-                            type="button"
-                            className="btn-icono btn-cochera-cancelar"
-                            onClick={cancelEditCochera}
-                            disabled={editingCocheraSaving}
-                            title="Cancelar edición"
-                          >
+
+                          <button className="btn-icono btn-cochera-cancelar" onClick={cancelEditCochera}>
                             <FaTimes />
                           </button>
                         </span>
                       ) : (
-                        <span className="cochera-piso-label">
-                          {coch.piso !== undefined && coch.piso !== null && coch.piso !== '' ? (
-                            <>
-                              • N° {coch.piso}
-                            </>
-                          ) : (
-                            ''
-                          )}
-                        </span>
+                        <>
+                          <button className="btn-icono btn-editar-cochera" onClick={() => startEditCochera(coch)}>
+                            <FaEdit />
+                          </button>
+
+                          <button
+                            className="btn-icono btn-editar-cochera"
+                            onClick={() =>
+                              setConfirmDelCochera({
+                                cocheraId: coch.cocheraId,
+                                tipo: coch.tipo,
+                                piso: coch.piso,
+                              })
+                            }
+                          >
+                            <FaTrashAlt />
+                          </button>
+                        </>
                       )}
-                      <button
-                        type="button"
-                        className="btn-icono btn-editar-cochera"
-                        onClick={() => startEditCochera(coch)}
-                        disabled={editingCocheraSaving && isEditingThis}
-                        title="Editar número de cochera"
-                      >
-                        <FaEdit />
-                      </button>
                     </h4>
                   </div>
                   {isEditingThis && editingCocheraError && (
@@ -1141,7 +1233,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                       <FaEdit /> <span>Editar</span>
                                     </button>
                                     <button
-                                      className="btn-vehiculo eliminar"
+                                      className="btn-vehiculo editar"
                                       onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
                                       title="Eliminar vehículo"
                                     >
@@ -1375,8 +1467,32 @@ function DetalleClienteCajero({ clienteId, volver }) {
             <button className="btn-secundario" onClick={() => setConfirmDel(null)} disabled={loading}>
               Cancelar
             </button>
-            <button className="btn-eliminar" onClick={deleteVehiculo} disabled={loading}>
+            <button className="btn-editar" onClick={deleteVehiculo} disabled={loading}>
               {loading ? 'Procesando...' : 'Dar de baja'}
+            </button>
+          </div>
+        </ModalMensaje>
+      )}
+      {confirmDelCochera && (
+        <ModalMensaje
+          titulo="Eliminar Cochera"
+          mensaje={`¿Seguro que querés eliminar la cochera ${confirmDelCochera.tipo} Nº ${confirmDelCochera.piso}?`}
+          onClose={() => setConfirmDelCochera(null)}
+        >
+          <div className="confirm-actions">
+            <button
+              className="btn-secundario"
+              onClick={() => setConfirmDelCochera(null)}
+              disabled={loading}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn-editar"
+              onClick={deleteCochera}
+              disabled={loading}
+            >
+              {loading ? 'Procesando...' : 'Eliminar'}
             </button>
           </div>
         </ModalMensaje>

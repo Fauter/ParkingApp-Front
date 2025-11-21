@@ -1,6 +1,6 @@
 // src/Operador/CargaMensuales/CargaMensualesDetalle.jsx
 import React, { useEffect, useState } from "react";
-import { FaArrowLeft, FaTrashAlt, FaEdit } from "react-icons/fa";
+import { FaArrowLeft, FaTrashAlt, FaEdit, FaCheck, FaTimes } from "react-icons/fa";
 import "./CargaMensualesDetalle.css";
 import ModalMensaje from "../ModalMensaje/ModalMensaje";
 
@@ -16,6 +16,95 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
   const [error, setError] = useState(null);
 
   const [vehiculoExpandido, setVehiculoExpandido] = useState(null);
+
+  const [cocherasCompletas, setCocherasCompletas] = useState([]);
+  const [confirmDelCochera, setConfirmDelCochera] = useState(null);
+
+  // Edición inline DE COCHERA COMPLETA (tipo/piso/exclusiva)
+  const [editingCocheraId, setEditingCocheraId] = useState(null);
+  const [editingCocheraTipo, setEditingCocheraTipo] = useState("Fija");
+  const [editingCocheraPiso, setEditingCocheraPiso] = useState("");
+  const [editingCocheraExclusiva, setEditingCocheraExclusiva] = useState(false);
+
+  const [editingCocheraSaving, setEditingCocheraSaving] = useState(false);
+  const [editingCocheraError, setEditingCocheraError] = useState("");
+
+  const startEditCochera = (coch) => {
+    if (!coch || !coch._id) return;
+
+    setEditingCocheraError("");
+    setEditingCocheraId(coch._id);
+    setEditingCocheraTipo(coch.tipo || "Fija");
+    setEditingCocheraPiso(coch.piso ?? "");
+    setEditingCocheraExclusiva(!!coch.exclusiva);
+  };
+  const cancelEditCochera = () => {
+    setEditingCocheraId(null);
+    setEditingCocheraTipo("Fija");
+    setEditingCocheraPiso("");
+    setEditingCocheraExclusiva(false);
+    setEditingCocheraError("");
+  };
+
+  const saveCocheraFull = async () => {
+    if (!editingCocheraId) {
+      setEditingCocheraError("No se pudo identificar la cochera.");
+      return;
+    }
+
+    let payload;
+
+    if (editingCocheraTipo === "Móvil") {
+      payload = {
+        tipo: "Móvil",
+        piso: "",
+        exclusiva: false
+      };
+    } else {
+      const pisoTrim = (editingCocheraPiso || "").trim();
+      if (!pisoTrim) {
+        setEditingCocheraError("El número de cochera no puede estar vacío.");
+        return;
+      }
+
+      payload = {
+        tipo: "Fija",
+        piso: pisoTrim,
+        exclusiva: !!editingCocheraExclusiva
+      };
+    }
+
+    try {
+      setEditingCocheraSaving(true);
+      setEditingCocheraError("");
+
+      const res = await fetch(`${API_BASE}/api/cocheras/${editingCocheraId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "No se pudo actualizar la cochera");
+
+      setCocherasCompletas((prev) =>
+        prev.map((c) =>
+          c._id === editingCocheraId
+            ? { ...c, ...payload }
+            : c
+        )
+      );
+
+      cancelEditCochera();
+    } catch (err) {
+      setEditingCocheraError(err.message);
+    } finally {
+      setEditingCocheraSaving(false);
+    }
+  };
 
   // Modales
   const [modalFotoUrl, setModalFotoUrl] = useState(null);
@@ -107,6 +196,39 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
   };
 
   useEffect(() => { cargarCliente(); }, [clienteId]);
+  // Nuevo: cargar cocheras completas usando modelo A
+  useEffect(() => {
+    const fetchCocheras = async () => {
+      if (!cliente || !Array.isArray(cliente.cocheras)) return;
+
+      const result = [];
+
+      for (const k of cliente.cocheras) {
+        const id = k.cocheraId || k._id;
+        if (!id) continue;
+
+        try {
+          const r = await fetch(`${API_BASE}/api/cocheras/${id}`, {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          });
+
+          if (r.ok) {
+            const data = await r.json();
+            result.push(data);
+          }
+        } catch (err) {
+          console.error("Error cargando cochera:", err);
+        }
+      }
+
+      setCocherasCompletas(result);
+    };
+
+    fetchCocheras();
+  }, [cliente]);
 
   useEffect(() => {
     const interval = setInterval(() => { cargarCliente(); }, 15000);
@@ -437,6 +559,39 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       });
     }
   };
+  const deleteCochera = async () => {
+    if (!confirmDelCochera?.cocheraId) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/cocheras/${confirmDelCochera.cocheraId}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "No se pudo eliminar la cochera");
+
+      // Recargar cliente + cocheras
+      await cargarCliente();
+
+      setConfirmDelCochera(null);
+      setMensajeModal({
+        titulo: "Cochera eliminada",
+        mensaje: "La cochera fue eliminada correctamente.",
+        onClose: () => setMensajeModal(null)
+      });
+
+    } catch (err) {
+      console.error("Error eliminar cochera:", err);
+      setMensajeModal({
+        titulo: "Error",
+        mensaje: err.message || "Error inesperado al eliminar cochera",
+        onClose: () => setMensajeModal(null)
+      });
+    }
+  };
 
   /* =================== Render =================== */
   if (cargando) {
@@ -493,9 +648,6 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         <button className="cmdet-btn-ghost" onClick={volver}><FaArrowLeft /> <span>Volver</span></button>
         <div className="cmdet-header-right">
           <h2 className="cmdet-title">{cliente.nombreApellido}</h2>
-          {piso && (
-            <span className="cmdet-pill">N° de Cochera: {piso}</span>
-          )}
           <button className="cmdet-btn-primary" onClick={openEditModal}>Editar</button>
         </div>
       </div>
@@ -512,88 +664,193 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       </div>
 
       <div className="cmdet-card">
-        <div className="cmdet-veh-header">
-          <h3>Vehículos ({abonosActivos.length})</h3>
-          {cocheraLabel && (
-            <span className={`cmdet-cochera-badge ${
-              cocheraLabel.includes("EXCLUSIVA") ? "exclusiva" :
-              cocheraLabel.includes("FIJA") ? "fija" : "movil"
-            }`}>
-              {cocheraLabel}
-            </span>
-          )}
-        </div>
 
-        {abonosActivos.length > 0 ? (
-          <table className="cmdet-table">
-            <thead>
-              <tr>
-                <th>Patente</th>
-                <th>Marca</th>
-                <th>Modelo</th>
-                <th>Año</th>
-                <th>Tipo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {abonosActivos.map((abono) => {
-                const expandido = vehiculoExpandido === abono._id;
-                return (
-                  <React.Fragment key={abono._id}>
-                    <tr
-                      onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
-                      className="cmdet-row"
-                    >
-                      <td>{abono.patente?.toUpperCase() || "—"}</td>
-                      <td>{capitalizeFirstLetter(abono.marca)}</td>
-                      <td>{capitalizeFirstLetter(abono.modelo)}</td>
-                      <td>{abono.anio || "—"}</td>
-                      <td>{capitalizeFirstLetter(abono.tipoVehiculo)}</td>
-                    </tr>
-                    {expandido && (
-                      <tr className="cmdet-row-expanded">
-                        <td colSpan="5">
-                          <div className="cmdet-expanded">
-                            <div className="cmdet-left">
-                              <div className="cmdet-kv">
-                                <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
-                                <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
-                              </div>
-                              <div className="cmdet-docs">
-                                <button onClick={() => abrirFoto(abono, "dni")}>DNI</button>
-                                <button onClick={() => abrirFoto(abono, "seguro")}>Seguro</button>
-                                <button onClick={() => abrirFoto(abono, "cedulaVerde")}>Céd. Verde</button>
-                              </div>
-                            </div>
-                            <div className="cmdet-right">
-                              <div className="cmdet-actions">
-                                <button
-                                  className="cmdet-btn-action edit"
-                                  onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
-                                  title="Editar vehículo"
-                                >
-                                  <FaEdit /> <span>Editar</span>
-                                </button>
-                                <button
-                                  className="cmdet-btn-action del"
-                                  onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
-                                  title="Eliminar vehículo"
-                                >
-                                  <FaTrashAlt /> <span>Eliminar</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+        {cocherasCompletas.length === 0 ? (
+          <div className="cmdet-empty">
+            No hay cocheras asignadas ni vehículos registrados.
+          </div>
         ) : (
-          <div className="cmdet-empty">No hay vehículos registrados para este cliente.</div>
+          cocherasCompletas.map((cochera) => {
+            const clave = `${cochera._id}`;
+            const titulo = (() => {
+              if (cochera.tipo === "Móvil") return "Móvil";
+              let txt = `Fija · N° ${cochera.piso}`;
+              if (cochera.exclusiva) txt += " · Exclusiva";
+              return txt;
+            })();
+            const vehiculos = Array.isArray(cochera.vehiculos) ? cochera.vehiculos : [];
+
+            return (
+              <div key={clave} className="cmdet-cochera-bloque">
+                <h4 className="cmdet-cochera-title">
+                  {editingCocheraId === cochera._id ? (
+                    <span className="cmdet-cochera-editwrap">
+
+                      {/* Select tipo */}
+                      <select
+                        className="cmdet-cochera-select"
+                        value={editingCocheraTipo}
+                        onChange={(e) => setEditingCocheraTipo(e.target.value)}
+                      >
+                        <option value="Fija">Fija</option>
+                        <option value="Móvil">Móvil</option>
+                      </select>
+
+                      {/* Input piso SOLO si Fija */}
+                      <input
+                        type="text"
+                        className="cmdet-cochera-input"
+                        placeholder="N°"
+                        value={editingCocheraTipo === "Fija" ? editingCocheraPiso : ""}
+                        disabled={editingCocheraTipo !== "Fija"}
+                        onChange={(e) => setEditingCocheraPiso(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveCocheraFull();
+                          if (e.key === "Escape") cancelEditCochera();
+                        }}
+                      />
+
+                      {/* Checkbox exclusiva SOLO si Fija */}
+                      <label
+                        className={`cmdet-cochera-exc ${editingCocheraTipo !== "Fija" ? "disabled" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={editingCocheraTipo !== "Fija"}
+                          checked={editingCocheraTipo === "Fija" ? editingCocheraExclusiva : false}
+                          onChange={(e) => setEditingCocheraExclusiva(e.target.checked)}
+                        />
+                        Exclusiva
+                      </label>
+
+                      <button className="cmdet-btn-icon" onClick={saveCocheraFull}>
+                        <FaCheck />
+                      </button>
+                      <button className="cmdet-btn-icon" onClick={cancelEditCochera}>
+                        <FaTimes />
+                      </button>
+
+                    </span>
+                  ) : (
+                    <>
+                      {titulo}
+
+                      <button
+                        className="cmdet-btn-icon edit"
+                        onClick={() => startEditCochera(cochera)}
+                        style={{ marginLeft: 10 }}
+                      >
+                        <FaEdit />
+                      </button>
+
+                      <button
+                        className="cmdet-btn-icon del"
+                        onClick={() =>
+                          setConfirmDelCochera({
+                            cocheraId: cochera._id,
+                            tipo: cochera.tipo,
+                            piso: cochera.piso,
+                          })
+                        }
+                        style={{ marginLeft: 6 }}
+                      >
+                        <FaTrashAlt />
+                      </button>
+                    </>
+                  )}
+                </h4>
+
+                {vehiculos.length === 0 ? (
+                  <div className="cmdet-empty" style={{ marginBottom: 16 }}>
+                    (Sin vehículos en esta cochera)
+                  </div>
+                ) : (
+                  <table className="cmdet-table">
+                    <thead>
+                      <tr>
+                        <th>Patente</th>
+                        <th>Marca</th>
+                        <th>Modelo</th>
+                        <th>Año</th>
+                        <th>Tipo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehiculos.map((v) => {
+                        const abono = cliente.abonos.find(
+                          (a) => a.patente?.toUpperCase() === v.patente?.toUpperCase()
+                        );
+                        const expandido = vehiculoExpandido === v._id;
+
+                        return (
+                          <React.Fragment key={v._id}>
+                            <tr
+                              className="cmdet-row"
+                              onClick={() =>
+                                setVehiculoExpandido((prev) =>
+                                  prev === v._id ? null : v._id
+                                )
+                              }
+                            >
+                              <td>{v.patente}</td>
+                              <td>{abono?.marca || "—"}</td>
+                              <td>{abono?.modelo || "—"}</td>
+                              <td>{abono?.anio || "—"}</td>
+                              <td>{abono?.tipoVehiculo || "—"}</td>
+                            </tr>
+
+                            {expandido && (
+                              <tr className="cmdet-row-expanded">
+                                <td colSpan="5">
+                                  <div className="cmdet-expanded">
+                                    <div className="cmdet-left">
+                                      <div className="cmdet-kv">
+                                        <p><strong>Color:</strong> {abono?.color || "—"}</p>
+                                        <p><strong>Seguro:</strong> {abono?.companiaSeguro || "—"}</p>
+                                      </div>
+                                      <div className="cmdet-docs">
+                                        <button onClick={() => abrirFoto(abono, "dni")}>DNI</button>
+                                        <button onClick={() => abrirFoto(abono, "seguro")}>Seguro</button>
+                                        <button onClick={() => abrirFoto(abono, "cedulaVerde")}>Céd. Verde</button>
+                                      </div>
+                                    </div>
+
+                                    <div className="cmdet-right">
+                                      <div className="cmdet-actions">
+                                        <button
+                                          className="cmdet-btn-action edit"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openEditVehiculo(abono);
+                                          }}
+                                        >
+                                          <FaEdit /> <span>Editar</span>
+                                        </button>
+
+                                        <button
+                                          className="cmdet-btn-action del"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            askDeleteVehiculo(abono);
+                                          }}
+                                        >
+                                          <FaTrashAlt /> <span>Eliminar</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -748,6 +1005,28 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             <button className="cmdet-btn-ghost" onClick={() => setConfirmDel(null)} disabled={vehEditSaving}>Cancelar</button>
             <button className="cmdet-btn-danger" onClick={deleteVehiculo} disabled={vehEditSaving}>
               Dar de baja
+            </button>
+          </div>
+        </ModalMensaje>
+      )}
+      {confirmDelCochera && (
+        <ModalMensaje
+          titulo="Eliminar cochera"
+          mensaje={`¿Seguro que querés eliminar la cochera ${confirmDelCochera.tipo} Nº ${confirmDelCochera.piso}?`}
+          onClose={() => setConfirmDelCochera(null)}
+        >
+          <div className="cmdet-confirm-actions">
+            <button
+              className="cmdet-btn-ghost"
+              onClick={() => setConfirmDelCochera(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              className="cmdet-btn-danger"
+              onClick={deleteCochera}
+            >
+              Eliminar
             </button>
           </div>
         </ModalMensaje>

@@ -759,3 +759,60 @@
   border-color: #555a6a !important;
   color: #ffffff !important;
 }
+
+.cochera-edit-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  background: #2c2f3d;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #454b5f;
+}
+
+.cochera-edit-select {
+  background-color: #1f1f28;
+  border: 1px solid #3a3a4a;
+  color: #e0e0e0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  height: 28px;
+}
+
+.cochera-edit-input {
+  width: 32px !important;
+  padding: 2px 4px !important;
+  height: 26px !important;
+  font-size: 0.78rem !important;
+  text-align: center;
+
+  background-color: #1f1f28;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  color: #e0e0e0;
+}
+
+.cochera-edit-input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cochera-edit-exc-label.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cochera-edit-exc-label.disabled input {
+  cursor: not-allowed;
+}
+
+.btn-icono.btn-cochera-guardar,
+.btn-icono.btn-cochera-cancelar {
+  height: 28px !important;
+  width: 28px !important;
+  min-height: 28px !important;
+  min-width: 28px !important;
+  font-size: 0.75rem;
+}
+

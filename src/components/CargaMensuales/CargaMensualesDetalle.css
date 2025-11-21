@@ -1,13 +1,39 @@
 /* Usa el mismo esquema de colores que CargaMensuales.css a través de las vars del scope .cm-scope-cargamensuales */
+/* Scope que vive DENTRO de .cm-scope-cargamensuales */
 .cmdet-scope {
-  /* el contenedor se monta dentro de .cm-scope-cargamensuales, así que hereda vars */
   color: var(--text);
   background: var(--bg);
-  min-height: 100vh;
+
+  /* 🔥 SOLUCIÓN: forzar a ocupar el área disponible
+     SIN romper el layout general del módulo */
+  height: 100%;
+  max-height: calc(100vh - 20px);
+
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+
+  /* 🔥 Scroll suave y no nativo */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--stroke) var(--panel-2);
+}
+
+/* Scrollbar Webkit */
+.cmdet-scope::-webkit-scrollbar {
+  width: 8px;
+}
+.cmdet-scope::-webkit-scrollbar-track {
+  background: var(--panel-2);
+  border-radius: 10px;
+}
+.cmdet-scope::-webkit-scrollbar-thumb {
+  background: var(--stroke);
+  border-radius: 10px;
+}
+.cmdet-scope::-webkit-scrollbar-thumb:hover {
+  background: #3c4a5a;
 }
 
 /* Header */
@@ -191,6 +217,42 @@
   color: #fca5a5;
 }
 
+/* Botón de ícono simple */
+.cmdet-btn-icon {
+  background: var(--panel-2);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  font-size: 14px;
+
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  opacity: 0.85;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+/* Hover simple, sin animación de tamaño */
+.cmdet-btn-icon:hover {
+  background: var(--panel);   /* un poco más claro */
+  opacity: 1;
+}
+
+/* Variantes semánticas */
+.cmdet-btn-icon.edit {
+  border-color: rgba(59,130,246,0.45);  /* azul suave */
+  color: #93c5fd;
+}
+
+.cmdet-btn-icon.del {
+  border-color: rgba(239,68,68,0.45);   /* rojo suave */
+  color: #fca5a5;
+}
+
 .cmdet-empty {
   text-align: center;
   padding: 16px;
@@ -257,3 +319,111 @@
 }
 .cmdet-muted { color: var(--muted); font-size: 12.5px; }
 .cmdet-confirm-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ===============================
+   INPUT INLINE COCHERA (EDICIÓN)
+   =============================== */
+
+.cmdet-cochera-input {
+  width: 55px;               /* angostito */
+  padding: 3px 6px;          /* sin “alto” extra */
+  font-size: 13px;
+  line-height: 1.2;
+
+  background: var(--panel-2);
+  color: var(--text);
+
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+
+  outline: none !important;  /* elimina borde celeste */
+  box-shadow: none !important;
+
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.cmdet-cochera-input:focus {
+  border-color: rgba(59,130,246,0.45); /* azul suave igual que otros inputs */
+  background: var(--panel);            /* lo aclara un toque */
+}
+
+/* Evita que el input se estire por flex */
+.cmdet-cochera-piso-edit,
+.cmdet-cochera-input {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+/* Botones check / cancelar al lado */
+.btn-cochera-guardar,
+.btn-cochera-cancelar {
+  padding: 3px 6px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+  height: auto !important;
+}
+
+.btn-cochera-guardar {
+  border-color: rgba(16,185,129,0.45);
+  color: #86efac;
+}
+
+.btn-cochera-cancelar {
+  border-color: rgba(239,68,68,0.45);
+  color: #fca5a5;
+}
+
+/* Error de cochera */
+.cochera-edit-error {
+  margin-top: 6px;
+  background: #4a1d1f;
+  border: 1px solid #7f1d1d;
+  color: #fca5a5;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.cmdet-cochera-editwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #2c2f3d;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #454b5f;
+}
+
+.cmdet-cochera-select {
+  background-color: #1f1f28;
+  border: 1px solid #3a3a4a;
+  color: #e0e0e0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  height: 28px;
+}
+
+.cmdet-cochera-input {
+  width: 50px !important;
+  padding: 2px 4px !important;
+  height: 26px !important;
+  background-color: #1f1f28;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  color: #e0e0e0;
+  text-align: center;
+}
+
+.cmdet-cochera-input:disabled {
+  opacity: 0.35;
+}
+
+.cmdet-cochera-exc.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cmdet-cochera-exc input {
+  cursor: pointer;
+}
