@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './Header.css';
 import ModalHeader from './ModalHeader/ModalHeader';
 import DatosAutoEntrada from '../../Operador/DatosAutoEntrada/DatosAutoEntrada';
+import { FaUserCircle } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 
 const TOKEN_KEY = 'token';
@@ -17,7 +18,6 @@ function Header({
   user,
   ticketPendiente,
   setTicketPendiente,
-  // estado levantado
   mostrarModalEntrada,
   setMostrarModalEntrada
 }) {
@@ -26,32 +26,35 @@ function Header({
   const menuRef = useRef();
   const navigate = useNavigate();
 
-  // ⏱️ (REMOVIDO: lógica de auto-impresión a los 20s)
+  // ⭐ NUEVO: menú usuario
+  const [menuUsuarioVisible, setMenuUsuarioVisible] = useState(false);
+  const userMenuRef = useRef();
+
   const autoPrintTimerRef = useRef(null);
 
-  // 👉 Cierra sesión (logout)
   const handleLogout = async () => {
     try {
-      // eliminamos token local
       localStorage.removeItem(TOKEN_KEY);
       localStorage.removeItem(OPERADOR_KEY);
-
-      // opcionalmente podrías avisar al backend, pero no es necesario.
-      // await fetch('http://localhost:5000/api/auth/logout', { method: 'POST' }).catch(() => {});
-
       navigate('/login', { replace: true });
     } catch (err) {
       console.error('Error al desloguearse:', err);
     }
   };
 
+  // Cerrar Submenú al hacer click afuera
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setMostrarSubmenu(false);
         setMostrarOverlay(false);
       }
+      // ⭐ NUEVO: cierre menú usuario
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setMenuUsuarioVisible(false);
+      }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [setMostrarOverlay]);
@@ -99,18 +102,13 @@ function Header({
     }
   };
 
-  // 🔸 Abrimos el modal INMEDIATO y disparamos BOT sin esperar
   const handleEjecutarBot = () => {
-    setMostrarModalEntrada(true);  // Mostrar modal YA
-    setTimestamp(Date.now());      // Forzar recarga (foto)
-    Promise.resolve(onEjecutarBot()).catch(() => {}); // Fire & forget
+    setMostrarModalEntrada(true);
+    setTimestamp(Date.now());
+    Promise.resolve(onEjecutarBot()).catch(() => {});
   };
 
-  // 🚫 REMOVIDO: efecto que auto-imprimía a los 20s si no confirmaban.
-  // (Se mantiene la API de funciones para no romper props/calls)
-
   const cancelarAutoImpresion = () => {
-    // ya no hay temporizador que cancelar; se deja no-op por compatibilidad
     if (autoPrintTimerRef.current) {
       clearTimeout(autoPrintTimerRef.current);
       autoPrintTimerRef.current = null;
@@ -118,7 +116,6 @@ function Header({
   };
 
   const handleEntradaConfirmada = () => {
-    // no-op (compatibilidad). Antes cancelaba el timer.
     cancelarAutoImpresion();
   };
 
@@ -126,13 +123,7 @@ function Header({
     <header className="topbar">
       <h1>Parking</h1>
       <div className="menu" ref={menuRef}>
-        {/* 🔘 Botón cuadrado para Logout (sin texto) */}
-        {/* <button
-          className="boton-logout"
-          title="Cerrar sesión"
-          onClick={handleLogout}
-        ></button> */}
-
+        
         <button className={getButtonClass('operador')} onClick={() => manejarCambioVista('operador')} disabled={modalActivo !== null}>Operador</button>
         <button className={getButtonClass('vehiculos')} onClick={() => manejarCambioVista('vehiculos')} disabled={modalActivo !== null}>Auditoría</button>
         <button className={getButtonClass('turnos')} onClick={() => manejarCambioVista('turnos')} disabled={modalActivo !== null}>Anticipados</button>
@@ -150,6 +141,28 @@ function Header({
         <button className={getButtonClass('incidente')} onClick={() => handleAbrirModal('incidente')}>Incidente</button>
         <button className={getButtonClass('config')} onClick={() => manejarCambioVista('config')} disabled={modalActivo !== null}>Config</button>
         <button className="boton-bot" onClick={handleEjecutarBot} disabled={modalActivo !== null}>BOT</button>
+
+        {/* ⭐ NUEVO: ICONO USUARIO */}
+        <div className="user-wrapper" ref={userMenuRef}>
+          <div
+            className="user-circle"
+            onClick={() => setMenuUsuarioVisible((v) => !v)}
+          >
+            <FaUserCircle size={22} />
+          </div>
+
+          {menuUsuarioVisible && (
+            <div className="user-menu">
+              <div className="user-menu-nombre">
+                {user?.username} 
+              </div>
+              <button className="cerrar-sesion" onClick={handleLogout}>
+                Cerrar Sesión
+              </button>
+            </div>
+          )}
+        </div>
+
       </div>
 
       {mostrarModalEntrada && (

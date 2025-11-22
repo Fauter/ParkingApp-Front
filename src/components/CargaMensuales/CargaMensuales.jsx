@@ -347,7 +347,7 @@ export default function CargaMensuales() {
       startCooldown();
     }
   }, [fetchClientes, isRefreshing, cooldownLeft, startCooldown]);
-  
+
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
@@ -1255,7 +1255,7 @@ export default function CargaMensuales() {
                 className="cm-tab-cargamensuales"
                 onClick={() => navigate("/operador/carga-estadias")}
               >
-                Estadías
+                Forzar Ticket Manual
               </button>
             </nav>
             <button
@@ -1305,7 +1305,7 @@ export default function CargaMensuales() {
                 className="cm-tab-cargamensuales"
                 onClick={() => navigate("/operador/carga-estadias")}
               >
-                Estadías
+                Forzar Ticket Manual
               </button>
             </nav>
             <button

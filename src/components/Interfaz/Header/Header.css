@@ -86,5 +86,82 @@
   transform: scale(1.05);
 }
 
+/* ===========================
+   Avatar Usuario (react-icons)
+   =========================== */
+.user-wrapper {
+  position: relative;
+  margin-left: 1.2rem; 
+  display: flex;
+  align-items: center;
+}
 
+/* Círculo contenedor */
+.user-circle {
+  width: 28px;
+  height: 28px;
+  background: #2f3542;
+  border: 2px solid #00acb557;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  transition: background 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
+}
 
+.user-circle:hover {
+  background: #00acb56c;
+  color: black;
+  border-color: #00deea5e;
+  transform: scale(1.01);
+}
+
+/* Menú desplegable */
+.user-menu {
+  position: absolute;
+  right: 0;
+  top: 110%;
+  background: #2f3543;
+  border: 1px solid #00acb571;
+  border-radius: 8px;
+  padding: 0.7rem 0;
+  min-width: 170px;
+  display: flex;
+  flex-direction: column;
+  z-index: 999999;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.35);
+  animation: fadeInUserMenu 0.12s ease-out;
+}
+
+@keyframes fadeInUserMenu {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-menu-nombre {
+  padding: 0.6rem 1rem;
+  color: #cfd6e3;
+  font-size: 0.95rem;
+}
+
+.user-menu-btn {
+  background: transparent;
+  color: #ff6b6b;
+  border: none;
+  text-align: left;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s ease;
+}
+
+.user-menu-btn:hover {
+  background: rgba(255, 107, 107, 0.15);
+}
+
+.cerrar-sesion {
+  margin: 0px 15px !important;
+  padding: 7px 0px !important;
+}

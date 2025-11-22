@@ -271,13 +271,18 @@ function DatosPago({
       group("RESET por vehiculoLocal=null");
       log("Reseteando campos de pago, webcam y mensajes");
       groupEnd();
+
       resetCamposPago();
       setPromoFoto(null);
       setCapturaTemporal(null);
-      setMensajeModal(null);
+
+      // ✔ NO BORRAR EL MODAL INMEDIATO → dejarlo vivir si fue recién disparado
+      setTimeout(() => {
+        setMensajeModal(null);
+      }, 50);
+
       if (modalCamAbierto) cerrarModalCam();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehiculoLocal]);
 
   const handleSelectMetodoPago = (metodo) => { log("Click método de pago:", metodo); setMetodoPago(metodo); };
@@ -343,7 +348,7 @@ function DatosPago({
   };
 
   // ==== NUEVO: helper para imprimir ticket de salida ====
-  const imprimirTicketSalida = async (salidaFinalISO) => {
+  const imprimirTicketSalida = async (salidaFinalISO, ticketPago) => {
     try {
       const payload = {
         ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
@@ -359,7 +364,15 @@ function DatosPago({
       const r = await fetch(`${BASE_URL}/api/tickets/imprimir-salida`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
+          ingreso: vehiculoLocal?.estadiaActual?.entrada,
+          egreso: salidaFinalISO,
+          totalConDescuento,
+          patente: vehiculoLocal?.patente,
+          tipoVehiculo: vehiculoLocal?.tipoVehiculo,
+          ticketPago   // ← NUEVO
+        }),
       });
 
       if (!r.ok) {
@@ -385,13 +398,13 @@ function DatosPago({
         mensaje: !metodoPago && !factura
           ? "Seleccioná un método de pago y un tipo de factura."
           : !metodoPago
-            ? "Seleccioná un método de pago."
-            : "Seleccioná un tipo de factura."
+          ? "Seleccioná un método de pago."
+          : "Seleccioná un tipo de factura.",
       });
       return;
     }
 
-    const token = localStorage.getItem('token') || '';
+    const token = localStorage.getItem("token") || "";
 
     // Tiempos (MISMA salida para todo el flujo)
     const entradaFinalISO = vehiculoLocal?.estadiaActual?.entrada
@@ -399,9 +412,11 @@ function DatosPago({
       : null;
 
     const salidaFinalISO =
-      (horaSalida ? new Date(horaSalida).toISOString()
-      : (vehiculoLocal?.estadiaActual?.salida ? new Date(vehiculoLocal.estadiaActual.salida).toISOString()
-      : new Date().toISOString()));
+      horaSalida
+        ? new Date(horaSalida).toISOString()
+        : vehiculoLocal?.estadiaActual?.salida
+        ? new Date(vehiculoLocal.estadiaActual.salida).toISOString()
+        : new Date().toISOString();
 
     // Texto
     const horas = tiempoEstadiaHoras || 1;
@@ -409,7 +424,7 @@ function DatosPago({
 
     const fotoMovimiento = vehiculoLocal?.estadiaActual?.fotoUrl || null;
 
-    group("REGISTRAR MOVIMIENTO payload");
+    group("REGISTRAR MOVIMIENTO payload (via registrarSalida)");
     log("metodoPago:", metodoPago, "factura:", factura);
     log("monto final (con promos):", totalConDescuento);
     log("tarifaAplicada:", tarifaAplicada);
@@ -417,7 +432,7 @@ function DatosPago({
     log("entradaFinalISO:", entradaFinalISO, "salidaFinalISO:", salidaFinalISO);
     groupEnd();
 
-    // 1) Registrar salida en vehiculo con la misma salidaFinalISO
+    // 🔥 1) Registrar salida EN EL BACK (que adentro crea el movimiento)
     fetch(`${BASE_URL}/api/vehiculos/${vehiculoLocal.patente}/registrarSalida`, {
       method: "PUT",
       headers: {
@@ -429,84 +444,55 @@ function DatosPago({
         costo: totalConDescuento,
         tarifa: tarifaAplicada || null,
         tiempoHoras: horas,
-      }),
+
+        metodoPago,
+        factura,
+        tipoTarifa: "hora",
+        descripcion,
+        fotoUrl: fotoMovimiento || null,
+
+        // 🔥 AGREGO ESTO
+        operador: {
+          username: user?.username,
+          nombre: user?.nombre,
+          apellido: user?.apellido,
+          email: user?.email,
+          _id: user?._id || user?.id,
+        },
+        operadorUsername: user?.username,
+        operadorId: user?._id || user?.id,
+
+        promo: promoSeleccionada
+          ? {
+              _id: promoSeleccionada._id,
+              nombre: promoSeleccionada.nombre,
+              descuento: promoSeleccionada.descuento,
+              ...(promoFoto ? { fotoUrl: promoFoto } : {}),
+            }
+          : undefined,
+      })
     })
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(json?.msg || "Error al registrar salida");
-        return json;
+        return json; // { msg, estadia, movimiento, turnoUsado, vehiculo }
       })
-      .then(() => {
-        // ======= AQUÍ VA EL OPERADOR LOGUEADO =======
-        const operadorPayload = user ? {
-          username: user.username,
-          nombre: user.nombre,
-          apellido: user.apellido,
-          email: user.email,
-          _id: user._id || user.id
-        } : undefined;
+      .then(async (resp) => {
+        const mov = resp?.movimiento || null;
 
-        // 2) POST movimiento con horarios explícitos
-        const datosMovimiento = {
-          patente: vehiculoLocal.patente,
-          tipoVehiculo: vehiculoLocal.tipoVehiculo || "Desconocido",
-          metodoPago,
-          factura,
-          descripcion,
-          monto: totalConDescuento,
-          tipoTarifa: "hora",
-          ticket: vehiculoLocal.estadiaActual?.ticket || undefined,
-          fotoUrl: fotoMovimiento || undefined,
+        if (!mov) {
+          throw new Error("Salida registrada pero no se generó movimiento.");
+        }
 
-          // ⏰ NUEVO: enviar horarios explícitos
-          entrada: entradaFinalISO || undefined,
-          salida:  salidaFinalISO,
-
-          // Extra informativo para tu grid/back
-          tiempoHoras: horas,
-
-          // Operador
-          ...(operadorPayload ? { operador: operadorPayload } : {}),
-          ...(user?.username ? { operadorUsername: user.username } : {}),
-          ...(user?._id || user?.id ? { operadorId: (user._id || user.id).toString() } : {}),
-
-          // Promo (si hay)
-          ...(promoSeleccionada ? {
-            promo: {
-              _id: promoSeleccionada._id,
-              nombre: promoSeleccionada.nombre,
-              descuento: promoSeleccionada.descuento,
-              ...(promoFoto ? { fotoUrl: promoFoto } : {})
-            }
-          } : {})
-        };
-
-        log("POST /api/movimientos/registrar", datosMovimiento);
-
-        return fetch(`${BASE_URL}/api/movimientos/registrar`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify(datosMovimiento),
-        });
-      })
-      .then(async (res) => {
-        if (!res) return null;
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json?.movimiento) throw new Error(json?.msg || "Error al registrar movimiento");
-        return json;
-      })
-      .then(async () => {
-        // 3) Imprimir ticket usando la MISMA salida
-        await imprimirTicketSalida(salidaFinalISO);
+        // 2) Imprimir ticket usando la MISMA salida
+        await imprimirTicketSalida(salidaFinalISO, mov.ticketPago);
 
         setMensajeModal({
           tipo: "exito",
           titulo: "Movimiento registrado",
           mensaje: `✅ Movimiento registrado para ${vehiculoLocal.patente}`,
         });
+
         limpiarVehiculo?.();
         resetCamposPago();
         setPromoFoto(null);

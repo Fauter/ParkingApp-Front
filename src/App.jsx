@@ -11,6 +11,20 @@ const TOKEN_KEY = 'token';
 const REDIRECT_KEY = 'redirectAfterLogin';
 const OPERADOR_KEY = 'operador';
 
+/* ==================================================
+   🔴 HARD RESET SOLO EN ELECTRON (file://)
+   - Si la app corre embebida en Electron (origen file:)
+   - Matamos cualquier token/operador ANTES de montar React
+   - Así SIEMPRE arrancás en /login en el .exe,
+     sin tocar el comportamiento de la versión web
+   ================================================== */
+if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch (e) { console.warn('[auth-reset] fallo limpieza inicial', e); }
+}
+
 /* ===== Helpers: operador seguro (double-parse) ===== */
 function readOperador() {
   const raw = localStorage.getItem(OPERADOR_KEY);
