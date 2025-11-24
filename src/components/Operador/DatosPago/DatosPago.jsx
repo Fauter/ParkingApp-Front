@@ -354,32 +354,38 @@ function DatosPago({
         ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
         ingreso: vehiculoLocal?.estadiaActual?.entrada,
         egreso: salidaFinalISO,
-        totalConDescuento,  // number
+        totalConDescuento,
         patente: vehiculoLocal?.patente,
         tipoVehiculo: vehiculoLocal?.tipoVehiculo,
+        ticketPago
       };
 
       log("POST /api/tickets/imprimir-salida payload:", payload);
 
-      const r = await fetch(`${BASE_URL}/api/tickets/imprimir-salida`, {
+      // =============== 🔥 1° impresión ===============
+      let r1 = await fetch(`${BASE_URL}/api/tickets/imprimir-salida`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ticketNumero: vehiculoLocal?.estadiaActual?.ticket,
-          ingreso: vehiculoLocal?.estadiaActual?.entrada,
-          egreso: salidaFinalISO,
-          totalConDescuento,
-          patente: vehiculoLocal?.patente,
-          tipoVehiculo: vehiculoLocal?.tipoVehiculo,
-          ticketPago   // ← NUEVO
-        }),
+        body: JSON.stringify(payload),
       });
-
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.error("❌ Error al imprimir ticket de salida:", txt || r.status);
+      if (!r1.ok) {
+        console.error("❌ Error en primer ticket:");
+        console.error(await r1.text().catch(() => ""));
         return false;
       }
+
+      // =============== 🔥 2° impresión ===============
+      let r2 = await fetch(`${BASE_URL}/api/tickets/imprimir-salida`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r2.ok) {
+        console.error("❌ Error en segundo ticket:");
+        console.error(await r2.text().catch(() => ""));
+        return false;
+      }
+
       return true;
     } catch (e) {
       console.error("❌ Excepción al imprimir ticket de salida:", e);
