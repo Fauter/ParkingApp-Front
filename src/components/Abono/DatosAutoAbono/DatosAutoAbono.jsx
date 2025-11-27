@@ -4,31 +4,38 @@ import { FaCamera, FaCheckCircle } from "react-icons/fa";
 import ModalMensaje from "../../ModalMensaje/ModalMensaje";
 import "./DatosAutoAbono.css";
 
+// 👇 USAMOS EL MISMO HOOK CENTRAL QUE EN DatosPago
+import { useTarifasData } from "../../../hooks/tarifasService";
+
 const BASE_URL = "http://localhost:5000";
-const CATALOG_POLL_MS = 180000; // 3 min
 
 // === Helpers de abono (tier según cochera/exclusiva) ===
 const getTierName = (cochera, exclusiva) => {
-  const c = String(cochera || "").toLowerCase(); // 'fija' | 'móvil' | ''
+  // Cochera puede venir como "Fija", "Móvil", "fija", "movil"
+  const c = String(cochera || "").trim().toLowerCase();
   if (c === "fija") return exclusiva ? "exclusiva" : "fija";
+  // Default: todo lo que no sea "fija" se considera móvil
   return "móvil";
 };
 
 const getAbonoTierKeyCandidates = (cochera, exclusiva) => {
   const t = getTierName(cochera, exclusiva); // 'móvil' | 'fija' | 'exclusiva'
-  if (t === "móvil") return ["móvil", "movil"]; // compat sin tilde
+  if (t === "móvil") return ["móvil", "movil"]; // compat sin tilde en catálogos viejos
   return [t];
 };
 
 // === Normalización ligera FRONT (el back también normaliza) ===
+// FRONT → BACK: siempre "Fija" | "Móvil"
 const normCocheraFront = (raw) => {
   const v = String(raw || "").trim().toLowerCase();
   if (v === "fija") return "Fija";
   if (v === "móvil" || v === "movil") return "Móvil";
   return "";
 };
-const normExclusivaFront = (exclusiva, cochera) =>
-  normCocheraFront(cochera) === "Fija" ? Boolean(exclusiva) : false;
+
+// Sólo permite exclusiva si tipo === Fija
+const normExclusivaFront = (exclusiva, cocheraRaw) =>
+  normCocheraFront(cocheraRaw) === "Fija" ? Boolean(exclusiva) : false;
 
 /* ===========================
    Modal simple inline (Confirmación GENERAL)
@@ -132,6 +139,30 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
 
   // Compat (algunos helpers esperan 'precios' a secas)
   const [precios, setPrecios] = useState({});
+
+  /* ============================================================
+   CARGA CENTRALIZADA DE CATÁLOGOS (TIPOS + PRECIOS EF/OTROS)
+   ============================================================
+   ⚠️ ESTE ES EL ÚNICO ORIGEN DE VERDAD PARA PRECIOS.
+   ✔ MISMO HOOK QUE USA DatosPago
+   ✔ SIN doble fetch
+   ✔ SIN desfasajes
+  ============================================================ */
+
+  const {
+    tiposVehiculo: tiposVehiculoHook,
+    preciosEfectivo: preciosEfectivoHook,
+    preciosOtros: preciosOtrosHook,
+    lastUpdateToken,
+  } = useTarifasData();
+
+  // Sincronizamos el hook con los estados internos que usa este componente
+  useEffect(() => {
+    setTiposVehiculo(Array.isArray(tiposVehiculoHook) ? tiposVehiculoHook : []);
+    setPreciosEfectivo(preciosEfectivoHook || {});
+    setPreciosOtros(preciosOtrosHook || {});
+    setPrecios(preciosEfectivoHook || {}); // compatibilidad
+  }, [tiposVehiculoHook, preciosEfectivoHook, preciosOtrosHook, lastUpdateToken]);
 
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -347,66 +378,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
       telefonoEmergencia: clienteSeleccionado?.telefonoEmergencia || prev.telefonoEmergencia,
       domicilioTrabajo: clienteSeleccionado?.domicilioTrabajo || prev.domicilioTrabajo,
       telefonoTrabajo: clienteSeleccionado?.telefonoTrabajo || prev.telefonoTrabajo,
-      cochera: normCocheraFront(clienteSeleccionado?.cochera) || prev.cochera,
-      exclusiva: normExclusivaFront(clienteSeleccionado?.exclusiva, clienteSeleccionado?.cochera) || false,
-      piso: clienteSeleccionado?.piso || prev.piso,
+      cochera: prev.cochera,            // NO pisar con datos viejos
+      exclusiva: prev.exclusiva,        // NO pisar con datos viejos
+      piso: prev.piso,                  // NO pisar con datos viejos
       patente: (clienteSeleccionado?.patente || prev.patente || "").toUpperCase().slice(0, 10),
     }));
   }, [clienteSeleccionado]);
-
-  // ====== Carga de catálogos con ambos precios ======
-  useEffect(() => {
-    let timer = null;
-
-    const fetchTiposYPrecios = async () => {
-      try {
-        const tiposRes = await fetch(`${BASE_URL}/api/tipos-vehiculo`, { cache: "no-store" });
-        if (!tiposRes.ok) throw new Error("No se pudo cargar tipos de vehículo");
-        const tiposData = await tiposRes.json();
-        setTiposVehiculo(Array.isArray(tiposData) ? tiposData : []);
-
-        // efectivo
-        let cash = {};
-        try {
-          const r1 = await fetch(`${BASE_URL}/api/precios`, { cache: "no-store" });
-          if (!r1.ok) throw new Error("precios efectivo falló");
-          cash = await r1.json();
-        } catch {
-          const r2 = await fetch(`${BASE_URL}/api/precios?metodo=efectivo`, { cache: "no-store" });
-          if (!r2.ok) throw new Error("precios efectivo fallback falló");
-          cash = await r2.json();
-        }
-        setPreciosEfectivo(cash);
-
-        // otros
-        let other = {};
-        try {
-          const r3 = await fetch(`${BASE_URL}/api/precios?metodo=otros`, { cache: "no-store" });
-          if (r3.ok) other = await r3.json();
-        } catch {}
-        setPreciosOtros(other);
-
-        setPrecios(cash);
-      } catch (err) {
-        console.error("Error al cargar datos:", err);
-        showModal("Error", "Error al cargar datos de vehículos y precios.");
-      }
-    };
-
-    fetchTiposYPrecios();
-    timer = setInterval(fetchTiposYPrecios, CATALOG_POLL_MS);
-
-    const onVis = () => document.visibilityState === "visible" && fetchTiposYPrecios();
-    const onOnline = () => fetchTiposYPrecios();
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("online", onOnline);
-
-    return () => {
-      if (timer) clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("online", onOnline);
-    };
-  }, []);
 
   useEffect(() => {
     fetchClientes();
@@ -415,16 +392,23 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
   // ===== Helpers FRONT: abono por método + prorrateo =====
 
   const getAbonoPrecioByMetodo = (tipoVehiculo, metodoPago, cochera, exclusiva) => {
-    const keyVehiculo = String(tipoVehiculo || "").toLowerCase();
+    const keyVehiculo = String(tipoVehiculo || "").trim().toLowerCase();
     if (!keyVehiculo) return null;
-    const mapa = metodoPago === "Efectivo" ? preciosEfectivo : preciosOtros;
-    if (!mapa || !mapa[keyVehiculo]) return null;
+
+    const mapaBase = metodoPago === "Efectivo" ? preciosEfectivo : preciosOtros;
+    if (!mapaBase || typeof mapaBase !== "object") return null;
+
+    const mapa = mapaBase[keyVehiculo];
+    if (!mapa || typeof mapa !== "object") return null;
 
     const candidates = getAbonoTierKeyCandidates(cochera, exclusiva);
     for (const tier of candidates) {
-      const val = mapa[keyVehiculo]?.[tier];
-      if (typeof val === "number" && isFinite(val) && val > 0) return val;
+      const val = mapa[tier];
+      if (typeof val === "number" && isFinite(val) && val > 0) {
+        return val;
+      }
     }
+
     return null;
   };
 
@@ -466,56 +450,42 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     const dni = (formData.dniCuitCuil || "").trim();
     if (!validarDNI(dni)) throw new Error("DNI/CUIT/CUIL inválido");
 
-    const cocheraNorm = normCocheraFront(formData.cochera);
-    const exclusivaNorm = normExclusivaFront(formData.exclusiva, cocheraNorm);
-    const pisoVal = String(formData.piso || "").trim();
-
     const encontrado = (clientes || []).find(
       (c) => String(c.dniCuitCuil || "").trim() === dni
     );
+
+    const payloadBase = {
+      nombreApellido: formData.nombreApellido,
+      dniCuitCuil: formData.dniCuitCuil,
+      domicilio: formData.domicilio,
+      localidad: formData.localidad,
+      telefonoParticular: formData.telefonoParticular,
+      telefonoEmergencia: formData.telefonoEmergencia,
+      domicilioTrabajo: formData.domicilioTrabajo,
+      telefonoTrabajo: formData.telefonoTrabajo,
+      email: formData.email
+      // ❌ sin cochera, sin exclusiva, sin piso
+    };
 
     if (encontrado && encontrado._id) {
       try {
         await fetch(`${BASE_URL}/api/clientes/${encontrado._id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            nombreApellido: formData.nombreApellido,
-            dniCuitCuil: formData.dniCuitCuil,
-            domicilio: formData.domicilio,
-            localidad: formData.localidad,
-            telefonoParticular: formData.telefonoParticular,
-            telefonoEmergencia: formData.telefonoEmergencia,
-            domicilioTrabajo: formData.domicilioTrabajo,
-            telefonoTrabajo: formData.telefonoTrabajo,
-            email: formData.email,
-            cochera: cocheraNorm,
-            exclusiva: exclusivaNorm,
-            piso: pisoVal
-          }),
+          body: JSON.stringify(payloadBase),
         }).catch(() => {});
       } catch {}
       return { id: encontrado._id, isNew: false };
     }
 
-    // Crear
+    // Crear nuevo cliente
     const nuevoClienteRes = await fetch(`${BASE_URL}/api/clientes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        nombreApellido: formData.nombreApellido,
-        dniCuitCuil: formData.dniCuitCuil,
-        domicilio: formData.domicilio,
-        localidad: formData.localidad,
-        telefonoParticular: formData.telefonoParticular,
-        telefonoEmergencia: formData.telefonoEmergencia,
-        domicilioTrabajo: formData.domicilioTrabajo,
-        telefonoTrabajo: formData.telefonoTrabajo,
-        email: formData.email,
+        ...payloadBase,
+        // retrocompat: usás tipoVehiculo como "precioAbono" viejo
         precioAbono: formData.tipoVehiculo || "",
-        cochera: cocheraNorm,
-        exclusiva: exclusivaNorm,
-        piso: pisoVal
       }),
     });
 
@@ -532,14 +502,16 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
   const fetchPreviewAbono = async () => {
     const params = new URLSearchParams();
     const dni = (formData.dniCuitCuil || "").trim();
+    const cocheraNorm = normCocheraFront(formData.cochera);
+    const exclusivaNorm = normExclusivaFront(formData.exclusiva, formData.cochera);
+
     if (validarDNI(dni)) params.set("dniCuitCuil", dni);
     if (formData.tipoVehiculo) params.set("tipoVehiculo", formData.tipoVehiculo);
+
     params.set("metodoPago", formData.metodoPago || "Efectivo");
-    params.set("cochera", formData.cochera || "Móvil");
-    params.set(
-      "exclusiva",
-      normCocheraFront(formData.cochera) === "Fija" && formData.exclusiva ? "true" : "false"
-    );
+    // Siempre mandamos cochera normalizada
+    params.set("cochera", cocheraNorm || "Móvil");
+    params.set("exclusiva", exclusivaNorm ? "true" : "false");
     params.set("mesesAbonar", "1");
 
     const url = `${BASE_URL}/api/abonos/preview?${params.toString()}`;
@@ -612,10 +584,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
        POST /api/clientes/asignarVehiculoACochera { clienteId, cocheraId:null, vehiculoId, cochera:{tipo,exclusiva,piso} }
      - Silencioso: no rompe el flujo si falla.
   =========================================================== */
-  const asignarVehiculoACocheraFront = async (clienteId, vehiculoId) => {
+  const asignarVehiculoACocheraFront = async (clienteObj, vehiculoId) => {
     try {
-      if (!clienteId || !vehiculoId) return;
-      const cliente = (clientes || []).find((c) => c._id === clienteId);
+      if (!clienteObj || !clienteObj._id || !vehiculoId) return;
+
+      const clienteId = clienteObj._id;
+      const cliente = clienteObj; // ahora usamos el cliente pasado, no el array viejo
       const token = localStorage.getItem("token");
       const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -871,7 +845,14 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         }
 
         if (vehiculoId) {
-          await asignarVehiculoACocheraFront(clienteId, vehiculoId);
+          let clienteFresh = null;
+          try {
+            const r = await fetch(`${BASE_URL}/api/clientes/${clienteId}`);
+            if (r.ok) clienteFresh = await r.json();
+          } catch {}
+
+          // 🔥 Pasamos el clienteFresh a la función de asignación
+          await asignarVehiculoACocheraFront(clienteFresh || clienteSeleccionado, vehiculoId);
         }
       } catch (errLink) {
         console.warn("⚠️ Vinculación vehículo↔cochera:", errLink?.message || errLink);
@@ -1123,7 +1104,8 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
       if (!validarDNI(formData.dniCuitCuil))
         throw new Error("DNI/CUIT/CUIL inválido.");
       if (!formData.email?.trim()) throw new Error("Debe ingresar un email.");
-      if (!formData.cochera) throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
+      if (!formData.cochera && !clienteSeleccionado?.cocheras?.length)
+        throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
     } catch (err) {
       return showModal("Error", err.message);
     }
@@ -1474,17 +1456,21 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
                     formData.cochera || "Móvil",
                     formData.cochera === "Fija" ? formData.exclusiva : false
                   );
-                  const capitalized = tipo.nombre
+
+                  const namePretty = tipo.nombre
                     ? tipo.nombre.charAt(0).toUpperCase() + tipo.nombre.slice(1)
                     : "";
+
                   const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
+                  const metodoCatalogo = formData.metodoPago === "Efectivo" ? "efectivo" : "otros";
+
                   return (
                     <option
                       key={tipo.nombre}
                       value={tipo.nombre}
-                      title={`Catálogo (${formData.metodoPago === "Efectivo" ? "efectivo" : "otros"}) • Tier: ${tierName}`}
+                      title={`Catálogo (${metodoCatalogo}) • Tier: ${tierName}`}
                     >
-                      {capitalized} - ${formatARS(monthly)}
+                      {namePretty} — ${formatARS(monthly)}
                     </option>
                   );
                 })}

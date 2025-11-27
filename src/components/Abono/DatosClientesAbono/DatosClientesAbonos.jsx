@@ -85,29 +85,63 @@ export default function DatosClientesAbonos({ onPickCliente }) {
     }
   }, []);
 
-  const fetchCocherasByCliente = useCallback(async (clienteId) => {
+  const fetchCocherasByCliente = useCallback(async (cliente) => {
+    const clienteId = cliente?._id;
     if (!clienteId) return;
 
     // Si ya cargamos las cocheras antes, no repetimos
-    if (cocherasMap[clienteId]) return;
+    setCocherasMap((prev) => {
+      if (prev[clienteId]) {
+        // Ya está cargado, no hace falta seguir
+        return prev;
+      }
+      return prev;
+    });
+
+    // Si ya se está cargando para este cliente, no duplicamos
+    if (cocherasLoading[clienteId]) return;
+
+    const cocherasRefs = Array.isArray(cliente.cocheras) ? cliente.cocheras : [];
+
+    // Si el cliente no tiene cocheras asociadas, guardamos array vacío y salimos
+    if (cocherasRefs.length === 0) {
+      setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
+      return;
+    }
 
     setCocherasLoading((prev) => ({ ...prev, [clienteId]: true }));
 
     try {
-      const res = await fetch(`${BASE_URL}/api/cocheras/cliente/${clienteId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCocherasMap((prev) => ({ ...prev, [clienteId]: data }));
-      } else {
-        setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
-      }
+      const richCocheras = await Promise.all(
+        cocherasRefs.map(async (ref) => {
+          const id = ref?.cocheraId;
+          if (!id) return null;
+
+          try {
+            const res = await fetch(`${BASE_URL}/api/cocheras/${id}`);
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data && data._id ? data : null;
+          } catch (err) {
+            console.error("[DatosClientesAbonos] error fetch cochera por id", err);
+            return null;
+          }
+        })
+      );
+
+      const filtered = richCocheras.filter(Boolean);
+
+      setCocherasMap((prev) => ({
+        ...prev,
+        [clienteId]: filtered,
+      }));
     } catch (e) {
-      console.error(e);
+      console.error("[DatosClientesAbonos] error general fetch cocheras cliente", e);
       setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
     } finally {
       setCocherasLoading((prev) => ({ ...prev, [clienteId]: false }));
     }
-  }, [cocherasMap]);
+  }, [cocherasLoading]);
 
   const softRefresh = useCallback(
     async () => {
@@ -228,9 +262,9 @@ export default function DatosClientesAbonos({ onPickCliente }) {
                 const clienteId = c._id;
                 const keyCliente = clienteId || `${c.dniCuitCuil}-${c.email}`;
 
-                // Lazy load obligatorio para cada cliente
-                if (!cocherasMap[clienteId] && !cocherasLoading[clienteId]) {
-                  fetchCocherasByCliente(clienteId);
+                // Lazy load obligatorio para cada cliente, usando los cocheraId que trae el cliente
+                if (clienteId && !cocherasMap[clienteId] && !cocherasLoading[clienteId]) {
+                  fetchCocherasByCliente(c);
                 }
 
                 const cocheras = cocherasMap[clienteId] || [];
