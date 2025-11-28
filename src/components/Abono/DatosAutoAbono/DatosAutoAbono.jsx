@@ -364,25 +364,45 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     }
   }, [datosVehiculo]);
 
-  // si el usuario elige un cliente a la izquierda, prellenamos el form
+  // si el usuario elige un cliente a la izquierda (flecha),
+  // prellenamos datos + cochera si vino en el payload
   useEffect(() => {
     if (!clienteSeleccionado) return;
-    setFormData((prev) => ({
-      ...prev,
-      nombreApellido: clienteSeleccionado?.nombreApellido || prev.nombreApellido,
-      dniCuitCuil: clienteSeleccionado?.dniCuitCuil || prev.dniCuitCuil,
-      email: clienteSeleccionado?.email || prev.email,
-      domicilio: clienteSeleccionado?.domicilio || prev.domicilio,
-      localidad: clienteSeleccionado?.localidad || prev.localidad,
-      telefonoParticular: clienteSeleccionado?.telefonoParticular || prev.telefonoParticular,
-      telefonoEmergencia: clienteSeleccionado?.telefonoEmergencia || prev.telefonoEmergencia,
-      domicilioTrabajo: clienteSeleccionado?.domicilioTrabajo || prev.domicilioTrabajo,
-      telefonoTrabajo: clienteSeleccionado?.telefonoTrabajo || prev.telefonoTrabajo,
-      cochera: prev.cochera,            // NO pisar con datos viejos
-      exclusiva: prev.exclusiva,        // NO pisar con datos viejos
-      piso: prev.piso,                  // NO pisar con datos viejos
-      patente: (clienteSeleccionado?.patente || prev.patente || "").toUpperCase().slice(0, 10),
-    }));
+
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        nombreApellido: clienteSeleccionado?.nombreApellido || prev.nombreApellido,
+        dniCuitCuil: clienteSeleccionado?.dniCuitCuil || prev.dniCuitCuil,
+        email: clienteSeleccionado?.email || prev.email,
+        domicilio: clienteSeleccionado?.domicilio || prev.domicilio,
+        localidad: clienteSeleccionado?.localidad || prev.localidad,
+        telefonoParticular: clienteSeleccionado?.telefonoParticular || prev.telefonoParticular,
+        telefonoEmergencia: clienteSeleccionado?.telefonoEmergencia || prev.telefonoEmergencia,
+        domicilioTrabajo: clienteSeleccionado?.domicilioTrabajo || prev.domicilioTrabajo,
+        telefonoTrabajo: clienteSeleccionado?.telefonoTrabajo || prev.telefonoTrabajo,
+        patente: (clienteSeleccionado?.patente || prev.patente || "")
+          .toUpperCase()
+          .slice(0, 10),
+      };
+
+      // 👇 Datos de cochera traídos por la flecha (DatosClientesAbonos.handlePickCochera)
+      const cocheraFromCliente = clienteSeleccionado?.cochera || "";
+      const pisoFromCliente = clienteSeleccionado?.piso || "";
+      const exclusivaFromCliente =
+        typeof clienteSeleccionado?.exclusiva === "boolean"
+          ? clienteSeleccionado.exclusiva
+          : prev.exclusiva;
+
+      // Si la flecha trae cochera, la usamos y también piso/exclusiva
+      if (cocheraFromCliente) {
+        next.cochera = cocheraFromCliente;
+        next.piso = pisoFromCliente;
+        next.exclusiva = normExclusivaFront(exclusivaFromCliente, cocheraFromCliente);
+      }
+
+      return next;
+    });
   }, [clienteSeleccionado]);
 
   useEffect(() => {
@@ -527,50 +547,59 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
   // === Cálculo LOCAL del “más caro” (usado sólo como fallback si falla el preview del back)
   const calcularUpgradeLocal = (clienteExistente) => {
     const metodoNuevo = formData.metodoPago;
-    const cocheraNueva = formData.cochera || "Móvil";
-    const exclNueva = formData.cochera === "Fija" ? !!formData.exclusiva : false;
+    const tipoNorm = normCocheraFront(formData.cochera || "Móvil"); // 'Fija' | 'Móvil'
+    const pisoNorm = String(formData.piso || "").trim().toLowerCase();
+    const exclNueva = tipoNorm === "Fija" ? !!formData.exclusiva : false;
 
-    const baseNuevo = getAbonoPrecioByMetodo(
-      formData.tipoVehiculo,
-      metodoNuevo,
-      cocheraNueva,
-      exclNueva
-    ) || 0;
+    const baseNuevo =
+      getAbonoPrecioByMetodo(
+        formData.tipoVehiculo,
+        metodoNuevo,
+        tipoNorm,
+        exclNueva
+      ) || 0;
 
     let baseActual = 0;
 
     if (clienteExistente?.abonos?.length) {
-      // max del mes actual
       for (const a of clienteExistente.abonos) {
         if (!a?.activo) continue;
         if (!isDentroMesActual(a?.fechaExpiracion)) continue;
 
+        // 🔥 FILTRO CRÍTICO: MISMA COCHERA + MISMO PISO
+        const tipoAbo = normCocheraFront(a.cochera);
+        const pisoAbo = String(a.piso || "").trim().toLowerCase();
+        if (tipoAbo !== tipoNorm) continue;
+        if (pisoAbo !== pisoNorm) continue;
+
         const metodoAbo = a.metodoPago || metodoNuevo;
-        const cochAbo = a.cochera || cocheraNueva;
-        const exclAbo = (a.cochera === "Fija") ? !!a.exclusiva : false;
+        const exclAbo = tipoAbo === "Fija" ? !!a.exclusiva : false;
 
         const baseAbo = getAbonoPrecioByMetodo(
           a.tipoVehiculo,
           metodoAbo,
-          cochAbo,
+          tipoAbo,
           exclAbo
         );
-        if (Number.isFinite(baseAbo) && baseAbo > baseActual) baseActual = baseAbo;
+
+        if (Number.isFinite(baseAbo) && baseAbo > baseActual) {
+          baseActual = baseAbo;
+        }
       }
-    } else if (clienteExistente?.abonado && clienteExistente?.precioAbono) {
-      // fallback si no tenemos abonos poblados
-      const baseA = getAbonoPrecioByMetodo(
-        clienteExistente.precioAbono,
-        metodoNuevo,
-        cocheraNueva,
-        exclNueva
-      );
-      if (Number.isFinite(baseA)) baseActual = baseA;
     }
 
     const diffBase = Math.max(0, baseNuevo - baseActual);
-    const { proporcional, diasRestantes, totalDiasMes } = prorratearMontoFront(diffBase);
-    return { baseActual, baseNuevo, diffBase, montoHoy: proporcional, diasRestantes, totalDiasMes };
+    const { proporcional, diasRestantes, totalDiasMes } =
+      prorratearMontoFront(diffBase);
+
+    return {
+      baseActual,
+      baseNuevo,
+      diffBase,
+      montoHoy: proporcional,
+      diasRestantes,
+      totalDiasMes,
+    };
   };
 
   /* ===========================================================
@@ -670,40 +699,61 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         );
       }
 
-      // Decisión final de "upgrade" (aumento) y monto HOY
+      // Decisión final de "upgrade" (aumento)
       const esUpgradeDecision =
-        decision?.upgrade ??
-        (previewOverride &&
-          Number(previewOverride.baseActual) > 0 &&
-          Number(previewOverride.diffBase) > 0);
+        !!decision?.upgrade ||
+        (
+          previewOverride &&
+          Number(previewOverride.baseNuevo) > Number(previewOverride.baseActual)
+        );
 
-      let proporcionalHoy;
-      let diasRestantes;
-      let totalDiasMes;
+      // Declaración correcta de nueva cochera (antes de usarla)
+      const esNuevaCocheraDecision = !!(decision && decision.nuevaCochera);
 
+      // Id de cochera resuelto en el front (si existe)
+      const cocheraIdForBack = decision?.cocheraId || null;
+
+      let proporcionalHoy = 0;
+      let diasRestantes = 0;
+      let totalDiasMes = 0;
+
+      // 🟩 Caso 1 — Cliente NUEVO
       if (clienteEsNuevo) {
-        // cliente NUEVO: cobra prorrateo de la base mensual completa
         const pr = prorratearMontoFront(baseMensual);
         proporcionalHoy = pr.proporcional;
         diasRestantes = pr.diasRestantes;
         totalDiasMes = pr.totalDiasMes;
-      } else if (esUpgradeDecision) {
-        // EXISTENTE con aumento: cobra la DIFERENCIA prorrateada (usa preview del back si está disponible)
+      }
+
+      // 🟩 Caso 2 — Upgrade (más caro)
+      else if (esUpgradeDecision) {
         if (previewOverride && Number.isFinite(previewOverride.proporcionalMesActual)) {
           proporcionalHoy = Number(previewOverride.proporcionalMesActual);
           diasRestantes = Number(previewOverride.diasRestantes);
           totalDiasMes = Number(previewOverride.totalDiasMes);
         } else {
-          // fallback defensivo
-          const pr = prorratearMontoFront(
-            Math.max(0, (previewOverride?.baseNuevo || baseMensual) - (previewOverride?.baseActual || 0))
+          const diff = Math.max(
+            0,
+            (previewOverride?.baseNuevo || baseMensual) -
+              (previewOverride?.baseActual || 0)
           );
+          const pr = prorratearMontoFront(diff);
           proporcionalHoy = pr.proporcional;
           diasRestantes = pr.diasRestantes;
           totalDiasMes = pr.totalDiasMes;
         }
-      } else {
-        // EXISTENTE y SIN aumento: no se cobra nada
+      }
+
+      // 🟩 Caso 3 — Nueva cochera (cliente existente)
+      else if (esNuevaCocheraDecision) {
+        const pr = prorratearMontoFront(baseMensual);
+        proporcionalHoy = pr.proporcional;
+        diasRestantes = pr.diasRestantes;
+        totalDiasMes = pr.totalDiasMes;
+      }
+
+      // 🟩 Caso 4 — No se cobra nada
+      else {
         const pr = prorratearMontoFront(0);
         proporcionalHoy = 0;
         diasRestantes = pr.diasRestantes;
@@ -719,6 +769,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
       fd.set("cliente", clienteId);
       fd.set("operador", user?.nombre || "Sistema");
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
+
+      // 🟢 Si ya tenemos una cochera real resuelta, se la avisamos al back
+      if (cocheraIdForBack) {
+        fd.set("cocheraId", String(cocheraIdForBack));
+      }
+
       fd.set("precio", String(baseMensual)); // precio de catálogo
       fd.set("precioProrrateadoHoy", String(proporcionalHoy));
       fd.set("tierAbono", getTierName(formData.cochera || "Móvil", formData.exclusiva));
@@ -736,7 +792,10 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
-      const debeCobrar = clienteEsNuevo || esUpgradeDecision;
+      const debeCobrar =
+        clienteEsNuevo ||
+        esUpgradeDecision ||
+        esNuevaCocheraDecision;
 
       // 2) (condicional) Crear Ticket en DB (tipo ABONO) sólo si se cobra algo
       let ticketNumber = null;
@@ -797,7 +856,11 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
 
       // 4) (condicional) Registrar movimiento
       if (debeCobrar && proporcionalHoy > 0) {
-        const descripcion = clienteEsNuevo ? "Alta abono" : "Aumento de Precio";
+        let descripcion = "";
+        if (clienteEsNuevo) descripcion = "Alta abono";
+        else if (esNuevaCocheraDecision) descripcion = "Nueva Cochera";
+        else if (esUpgradeDecision) descripcion = "Aumento de Precio";
+        else descripcion = "Abono mensual";
         try {
           const movBody = {
             patente,
@@ -861,11 +924,16 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
       await fetchClientes();
       fetch(`${BASE_URL}/api/sync/run-now`, { method: "POST" }).catch(() => {});
 
-      const msgOk = clienteEsNuevo
-        ? `Abono registrado y cobrado para ${patente} (cliente nuevo). Sincronizado con cochera.`
-        : esUpgradeDecision
-          ? `Abono agregado y diferencia cobrada para ${patente} (aumento de precio). Sincronizado con cochera.`
-          : `Abono agregado para ${patente} (sin cargos). Sincronizado con cochera.`;
+      let msgOk = "";
+      if (clienteEsNuevo) {
+        msgOk = `Abono registrado y cobrado para ${patente} (cliente nuevo). Sincronizado con cochera.`;
+      } else if (esUpgradeDecision) {
+        msgOk = `Abono agregado y diferencia cobrada para ${patente} (aumento de precio). Sincronizado con cochera.`;
+      } else if (esNuevaCocheraDecision) {
+        msgOk = `Abono registrado y cobrado para ${patente} (nueva cochera). Sincronizado con cochera.`;
+      } else {
+        msgOk = `Abono agregado para ${patente} (sin cargos). Sincronizado con cochera.`;
+      }
 
       showModal("Éxito", msgOk);
 
@@ -919,6 +987,49 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         (c) => String(c.dniCuitCuil || "").trim() === dni
       );
       const esClienteNuevo = !clienteExistente;
+      // === Detectar si esta cochera es nueva para este cliente existente
+      //     y resolver el ID REAL de cochera ===
+      let esNuevaCochera = false;
+      let cocheraRealId = null;
+
+      if (!esClienteNuevo && clienteExistente && Array.isArray(clienteExistente.cocheras)) {
+        const tipoNorm = normCocheraFront(formData.cochera);
+        const pisoNorm = String(formData.piso || "").trim();
+
+        // 💥 Solución: comparar contra cocheraId REAL
+        if (clienteExistente.cocheras.length > 0) {
+          // Busco la cochera REAL del sistema por tipo+piso
+          let cocheraReal = null;
+
+          try {
+            const r = await fetch(`${BASE_URL}/api/cocheras`);
+            const cocherasSistema = await r.json();
+
+            cocheraReal = cocherasSistema.find((c) => {
+              return (
+                normCocheraFront(c.tipo) === tipoNorm &&
+                String(c.piso || "").trim() === pisoNorm
+              );
+            });
+          } catch (err) {
+            console.warn("⚠️ No se pudo cargar catálogo de cocheras", err);
+          }
+
+          if (cocheraReal) {
+            cocheraRealId = cocheraReal._id;
+
+            const yaLaTiene = clienteExistente.cocheras.some(
+              (c) => String(c.cocheraId || c._id) === String(cocheraRealId)
+            );
+
+            esNuevaCochera = !yaLaTiene;
+          } else {
+            // fallback defensivo: si no encontramos la cochera en el catálogo, asumimos que es nueva
+            esNuevaCochera = true;
+            cocheraRealId = null;
+          }
+        }
+      }
 
       // 1) Intentamos preview del back (más preciso)
       let preview = null;
@@ -953,7 +1064,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
           onConfirm: async () => {
             setConfirmModal((s) => ({ ...s, open: false }));
             setLoading(true);
-            await finalizarSubmit(preview, { isNew: esClienteNuevo, upgrade: true });
+            await finalizarSubmit(preview, {
+              isNew: esClienteNuevo,
+              upgrade: true,
+              nuevaCochera: false,
+              cocheraId: cocheraRealId,
+            });
             setLoading(false);
           },
           onCancel: () => {
@@ -999,7 +1115,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
             onConfirm: async () => {
               setConfirmModal((s) => ({ ...s, open: false }));
               setLoading(true);
-              await finalizarSubmit(previewLike, { isNew: esClienteNuevo, upgrade: true });
+              await finalizarSubmit(previewLike, {
+                isNew: esClienteNuevo,
+                upgrade: true,
+                nuevaCochera: false,
+                cocheraId: cocheraRealId,
+              });
               setLoading(false);
             },
             onCancel: () => {
@@ -1013,10 +1134,45 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         }
       }
 
-      // 3) No es upgrade: alta normal
+      // === Si no es upgrade, verificar si es NUEVA COCHERA ===
+      if (!esClienteNuevo && esNuevaCochera) {
+        setConfirmModal({
+          open: true,
+          titulo: "Nueva Cochera",
+          mensaje:
+            `Estás agregando una NUEVA COCHERA para este cliente.\n\n` +
+            `• Cochera: ${formData.cochera}\n` +
+            `• Número: ${formData.piso || "-"}\n` +
+            `• Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
+            `Esto generará un cobro proporcional por la nueva cochera.\n\n` +
+            `¿Deseás continuar?`,
+          onConfirm: async () => {
+            setConfirmModal((s) => ({ ...s, open: false }));
+            await finalizarSubmit(preview || null, {
+              isNew: esClienteNuevo,
+              upgrade: false,
+              nuevaCochera: true,
+              cocheraId: cocheraRealId,
+            });
+          },
+          onCancel: () => {
+            setConfirmModal((s) => ({ ...s, open: false }));
+          }
+        });
+
+        setLoading(false);
+        return;
+      }
+
+      // 3) Alta normal (sin upgrade, sin nueva cochera)
       setIsUpgrade(false);
       setLastPreview(null);
-      await finalizarSubmit(preview || null, { isNew: esClienteNuevo, upgrade: false });
+      await finalizarSubmit(preview || null, {
+        isNew: esClienteNuevo,
+        upgrade: false,
+        nuevaCochera: false,
+        cocheraId: cocheraRealId,
+      });
     } catch (error) {
       console.error(error);
       showModal("Error", error?.message || "Ocurrió un error al guardar el abono.");
