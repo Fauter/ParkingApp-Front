@@ -12,6 +12,38 @@ const API_ABONOS = `${API_BASE}/api/abonos`;
 const API_VEHICULOS = `${API_BASE}/api/vehiculos`;
 const API_COCHERAS = `${API_BASE}/api/cocheras`; // 👈 nuevo: endpoint de cocheras
 
+// ====================== CÁLCULO REAL DE PRECIOS ======================
+const getAbonoPrecioByMetodo = (
+  tipoVehiculo,
+  metodoPago,
+  cocheraTipo,
+  exclusiva,
+  catalogo
+) => {
+  if (!catalogo) return 0;
+  if (!tipoVehiculo) return 0;
+
+  // normalizar clave
+  const key = tipoVehiculo.toLowerCase().trim();
+  const cat = catalogo[key];
+  if (!cat) return 0;
+
+  // Determinar la key correcta según tipo de cochera
+  let cocheraKey = "móvil";
+  if (cocheraTipo === "Fija") {
+    cocheraKey = exclusiva ? "exclusiva" : "fija";
+  }
+
+  // El catálogo YA VIENE filtrado por metodoPago
+  // Entonces acá simplemente tomamos el valor directo
+  const precio = cat[cocheraKey];
+
+  // fallback si falta el campo
+  if (!precio || isNaN(precio)) return 0;
+
+  return precio;
+};
+
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -31,6 +63,25 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [factura, setFactura] = useState('CC');
   const [diasRestantes, setDiasRestantes] = useState(0);
+
+  // Catálogo Precios
+  const [catalogoPrecios, setCatalogoPrecios] = useState(null);
+  useEffect(() => {
+    const cargarCatalogo = async () => {
+      try {
+        const metodo = metodoPago === "Efectivo" ? "efectivo" : "otros";
+        const r = await fetch(`${API_PRECIOS}?metodo=${metodo}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        const data = await r.json();
+        setCatalogoPrecios(data);
+      } catch (err) {
+        console.error("Error cargando catálogo", err);
+      }
+    };
+
+    cargarCatalogo();
+  }, [metodoPago]);
 
   // Modal editar datos del cliente
   const [editOpen, setEditOpen] = useState(false);
@@ -96,8 +147,29 @@ function DetalleClienteCajero({ clienteId, volver }) {
     fotoCedulaAzul: null,
   });
 
+  // 🔧 Toma el abono correcto para una patente (activo y más reciente)
+  const elegirAbonoPorPatente = (abonosCliente, patenteUpper) => {
+    if (!Array.isArray(abonosCliente) || !patenteUpper) return null;
+
+    const mismos = abonosCliente.filter(a =>
+      a && String(a.patente || '').toUpperCase() === patenteUpper
+    );
+    if (!mismos.length) return null;
+
+    const ordenarPorFecha = (x, y) => {
+      const fx = new Date(x.fechaExpiracion || x.fechaCreacion || 0);
+      const fy = new Date(y.fechaExpiracion || y.fechaCreacion || 0);
+      return fy - fx; // más nuevo primero
+    };
+
+    const activos = mismos.filter(a => a.activo !== false);
+    if (activos.length) return [...activos].sort(ordenarPorFecha)[0];
+
+    return [...mismos].sort(ordenarPorFecha)[0];
+  };
+
   /* =================== Helpers de estado de abono =================== */
-  const obtenerFinAbono = (cli) => {
+  const obtenerFinAbonoCliente = (cli) => {
     if (!cli) return null;
     let fin = cli.finAbono ? new Date(cli.finAbono) : null;
     if ((!fin || isNaN(fin)) && Array.isArray(cli.abonos) && cli.abonos.length) {
@@ -111,8 +183,27 @@ function DetalleClienteCajero({ clienteId, volver }) {
     return fin || null;
   };
 
-  const esAbonoActivo = (cli) => {
-    const fin = obtenerFinAbono(cli);
+  const esAbonoActivoCliente = (cli) => {
+    const fin = obtenerFinAbonoCliente(cli);
+    if (!fin) return false;
+    const ahora = new Date();
+    return fin >= ahora;
+  };
+
+  // 🔹 Versión por COCHERA: trabaja sobre el array de abonos (coch.vehiculos)
+  const obtenerFinAbonoDeAbonos = (abonos) => {
+    if (!Array.isArray(abonos) || !abonos.length) return null;
+    let fin = null;
+    for (const a of abonos) {
+      if (!a || !a.fechaExpiracion) continue;
+      const f = new Date(a.fechaExpiracion);
+      if (!isNaN(f) && (!fin || f > fin)) fin = f;
+    }
+    return fin;
+  };
+
+  const esAbonoActivoDeAbonos = (abonos) => {
+    const fin = obtenerFinAbonoDeAbonos(abonos);
     if (!fin) return false;
     const ahora = new Date();
     return fin >= ahora;
@@ -147,6 +238,44 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
+  // Vehículos del cliente (desde /api/vehiculos)
+  const [vehiculosCliente, setVehiculosCliente] = useState([]);
+
+  useEffect(() => {
+    const fetchVehiculosCliente = async () => {
+      if (!cliente || !cliente._id) {
+        setVehiculosCliente([]);
+        return;
+      }
+
+      try {
+        const res = await fetch(API_VEHICULOS, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (!res.ok) {
+          console.error('No se pudieron cargar vehículos (status)', res.status);
+          return;
+        }
+
+        const data = await res.json();
+
+        const propios = Array.isArray(data)
+          ? data.filter(v => v.cliente && String(v.cliente._id) === String(cliente._id))
+          : [];
+
+        setVehiculosCliente(propios);
+      } catch (err) {
+        console.error('Error cargando vehículos del cliente:', err);
+      }
+    };
+
+    fetchVehiculosCliente();
+  }, [cliente]);
+
   useEffect(() => {
     cargarCliente();
   }, [clienteId]);
@@ -158,17 +287,16 @@ function DetalleClienteCajero({ clienteId, volver }) {
         setCocherasConVehiculos([]);
         return;
       }
+
       try {
         setCocherasLoading(true);
 
-        const abonosActivosLocal = Array.isArray(cliente.abonos)
-          ? cliente.abonos.filter(a => a && a.activo !== false)
-          : [];
-
+        const abonosCliente = Array.isArray(cliente.abonos) ? cliente.abonos : [];
         const resultado = [];
 
         for (const c of cliente.cocheras) {
           if (!c || !c.cocheraId) continue;
+
           try {
             const res = await fetch(`${API_COCHERAS}/${c.cocheraId}`, {
               headers: {
@@ -177,24 +305,72 @@ function DetalleClienteCajero({ clienteId, volver }) {
               }
             });
             if (!res.ok) continue;
-            const cocheraData = await res.json();
 
-            const vehiculosCochera = Array.isArray(cocheraData.vehiculos) ? cocheraData.vehiculos : [];
+            const cocheraData = await res.json();
+            const vehiculosCochera = Array.isArray(cocheraData.vehiculos)
+              ? cocheraData.vehiculos
+              : [];
             const vehiculosAbonos = [];
 
             for (const v of vehiculosCochera) {
               const patenteUpper = (v?.patente || '').toUpperCase();
-              const abonoMatch = abonosActivosLocal.find(
-                a => String(a.patente || '').toUpperCase() === patenteUpper
+
+              // 🔹 1) Buscar el VEHÍCULO real del cliente
+              const vehiculoDoc = vehiculosCliente.find((veh) =>
+                (veh._id && v._id && String(veh._id) === String(v._id)) ||
+                ((veh.patente || '').toUpperCase() === patenteUpper)
               );
-              if (abonoMatch) {
-                vehiculosAbonos.push(abonoMatch);
-              } else {
+
+              // 🔹 2) Buscar el ABONO por patente (activo o el último que matchee)
+              const abonoMatch = elegirAbonoPorPatente(cliente.abonos || [], patenteUpper);;
+
+              if (!vehiculoDoc && !abonoMatch) {
                 console.warn(
-                  '[DetalleClienteCajero] Vehículo en cochera sin abono activo asociado:',
+                  '[DetalleClienteCajero] Vehículo en cochera sin datos de vehículo ni abono:',
                   patenteUpper
                 );
+                continue;
               }
+
+              // 🔥 MERGE INTELIGENTE: evita que el abono PISE datos del vehículo
+              const mergeAbonoVehiculo = (vehiculo, abono) => {
+                if (!vehiculo && !abono) return null;
+                if (!vehiculo) return abono;
+                if (!abono) return vehiculo;
+
+                return {
+                  ...vehiculo,
+
+                  // Patente y tipo
+                  patente: abono.patente || vehiculo.patente,
+                  tipoVehiculo: abono.tipoVehiculo || vehiculo.tipoVehiculo,
+
+                  // 🔥 Datos del vehículo que NO pueden ser pisados por el abono
+                  marca: abono.marca || vehiculo.marca,
+                  modelo: abono.modelo || vehiculo.modelo,
+                  color: abono.color || vehiculo.color,
+                  anio: abono.anio || vehiculo.anio,
+                  companiaSeguro: abono.companiaSeguro || vehiculo.companiaSeguro,
+
+                  // 🔵 Datos que sí vienen del ABONO (y no rompen)
+                  precio: abono.precio ?? vehiculo.precio,
+                  fechaExpiracion: abono.fechaExpiracion ?? vehiculo.fechaExpiracion,
+                  fechaCreacion: abono.fechaCreacion ?? vehiculo.fechaCreacion,
+                  activo: abono.activo ?? vehiculo.activo,
+
+                  cochera: abono.cochera || vehiculo.cochera,
+                  piso: abono.piso ?? vehiculo.piso,
+                  exclusiva: (abono.exclusiva !== undefined ? abono.exclusiva : vehiculo.exclusiva),
+
+                  // ID del abono si existe, sino el del vehículo
+                  _id: abono._id || vehiculo._id,
+                };
+              };
+
+              // 🔥 USAR MERGE REAL
+              vehiculosAbonos.push(
+                mergeAbonoVehiculo(vehiculoDoc, abonoMatch)
+              );
             }
 
             resultado.push({
@@ -204,7 +380,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
               exclusiva: typeof cocheraData.exclusiva === 'boolean'
                 ? cocheraData.exclusiva
                 : !!c.exclusiva,
-              vehiculos: vehiculosAbonos,
+              vehiculos: vehiculosAbonos, // 🔥 Ahora son los abonos correctos
             });
           } catch (err) {
             console.error('Error cargando cochera cliente:', c.cocheraId, err);
@@ -218,8 +394,25 @@ function DetalleClienteCajero({ clienteId, volver }) {
     };
 
     fetchCocherasCliente();
-  }, [cliente]);
+  }, [cliente, vehiculosCliente]);
 
+  useEffect(() => {
+    if (!modalRenovarVisible) return;
+
+    if (cocheraEnRenovacion && abonosEnRenovacion.length > 0) {
+      // recalcular usando los mismos datos, pero otro método de pago
+      calcularPrecioRenovacionCochera({
+        ...cocheraEnRenovacion,
+        vehiculos: abonosEnRenovacion
+      });
+      return;
+    }
+
+    if (!cocheraEnRenovacion && abonosEnRenovacion.length > 0) {
+      calcularPrecioRenovacionCliente();
+    }
+  }, [metodoPago, catalogoPrecios]);
+  
   /* =================== Formateos y labels =================== */
   const formatearFechaCorta = (fechaISO) => {
     if (!fechaISO) return '---';
@@ -394,6 +587,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       setLoading(false);
     }
   };  
+
   /* =================== Fotos documentos =================== */
   const abrirFoto = (abono, tipoFoto) => {
     const camposValidos = {
@@ -437,24 +631,74 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const cerrarModalFoto = () => setModalFotoUrl(null);
 
   /* =================== Renovación =================== */
-  const calcularPrecioProporcional = (precioMensual) => {
+  const calcularPrecioProporcional = (precioMensualTotal) => {
     const hoy = new Date();
     const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
     const totalDiasMes = ultimoDiaMes.getDate();
     const diaActual = hoy.getDate();
     const diasRestantesCalculados = totalDiasMes - diaActual + 1;
     setDiasRestantes(diasRestantesCalculados);
-    if (diaActual === 1) return precioMensual;
-    return Math.round((precioMensual / totalDiasMes) * diasRestantesCalculados);
+    if (diaActual === 1) return precioMensualTotal;
+    return Math.round((precioMensualTotal / totalDiasMes) * diasRestantesCalculados);
   };
 
-  const calcularPrecioRenovacion = async () => {
+  // 🔹 Cochera que se está renovando (o null si es renovación legacy por cliente)
+  const [cocheraEnRenovacion, setCocheraEnRenovacion] = useState(null);
+  const [abonosEnRenovacion, setAbonosEnRenovacion] = useState([]);
+
+  // 🟦 Renovación por COCHERA (nuevo flujo)
+  const calcularPrecioRenovacionCochera = (coch) => {
+    if (!cliente || !catalogoPrecios) return;
+
+    const abonosCochera = Array.isArray(coch.vehiculos) ? coch.vehiculos : [];
+    if (!abonosCochera.length) {
+      setMensajeModal({
+        titulo: "Atención",
+        mensaje: "Esta cochera no tiene vehículos.",
+        onClose: () => setMensajeModal(null),
+      });
+      return;
+    }
+
+    let precioMensualTotal = 0;
+
+    abonosCochera.forEach((a) => {
+      const p = getAbonoPrecioByMetodo(
+        a.tipoVehiculo,
+        metodoPago,
+        coch.tipo,
+        coch.exclusiva,
+        catalogoPrecios
+      );
+      precioMensualTotal += p;
+    });
+
+    const precioProporcional = calcularPrecioProporcional(precioMensualTotal);
+
+    setPrecioRenovacion(precioProporcional);
+    setCocheraEnRenovacion({
+      cocheraId: coch.cocheraId,
+      tipo: coch.tipo,
+      piso: coch.tipo === "Fija" ? String(coch.piso || "").trim() : "",
+      exclusiva: !!coch.exclusiva,
+    });
+    setAbonosEnRenovacion(abonosCochera);
+    setModalRenovarVisible(true);
+  };
+
+  // 🟦 Renovación LEGACY por cliente completo (solo si NO hay cocheras[])
+  const calcularPrecioRenovacionCliente = async () => {
     try {
       if (!cliente) return;
-      if (!cliente.abonos || cliente.abonos.length === 0) {
+
+      const abonosActivos = Array.isArray(cliente.abonos)
+        ? cliente.abonos.filter(a => a && a.activo !== false)
+        : [];
+
+      if (!abonosActivos.length) {
         setMensajeModal({
           titulo: 'Atención',
-          mensaje: 'El cliente no tiene vehículos registrados. Agregue un vehículo primero.',
+          mensaje: 'El cliente no tiene vehículos con abono activo. Agregá un vehículo primero.',
           onClose: () => {
             setMensajeModal(null);
             setModalAgregarVisible(true);
@@ -462,15 +706,40 @@ function DetalleClienteCajero({ clienteId, volver }) {
         });
         return;
       }
+
       const response = await fetch(API_PRECIOS, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       if (!response.ok) throw new Error('Error al obtener precios');
       const precios = await response.json();
-      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '').toLowerCase();
-      const precioMensual = precios?.[tipo]?.mensual || 0;
-      const precioProporcional = calcularPrecioProporcional(precioMensual);
+
+      let precioMensualTotal = 0;
+
+      abonosActivos.forEach((a) => {
+        const tipoKey = (a.tipoVehiculo || '').toLowerCase().trim();
+        const precioBase = precios?.[tipoKey]?.mensual || 0;
+
+        let precioFinal = precioBase;
+
+        if (metodoPago !== 'Efectivo') {
+          // precio “otros” según cochera del abono
+          const cocheraKey =
+            a.exclusiva ? 'exclusiva' :
+            a.cochera === 'Fija' ? 'fija' :
+            'móvil';
+
+          const precioOtros = precios?.[tipoKey]?.[cocheraKey] || precioBase;
+
+          if (precioOtros > 0) precioFinal = precioOtros;
+        }
+
+        precioMensualTotal += precioFinal;
+      });
+
+      const precioProporcional = calcularPrecioProporcional(precioMensualTotal);
       setPrecioRenovacion(precioProporcional);
+      setCocheraEnRenovacion(null); // contexto "cliente completo"
+      setAbonosEnRenovacion(abonosActivos);
       setModalRenovarVisible(true);
     } catch (error) {
       console.error('Error al calcular precio:', error);
@@ -486,46 +755,123 @@ function DetalleClienteCajero({ clienteId, volver }) {
     try {
       setLoading(true);
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
-      const patente = cliente.abonos?.[0]?.patente || 'N/A';
-      const tipo = (cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '');
-      const response = await fetch(`${API_ABONOS}/renovar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
+
+      if (!Array.isArray(abonosEnRenovacion) || abonosEnRenovacion.length === 0) {
+        setMensajeModal({
+          titulo: 'Error',
+          mensaje: 'No hay abonos seleccionados para renovar.',
+          onClose: () => setMensajeModal(null),
+        });
+        return;
+      }
+
+      // 🔁 Renovamos TODOS los abonos seleccionados (una cochera o todo el cliente)
+      for (const abonoRef of abonosEnRenovacion) {
+        if (!abonoRef) continue;
+
+        const tipo = (abonoRef.tipoVehiculo || cliente.precioAbono || '');
+        const body = {
           clienteId,
           metodoPago,
           factura,
           operador,
-          patente,
-          cochera: cliente.abonos?.[0]?.cochera || 'Móvil',
-          exclusiva: !!cliente.abonos?.[0]?.exclusiva,
+
+          patente: abonoRef.patente || 'N/A',
+          tipoVehiculo: tipo,
+
+          cochera: cocheraEnRenovacion?.tipo || abonoRef.cochera || 'Móvil',
+          piso: cocheraEnRenovacion?.piso || abonoRef.piso || '',
+          exclusiva: cocheraEnRenovacion
+            ? !!cocheraEnRenovacion.exclusiva
+            : !!abonoRef.exclusiva,
+
           mesesAbonar: 1,
-          tipoVehiculo: tipo
-        })
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData?.message || errorData?.error || 'Error al renovar abono');
+        };
+
+        const response = await fetch(`${API_ABONOS}/renovar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData?.message || errorData?.error || 'Error al renovar abono');
+        }
       }
+
+      // ========= CREAR MOVIMIENTO =========
+      try {
+        const movimientoBody = {
+          tipo: "Ingreso",
+          origen: "ABONO",
+          monto: precioRenovacion,
+          metodoPago: metodoPago,
+          factura: factura,
+          descripcion: "Renovación de Abono",
+          clienteId: clienteId,
+          operador: operador,
+          detalle: {
+            cocheraId: cocheraEnRenovacion?.cocheraId || null,
+            abonos: abonosEnRenovacion.map(a => ({
+              abonoId: a._id || null,
+              patente: a.patente || null
+            }))
+          }
+        };
+
+        await fetch(`${API_BASE}/api/movimientos/registrar`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            patente: abonosEnRenovacion[0]?.patente || "ABONO",
+            tipoVehiculo: abonosEnRenovacion[0]?.tipoVehiculo || "abono",                        
+            metodoPago: metodoPago,                        // obligatorio
+            factura: factura,                              // obligatorio
+            monto: precioRenovacion,                       // obligatorio
+            descripcion: "Renovación de Abono",            // obligatorio
+            cliente: clienteId,                            // opcional
+            operador: operador,                            // robusto
+            tipoTarifa: "abono",                           // opcional
+            promo: null,                                   // opcional
+            fotoUrl: null,                                 // opcional
+            detalle: {
+              cocheraId: cocheraEnRenovacion?.cocheraId || null,
+              abonos: abonosEnRenovacion.map(a => ({
+                abonoId: a._id || null,
+                patente: a.patente || null
+              }))
+            }
+          }),
+        });
+      } catch (err) {
+        console.error("Error creando movimiento:", err);
+      }
+
       await cargarCliente();
       setModalRenovarVisible(false);
       setMensajeModal({
         titulo: 'Éxito',
-        mensaje: 'Abono renovado exitosamente',
-        onClose: () => setMensajeModal(null)
+        mensaje: 'Abono renovado exitosamente.',
+        onClose: () => setMensajeModal(null),
       });
     } catch (error) {
       console.error('Error al renovar abono:', error);
       setMensajeModal({
         titulo: 'Error',
         mensaje: error.message || 'Error al renovar abono',
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
     } finally {
       setLoading(false);
+      setCocheraEnRenovacion(null);
+      setAbonosEnRenovacion([]);
     }
   };
 
@@ -554,6 +900,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       });
     }
   };
+
 
   /* =================== Editar datos del cliente =================== */
   const openEditModal = () => {
@@ -833,8 +1180,8 @@ function DetalleClienteCajero({ clienteId, volver }) {
     );
   }
 
-  const finDerivado = obtenerFinAbono(cliente);
-  const abonoActivo = esAbonoActivo(cliente);
+  const finDerivado = obtenerFinAbonoCliente(cliente);
+  const abonoActivo = esAbonoActivoCliente(cliente);
 
   const clienteCocherasArr = Array.isArray(cliente.cocheras) ? cliente.cocheras : [];
   const multipleCocheras = clienteCocherasArr.length > 1;
@@ -871,21 +1218,26 @@ function DetalleClienteCajero({ clienteId, volver }) {
         </div>
       </div>
 
-      <div className="status-abono-container">
-        <div className={`status-abono ${abonoActivo ? 'activo' : 'inactivo'}`}>
-          {abonoActivo ? (
-            <>
-              <span className="status-text">ABONADO HASTA</span>
-              <span className="status-fecha">{formatearFechaCorta(finDerivado)}</span>
-            </>
-          ) : (
-            <span className="status-text">ABONO EXPIRADO</span>
-          )}
-          {!abonoActivo && (
-            <button className="btn-renovar" onClick={calcularPrecioRenovacion}>RENOVAR</button>
-          )}
+      {/* Status-abono LEGACY: solo si el cliente NO tiene cocheras[] */}
+      {clienteCocherasArr.length === 0 && (
+        <div className="status-abono-container">
+          <div className={`status-abono ${abonoActivo ? 'activo' : 'inactivo'}`}>
+            {abonoActivo ? (
+              <>
+                <span className="status-text">ABONADO HASTA</span>
+                <span className="status-fecha">{formatearFechaCorta(finDerivado)}</span>
+              </>
+            ) : (
+              <span className="status-text">ABONO EXPIRADO</span>
+            )}
+            {!abonoActivo && (
+              <button className="btn-renovar" onClick={calcularPrecioRenovacionCliente}>
+                RENOVAR
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="vehiculos-header">
         <div className="vehiculos-title">
@@ -914,7 +1266,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
         {clienteCocherasArr.length > 0 ? (
           <>
             {/* Vehículos agrupados por cochera */}
-            {cocherasConVehiculos.map(coch => {
+            {cocherasConVehiculos.map((coch) => {
               const tipoNorm = (coch.tipo || '').toString().trim().toLowerCase();
               const badgeClass = coch.exclusiva
                 ? 'exclusiva'
@@ -922,104 +1274,144 @@ function DetalleClienteCajero({ clienteId, volver }) {
                   ? 'fija'
                   : 'movil';
 
-              // Para el título, usamos solo la parte "Cochera Fija / Móvil / Exclusiva"
-              const headerLabel = buildCocheraHeaderLabel(coch.tipo, null, coch.exclusiva);
               const vehiculos = coch.vehiculos || [];
+              const vehiculosActivos = vehiculos.filter(a => a && a.activo !== false);
               const isEditingThis = editingCocheraId === coch.cocheraId;
 
               return (
                 <div key={coch.cocheraId} className="cochera-group">
-                  <div className="cochera-group-header">
-                    <h4 className={`cochera-title ${badgeClass}`}>
-                      {!isEditingThis && (
-                        <span className="cochera-piso-label">
-                          {/* headerLabel YA contiene "Cochera Fija" o "Cochera Exclusiva" */}
-                          {coch.tipo === "Fija"
-                            ? coch.exclusiva
-                              ? "Cochera Exclusiva"
-                              : "Cochera Fija"
-                            : "Cochera Móvil"
-                          }
+                  {/* ================= HEADER + ESTADO TODO JUNTO ================= */}
+                  <div className="status-abono-container cochera-status">
+                    <div
+                      className={`status-abono ${
+                        vehiculosActivos.length > 0 && esAbonoActivoDeAbonos(vehiculosActivos)
+                          ? 'activo'
+                          : 'inactivo'
+                      }`}
+                    >
+                      {/* === IZQUIERDA: Título / Edición cochera === */}
+                      <div className="cochera-header-left">
+                        {/* MODO VISUAL */}
+                        {!isEditingThis && (
+                          <span className="cochera-piso-label">
+                            {coch.tipo === 'Fija'
+                              ? coch.exclusiva
+                                ? 'Cochera Exclusiva'
+                                : 'Cochera Fija'
+                              : 'Cochera Móvil'}
+                            {coch.piso ? ` • N° ${coch.piso}` : ''}
+                          </span>
+                        )}
 
-                          {coch.piso ? ` • N° ${coch.piso}` : ""}
-                        </span>
-                      )}
+                        {/* MODO EDICIÓN */}
+                        {isEditingThis && (
+                          <span className="cochera-edit-wrapper">
+                            <select
+                              className="cochera-edit-select"
+                              value={editingCocheraTipo}
+                              onChange={(e) => setEditingCocheraTipo(e.target.value)}
+                            >
+                              <option value="Fija">Fija</option>
+                              <option value="Móvil">Móvil</option>
+                            </select>
 
-                      {isEditingThis ? (
-                        <span className="cochera-edit-wrapper">
-                          {/* Select tipo */}
-                          <select
-                            className="cochera-edit-select"
-                            value={editingCocheraTipo}
-                            onChange={(e) => setEditingCocheraTipo(e.target.value)}
-                          >
-                            <option value="Fija">Fija</option>
-                            <option value="Móvil">Móvil</option>
-                          </select>
-
-                          {/* Input piso: solo habilitado si es Fija */}
-                          <input
-                            type="text"
-                            className="cochera-edit-input"
-                            placeholder="N°"
-                            value={editingCocheraTipo === "Fija" ? editingCocheraPiso : ""}
-                            disabled={editingCocheraTipo !== "Fija"}
-                            onChange={(e) => setEditingCocheraPiso(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveCocheraFull();
-                              if (e.key === "Escape") cancelEditCochera();
-                            }}
-                          />
-
-                          {/* Checkbox Exclusiva SOLO si es Fija */}
-                          <label
-                            className={`cochera-edit-exc-label ${
-                              editingCocheraTipo !== "Fija" ? "disabled" : ""
-                            }`}
-                          >
                             <input
-                              type="checkbox"
-                              disabled={editingCocheraTipo !== "Fija"}
-                              checked={editingCocheraTipo === "Fija" ? editingCocheraExclusiva : false}
-                              onChange={(e) => setEditingCocheraExclusiva(e.target.checked)}
+                              type="text"
+                              className="cochera-edit-input"
+                              placeholder="N°"
+                              value={editingCocheraTipo === 'Fija' ? editingCocheraPiso : ''}
+                              disabled={editingCocheraTipo !== 'Fija'}
+                              onChange={(e) => setEditingCocheraPiso(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveCocheraFull();
+                                if (e.key === 'Escape') cancelEditCochera();
+                              }}
                             />
-                            Exclusiva
-                          </label>
 
-                          <button className="btn-icono btn-cochera-guardar" onClick={saveCocheraFull}>
-                            <FaCheck />
-                          </button>
+                            <label
+                              className={`cochera-edit-exc-label ${
+                                editingCocheraTipo !== 'Fija' ? 'disabled' : ''
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={editingCocheraTipo !== 'Fija'}
+                                checked={editingCocheraTipo === 'Fija' ? editingCocheraExclusiva : false}
+                                onChange={(e) => setEditingCocheraExclusiva(e.target.checked)}
+                              />
+                              Exclusiva
+                            </label>
 
-                          <button className="btn-icono btn-cochera-cancelar" onClick={cancelEditCochera}>
-                            <FaTimes />
-                          </button>
-                        </span>
-                      ) : (
-                        <>
-                          <button className="btn-icono btn-editar-cochera" onClick={() => startEditCochera(coch)}>
-                            <FaEdit />
-                          </button>
+                            <button className="btn-icono btn-cochera-guardar" onClick={saveCocheraFull}>
+                              <FaCheck />
+                            </button>
 
-                          <button
-                            className="btn-icono btn-editar-cochera"
-                            onClick={() =>
-                              setConfirmDelCochera({
-                                cocheraId: coch.cocheraId,
-                                tipo: coch.tipo,
-                                piso: coch.piso,
-                              })
-                            }
-                          >
-                            <FaTrashAlt />
-                          </button>
-                        </>
-                      )}
-                    </h4>
+                            <button className="btn-icono btn-cochera-cancelar" onClick={cancelEditCochera}>
+                              <FaTimes />
+                            </button>
+                          </span>
+                        )}
+
+                        {/* Botones edición/borrar en modo normal */}
+                        {!isEditingThis && (
+                          <>
+                            <button
+                              className="btn-icono btn-editar-cochera"
+                              onClick={() => startEditCochera(coch)}
+                            >
+                              <FaEdit />
+                            </button>
+
+                            <button
+                              className="btn-icono btn-editar-cochera"
+                              onClick={() =>
+                                setConfirmDelCochera({
+                                  cocheraId: coch.cocheraId,
+                                  tipo: coch.tipo,
+                                  piso: coch.piso,
+                                })
+                              }
+                            >
+                              <FaTrashAlt />
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* === DERECHA: Estado del ABONO === */}
+                      <div className="cochera-header-right">
+                        {(() => {
+                          const fin = obtenerFinAbonoDeAbonos(vehiculosActivos);
+                          const activo =
+                            vehiculosActivos.length > 0 && esAbonoActivoDeAbonos(vehiculosActivos);
+
+                          return activo && fin ? (
+                            <>
+                              <span className="status-text">ABONADO HASTA</span>
+                              <span className="status-fecha">{formatearFechaCorta(fin)}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="status-text">ABONO EXPIRADO</span>
+                              <button className="btn-renovar" onClick={() => calcularPrecioRenovacionCochera(coch)}>
+                                RENOVAR
+                              </button>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {isEditingThis && editingCocheraError && (
+                      <div className="cochera-edit-error">{editingCocheraError}</div>
+                    )}
                   </div>
+                  {/* ================= FIN HEADER ================= */}
+
                   {isEditingThis && editingCocheraError && (
                     <div className="cochera-edit-error">{editingCocheraError}</div>
                   )}
-
+                
                   {vehiculos.length > 0 ? (
                     <table className="tabla-vehiculos">
                       <thead>
@@ -1037,7 +1429,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
                           return (
                             <React.Fragment key={abono._id}>
                               <tr
-                                onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
+                                onClick={() =>
+                                  setVehiculoExpandido((prev) =>
+                                    prev === abono._id ? null : abono._id
+                                  )
+                                }
                                 className="fila-vehiculo"
                               >
                                 <td>{abono.patente?.toUpperCase() || '---'}</td>
@@ -1052,27 +1448,47 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                     <div className="expandido-contenido">
                                       <div className="expandido-left">
                                         <div className="detalles-adicionales">
-                                          <p><strong>Color:</strong> {capitalizeFirstLetter(abono.color)}</p>
-                                          <p><strong>Seguro:</strong> {capitalizeFirstLetter(abono.companiaSeguro)}</p>
+                                          <p>
+                                            <strong>Color:</strong>{' '}
+                                            {capitalizeFirstLetter(abono.color)}
+                                          </p>
+                                          <p>
+                                            <strong>Seguro:</strong>{' '}
+                                            {capitalizeFirstLetter(abono.companiaSeguro)}
+                                          </p>
                                         </div>
                                         <div className="botones-documentos">
-                                          <button onClick={() => abrirFoto(abono, 'dni')}>DNI</button>
-                                          <button onClick={() => abrirFoto(abono, 'seguro')}>Seguro</button>
-                                          <button onClick={() => abrirFoto(abono, 'cedulaVerde')}>Céd. Verde</button>
+                                          <button onClick={() => abrirFoto(abono, 'dni')}>
+                                            DNI
+                                          </button>
+                                          <button onClick={() => abrirFoto(abono, 'seguro')}>
+                                            Seguro
+                                          </button>
+                                          <button
+                                            onClick={() => abrirFoto(abono, 'cedulaVerde')}
+                                          >
+                                            Céd. Verde
+                                          </button>
                                         </div>
                                       </div>
                                       <div className="expandido-right">
                                         <div className="vehiculo-actions">
                                           <button
                                             className="btn-vehiculo editar"
-                                            onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openEditVehiculo(abono);
+                                            }}
                                             title="Editar vehículo"
                                           >
                                             <FaEdit /> <span>Editar</span>
                                           </button>
                                           <button
                                             className="btn-vehiculo eliminar"
-                                            onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              askDeleteVehiculo(abono);
+                                            }}
                                             title="Eliminar vehículo"
                                           >
                                             <FaTrashAlt /> <span>Eliminar</span>
@@ -1281,9 +1697,19 @@ function DetalleClienteCajero({ clienteId, volver }) {
               <h3>Renovar Abono</h3>
             </div>
             <div className="detalles-renovacion">
-              <p><strong>Tipo de vehículo:</strong> {cliente.precioAbono || cliente.abonos?.[0]?.tipoVehiculo || '---'}</p>
+              <p>
+                <strong>Renovando:</strong>{' '}
+                {cocheraEnRenovacion
+                  ? `Cochera ${cocheraEnRenovacion.tipo}${cocheraEnRenovacion.piso ? ' • N° ' + cocheraEnRenovacion.piso : ''}${cocheraEnRenovacion.exclusiva ? ' (Exclusiva)' : ''}`
+                  : 'Cliente completo'}
+              </p>
+
+              <p><strong>Vehículos incluidos:</strong> {abonosEnRenovacion.length}</p>
+
               <p><strong>Días restantes del mes:</strong> {diasRestantes}</p>
+
               <p><strong>Precio a cobrar:</strong> ${precioRenovacion}</p>
+
               <div className="form-group">
                 <label>Método de pago:</label>
                 <select
@@ -1299,6 +1725,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                   <option value="QR">QR</option>
                 </select>
               </div>
+
               <div className="form-group">
                 <label>Tipo de factura:</label>
                 <select

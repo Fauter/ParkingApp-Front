@@ -90,7 +90,7 @@ function Clientes({ onSeleccionarCliente }) {
                 <td>{formatearDNI(cliente.dniCuitCuil) || '—'}</td>
                 <td>{(cliente.vehiculos || []).map(v => v.patente).join(', ') || '—'}</td>
                 <td>
-                  {cliente.abonado ? (
+                  {cliente?.abonos?.some(a => a?.activo) ? (
                     <span className="estado-abonado">ABONADO</span>
                   ) : (
                     <span className="estado-renovar">RENOVAR</span>

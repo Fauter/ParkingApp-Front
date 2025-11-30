@@ -31,14 +31,14 @@
 
 .status-abono-container {
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 0px;
 }
 
 .status-abono {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 9px 20px;
   border-radius: 8px;
   font-weight: bold;
 }
@@ -73,6 +73,7 @@
   cursor: pointer;
   font-weight: bold;
   transition: background-color 0.3s;
+  margin-left: 10px;
 }
 
 .btn-renovar:hover {
@@ -603,7 +604,6 @@
   background: rgba(139, 92, 246, 0.18);
   color: #c4b5fd;
   border-color: rgba(139, 92, 246, 0.45);
-  margin-left: 5px;
 }
 .cochera-badge.exclusiva {
   background: rgba(16, 185, 129, 0.18);
@@ -660,7 +660,6 @@
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
 }
 
 /* ===== Editar número de cochera (input + ok/cancel compactos) ===== */
@@ -689,6 +688,9 @@
 .cochera-piso-input:focus {
   border-color: #4a4a5a;
   background-color: #24242f;
+}
+.cochera-piso-label {
+  padding-right: 6px;
 }
 
 /* ===== Botones OK / Cancelar compactos y en línea ===== */
@@ -816,3 +818,16 @@
   font-size: 0.75rem;
 }
 
+.cochera-header-left,
+.cochera-header-right {
+  display: flex;
+  align-items: center;
+}
+
+.cochera-header-left {
+  flex-shrink: 0;
+}
+
+.cochera-header-right {
+  margin-left: auto; /* empuja a la derecha */
+}

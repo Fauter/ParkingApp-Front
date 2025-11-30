@@ -448,6 +448,12 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
     return { proporcional, diasRestantes, totalDiasMes: total, factor };
   };
 
+  // === Helper global simple ===
+  const ucfirst = (s) => {
+    const str = String(s || "").trim();
+    return str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
+  };
+
   // === Dentro del mes actual (para abonos del cliente)
   const isDentroMesActual = (iso) => {
     if (!iso) return false;
@@ -1055,12 +1061,20 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
           open: true,
           titulo: "Vehículo más caro",
           mensaje:
-            `Estás pasando a "${vehiculoPretty}".\n\n` +
-            `• Base actual: $${formatARS(preview.baseActual)}\n` +
-            `• Base nueva: $${formatARS(preview.baseNuevo)}\n` +
-            `• Diferencia mensual: $${formatARS(preview.diffBase)}\n` +
-            `• A cobrar HOY: $${formatARS(preview.proporcionalMesActual)}\n\n` +
-            `¿Deseás continuar?`,
+            [
+              `Estás pasando a "${vehiculoPretty}".`,
+              ``,
+              `Base actual: $${formatARS(previewLike.baseActual)}` +
+                (clienteExistente?.abonos?.length
+                  ? ` (Vehículo anterior: ${ucfirst(clienteExistente.abonos.find(a => a.activo)?.tipoVehiculo || "-" )})`
+                  : ""),
+              `Base nueva: $${formatARS(previewLike.baseNuevo)}`,
+              `Diferencia mensual: $${formatARS(previewLike.diffBase)}`,
+              ``,
+              `A cobrar HOY: $${formatARS(previewLike.proporcionalMesActual)} (${previewLike.diasRestantes}/${previewLike.totalDiasMes})`,
+              ``,
+              `¿Deseás continuar?`
+            ].join("\n"),
           onConfirm: async () => {
             setConfirmModal((s) => ({ ...s, open: false }));
             setLoading(true);
@@ -1106,16 +1120,24 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
             open: true,
             titulo: "Vehículo más caro",
             mensaje:
-              `Estás pasando a "${vehiculoPretty}".\n\n` +
-              `• Base actual: $${formatARS(baseActual)}\n` +
-              `• Base nueva: $${formatARS(baseNuevo)}\n` +
-              `• Diferencia mensual: $${formatARS(diffBase)}\n` +
-              `• A cobrar HOY: $${formatARS(montoHoy)}\n\n` +
-              `¿Deseás continuar?`,
+              [
+                `Estás pasando a "${vehiculoPretty}".`,
+                ``,
+                `Base actual: $${formatARS(previewLike.baseActual)}` +
+                  (clienteExistente?.abonos?.length
+                    ? ` (Vehículo anterior: ${ucfirst(clienteExistente.abonos.find(a => a.activo)?.tipoVehiculo || "-" )})`
+                    : ""),
+                `Base nueva: $${formatARS(previewLike.baseNuevo)}`,
+                `Diferencia mensual: $${formatARS(previewLike.diffBase)}`,
+                ``,
+                `A cobrar HOY: $${formatARS(previewLike.proporcionalMesActual)} (${previewLike.diasRestantes}/${previewLike.totalDiasMes})`,
+                ``,
+                `¿Deseás continuar?`
+              ].join("\n"),
             onConfirm: async () => {
               setConfirmModal((s) => ({ ...s, open: false }));
               setLoading(true);
-              await finalizarSubmit(previewLike, {
+              await finalizarSubmit(preview, {
                 isNew: esClienteNuevo,
                 upgrade: true,
                 nuevaCochera: false,
@@ -1136,16 +1158,32 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
 
       // === Si no es upgrade, verificar si es NUEVA COCHERA ===
       if (!esClienteNuevo && esNuevaCochera) {
+        // calculo local (fallback si preview fue null)
+        const baseMensualNC = getAbonoPrecioByMetodo(
+          formData.tipoVehiculo,
+          formData.metodoPago,
+          formData.cochera || "Móvil",
+          formData.cochera === "Fija" ? formData.exclusiva : false
+        );
+
+        const prNC = prorratearMontoFront(baseMensualNC);
+
         setConfirmModal({
           open: true,
           titulo: "Nueva Cochera",
           mensaje:
-            `Estás agregando una NUEVA COCHERA para este cliente.\n\n` +
-            `• Cochera: ${formData.cochera}\n` +
-            `• Número: ${formData.piso || "-"}\n` +
-            `• Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
-            `Esto generará un cobro proporcional por la nueva cochera.\n\n` +
-            `¿Deseás continuar?`,
+            [
+              `Estás agregando una NUEVA COCHERA para este cliente.`,
+              ``,
+              `Cochera: ${formData.cochera}`,
+              `Número: ${formData.piso || "-"}`,
+              `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}`,
+              ``,
+              `Precio mensual: $${formatARS(baseMensualNC)}`,
+              `A cobrar HOY: $${formatARS(prNC.proporcional)} (${prNC.diasRestantes}/${prNC.totalDiasMes})`,
+              ``,
+              `¿Deseás continuar?`
+            ].join("\n"),
           onConfirm: async () => {
             setConfirmModal((s) => ({ ...s, open: false }));
             await finalizarSubmit(preview || null, {
@@ -1155,9 +1193,7 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
               cocheraId: cocheraRealId,
             });
           },
-          onCancel: () => {
-            setConfirmModal((s) => ({ ...s, open: false }));
-          }
+          onCancel: () => setConfirmModal((s) => ({ ...s, open: false }))
         });
 
         setLoading(false);
@@ -1605,6 +1641,24 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
               <option value="">Seleccione</option>
               {tiposVehiculo
                 .filter((tipo) => tipo?.mensual === true)
+                // 🔥 ORDEN: más caro arriba
+                .sort((a, b) => {
+                  const precioA = getAbonoPrecioByMetodo(
+                    a.nombre,
+                    formData.metodoPago,
+                    formData.cochera || "Móvil",
+                    formData.cochera === "Fija" ? formData.exclusiva : false
+                  ) || 0;
+
+                  const precioB = getAbonoPrecioByMetodo(
+                    b.nombre,
+                    formData.metodoPago,
+                    formData.cochera || "Móvil",
+                    formData.cochera === "Fija" ? formData.exclusiva : false
+                  ) || 0;
+
+                  return precioB - precioA; // ⬅️ ahora el orden es DESC (caro → barato)
+                })
                 .map((tipo) => {
                   const monthly = getAbonoPrecioByMetodo(
                     tipo.nombre,
