@@ -38,6 +38,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     setEditingCocheraPiso(coch.piso ?? "");
     setEditingCocheraExclusiva(!!coch.exclusiva);
   };
+
   const cancelEditCochera = () => {
     setEditingCocheraId(null);
     setEditingCocheraTipo("Fija");
@@ -58,7 +59,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       payload = {
         tipo: "Móvil",
         piso: "",
-        exclusiva: false
+        exclusiva: false,
       };
     } else {
       const pisoTrim = (editingCocheraPiso || "").trim();
@@ -70,7 +71,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       payload = {
         tipo: "Fija",
         piso: pisoTrim,
-        exclusiva: !!editingCocheraExclusiva
+        exclusiva: !!editingCocheraExclusiva,
       };
     }
 
@@ -91,11 +92,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       if (!res.ok) throw new Error(data?.message || "No se pudo actualizar la cochera");
 
       setCocherasCompletas((prev) =>
-        prev.map((c) =>
-          c._id === editingCocheraId
-            ? { ...c, ...payload }
-            : c
-        )
+        prev.map((c) => (c._id === editingCocheraId ? { ...c, ...payload } : c))
       );
 
       cancelEditCochera();
@@ -144,26 +141,23 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
   // Confirmar baja vehículo
   const [confirmDel, setConfirmDel] = useState(null); // { abonoId, patente }
 
-  /* =================== Helpers de estado de abono =================== */
-  const obtenerFinAbono = (cli) => {
-    if (!cli) return null;
-    let fin = cli.finAbono ? new Date(cli.finAbono) : null;
-    if ((!fin || isNaN(fin)) && Array.isArray(cli.abonos) && cli.abonos.length) {
-      for (const a of cli.abonos) {
-        if (a && a.fechaExpiracion) {
-          const f = new Date(a.fechaExpiracion);
-          if (!isNaN(f) && (!fin || f > fin)) fin = f;
-        }
+  /* ===== Helpers NUEVOS: estado de abono POR COCHERA ===== */
+  const obtenerFinAbonoDeAbonos = (abonos) => {
+    if (!Array.isArray(abonos)) return null;
+    let fin = null;
+    for (const a of abonos) {
+      if (a && a.fechaExpiracion) {
+        const d = new Date(a.fechaExpiracion);
+        if (!isNaN(d) && (!fin || d > fin)) fin = d;
       }
     }
-    return fin || null;
+    return fin;
   };
 
-  const esAbonoActivo = (cli) => {
-    const fin = obtenerFinAbono(cli);
+  const esAbonoActivoDeAbonos = (abonos) => {
+    const fin = obtenerFinAbonoDeAbonos(abonos);
     if (!fin) return false;
-    const ahora = new Date();
-    return fin >= ahora;
+    return fin >= new Date();
   };
 
   /* =================== Carga cliente =================== */
@@ -176,8 +170,8 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       const response = await fetch(`${API_CLIENTES}/id/${clienteId}`, {
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -195,7 +189,10 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     }
   };
 
-  useEffect(() => { cargarCliente(); }, [clienteId]);
+  useEffect(() => {
+    cargarCliente();
+  }, [clienteId]);
+
   // Nuevo: cargar cocheras completas usando modelo A
   useEffect(() => {
     const fetchCocheras = async () => {
@@ -231,11 +228,13 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
   }, [cliente]);
 
   useEffect(() => {
-    const interval = setInterval(() => { cargarCliente(); }, 15000);
+    const interval = setInterval(() => {
+      cargarCliente();
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  /* =================== Formateos y labels =================== */
+  /* =================== Formateos =================== */
   const formatearFechaCorta = (fechaISO) => {
     if (!fechaISO) return "—";
     const fecha = new Date(fechaISO);
@@ -243,38 +242,6 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     const mes = (fecha.getMonth() + 1).toString().padStart(2, "0");
     const anio = fecha.getFullYear().toString().slice(-2);
     return `${dia}/${mes}/${anio}`;
-  };
-
-  const capitalizeFirstLetter = (str) =>
-    str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : "—";
-
-  const normalize = (s) => (s || "")
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  const getCocheraLabel = (cli) => {
-    if (!cli) return null;
-    const cocheraRaw = cli.cochera ?? cli.abonos?.[0]?.cochera ?? "";
-    const exclusivaRaw = (typeof cli.exclusiva === "boolean") ? cli.exclusiva : !!cli.abonos?.[0]?.exclusiva;
-
-    const c = normalize(cocheraRaw);
-    if (c === "movil" || c === "móvil") return "COCHERA MÓVIL";
-    if (c === "fija") return exclusivaRaw ? "COCHERA EXCLUSIVA" : "COCHERA FIJA";
-    return null;
-  };
-
-  const getPisoFromCliente = (cli) => {
-    if (!cli) return null;
-    const directo = (cli.piso ?? cli.pisoAbono);
-    if (directo !== undefined && directo !== null && directo !== "") return String(directo);
-    if (Array.isArray(cli.abonos) && cli.abonos.length) {
-      const withPiso = cli.abonos.find(a => a && a.piso !== undefined && a.piso !== null && a.piso !== "");
-      if (withPiso) return String(withPiso.piso);
-    }
-    return null;
   };
 
   /* =================== Fotos documentos =================== */
@@ -290,7 +257,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       setMensajeModal({
         titulo: "Error",
         mensaje: "Tipo de foto desconocido",
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
       return;
     }
@@ -299,7 +266,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       setMensajeModal({
         titulo: "Aviso",
         mensaje: "No hay foto disponible",
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
       return;
     }
@@ -317,6 +284,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     const urlConTimestamp = `${rutaFoto}?t=${Date.now()}`;
     setModalFotoUrl(urlConTimestamp);
   };
+
   const cerrarModalFoto = () => setModalFotoUrl(null);
 
   /* =================== Editar datos del cliente =================== */
@@ -339,7 +307,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
 
   const handleEditChange = (e) => {
     const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
+    setEditForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const validateEdit = () => {
@@ -355,7 +323,10 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
 
   const saveEdit = async () => {
     const v = validateEdit();
-    if (v) { setEditError(v); return; }
+    if (v) {
+      setEditError(v);
+      return;
+    }
     try {
       setEditSaving(true);
       setEditError("");
@@ -363,7 +334,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify(editForm),
       });
@@ -376,7 +347,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
-        }
+        },
       });
     } catch (err) {
       console.error(err);
@@ -405,19 +376,23 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
 
   const handleVehEditChange = (e) => {
     const { name, value } = e.target;
-    setVehEditForm(prev => ({ ...prev, [name]: value }));
+    setVehEditForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const validateVehEdit = () => {
     if (!vehEditForm.patente.trim()) return "La patente es obligatoria.";
     if (!vehEditForm.tipoVehiculo.trim()) return "El tipo de vehículo es obligatorio.";
-    if (vehEditForm.anio && !/^\d{4}$/.test(String(vehEditForm.anio))) return "Año inválido (formato 4 dígitos).";
+    if (vehEditForm.anio && !/^\d{4}$/.test(String(vehEditForm.anio)))
+      return "Año inválido (formato 4 dígitos).";
     return "";
   };
 
   const saveVehiculo = async () => {
     const v = validateVehEdit();
-    if (v) { setVehEditError(v); return; }
+    if (v) {
+      setVehEditError(v);
+      return;
+    }
     if (!vehEditAbonoId) {
       setVehEditError("No se pudo identificar el abono/vehículo a editar.");
       return;
@@ -439,7 +414,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: JSON.stringify(payload),
       });
@@ -452,15 +427,19 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       try {
         const syncRes = await fetch(`${API_VEHICULOS}/sync-from-abono/${vehEditAbonoId}`, {
           method: "PATCH",
-          headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
         if (!syncRes.ok) {
           let syncErrBody = {};
-          try { syncErrBody = await syncRes.json(); } catch (_) {}
+          try {
+            syncErrBody = await syncRes.json();
+          } catch (_) {}
           if (syncRes.status === 409) {
             setVehEditError(syncErrBody?.msg || "Ya existe un vehículo con esa patente. Elegí otra.");
           } else {
-            setVehEditError(syncErrBody?.msg || "No se pudo sincronizar el vehículo. Intentá nuevamente.");
+            setVehEditError(
+              syncErrBody?.msg || "No se pudo sincronizar el vehículo. Intentá nuevamente."
+            );
           }
           return;
         }
@@ -477,7 +456,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
-        }
+        },
       });
     } catch (err) {
       console.error(err);
@@ -499,22 +478,25 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ activo: false })
+        body: JSON.stringify({ activo: false }),
       });
       const data1 = await res1.json().catch(() => ({}));
       if (!res1.ok) throw new Error(data1?.msg || data1?.message || "No se pudo desactivar el abono");
 
       // Desabonarlo en Vehículos y desvincular de cliente
-      const res2 = await fetch(`${API_VEHICULOS}/${encodeURIComponent(confirmDel.patente)}/abonado`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        },
-        body: JSON.stringify({ abonado: false, detachFromCliente: true })
-      });
+      const res2 = await fetch(
+        `${API_VEHICULOS}/${encodeURIComponent(confirmDel.patente)}/abonado`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ abonado: false, detachFromCliente: true }),
+        }
+      );
       const data2 = await res2.json().catch(() => ({}));
       if (!res2.ok) throw new Error(data2?.msg || data2?.message || "No se pudo actualizar el vehículo");
 
@@ -523,20 +505,22 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ vehiculoId: null })
+        body: JSON.stringify({ vehiculoId: null }),
       }).catch(() => {});
 
       // Optimistic UI
-      setCliente(prev => {
+      setCliente((prev) => {
         if (!prev) return prev;
         const nuevo = { ...prev };
         if (Array.isArray(nuevo.abonos)) {
-          nuevo.abonos = nuevo.abonos.filter(a => a && a._id !== confirmDel.abonoId);
+          nuevo.abonos = nuevo.abonos.filter((a) => a && a._id !== confirmDel.abonoId);
         }
         if (Array.isArray(nuevo.vehiculos)) {
-          nuevo.vehiculos = nuevo.vehiculos.filter(v => v && v.patente !== confirmDel.patente);
+          nuevo.vehiculos = nuevo.vehiculos.filter(
+            (v) => v && v.patente !== confirmDel.patente
+          );
         }
         return nuevo;
       });
@@ -548,17 +532,18 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
-        }
+        },
       });
     } catch (err) {
       console.error(err);
       setMensajeModal({
         titulo: "Error",
         mensaje: err.message || "Error al dar de baja el vehículo",
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
     }
   };
+
   const deleteCochera = async () => {
     if (!confirmDelCochera?.cocheraId) return;
 
@@ -566,8 +551,8 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       const res = await fetch(`${API_BASE}/api/cocheras/${confirmDelCochera.cocheraId}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        }
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
       });
 
       const data = await res.json().catch(() => ({}));
@@ -580,15 +565,14 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       setMensajeModal({
         titulo: "Cochera eliminada",
         mensaje: "La cochera fue eliminada correctamente.",
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
-
     } catch (err) {
       console.error("Error eliminar cochera:", err);
       setMensajeModal({
         titulo: "Error",
         mensaje: err.message || "Error inesperado al eliminar cochera",
-        onClose: () => setMensajeModal(null)
+        onClose: () => setMensajeModal(null),
       });
     }
   };
@@ -598,7 +582,9 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     return (
       <div className="cmdet-scope">
         <div className="cmdet-header">
-          <button className="cmdet-btn-ghost" onClick={volver}><FaArrowLeft /> <span>Volver</span></button>
+          <button className="cmdet-btn-ghost" onClick={volver}>
+            <FaArrowLeft /> <span>Volver</span>
+          </button>
           <h2 className="cmdet-title">Cargando…</h2>
         </div>
       </div>
@@ -609,7 +595,9 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     return (
       <div className="cmdet-scope">
         <div className="cmdet-header">
-          <button className="cmdet-btn-ghost" onClick={volver}><FaArrowLeft /> <span>Volver</span></button>
+          <button className="cmdet-btn-ghost" onClick={volver}>
+            <FaArrowLeft /> <span>Volver</span>
+          </button>
           <h2 className="cmdet-title">Error</h2>
         </div>
         <div className="cmdet-card">
@@ -624,7 +612,9 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     return (
       <div className="cmdet-scope">
         <div className="cmdet-header">
-          <button className="cmdet-btn-ghost" onClick={volver}><FaArrowLeft /> <span>Volver</span></button>
+          <button className="cmdet-btn-ghost" onClick={volver}>
+            <FaArrowLeft /> <span>Volver</span>
+          </button>
           <h2 className="cmdet-title">Cliente no encontrado</h2>
         </div>
         <div className="cmdet-card">
@@ -634,37 +624,21 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     );
   }
 
-  const finDerivado = obtenerFinAbono(cliente);
-  const abonoActivo = esAbonoActivo(cliente);
-  const cocheraLabel = getCocheraLabel(cliente);
-  const piso = getPisoFromCliente(cliente);
-  const abonosActivos = Array.isArray(cliente.abonos)
-    ? cliente.abonos.filter(a => a && a.activo !== false)
-    : [];
-
   return (
     <div className="cmdet-scope">
       <div className="cmdet-header">
-        <button className="cmdet-btn-ghost" onClick={volver}><FaArrowLeft /> <span>Volver</span></button>
+        <button className="cmdet-btn-ghost" onClick={volver}>
+          <FaArrowLeft /> <span>Volver</span>
+        </button>
         <div className="cmdet-header-right">
           <h2 className="cmdet-title">{cliente.nombreApellido}</h2>
-          <button className="cmdet-btn-primary" onClick={openEditModal}>Editar</button>
+          <button className="cmdet-btn-primary" onClick={openEditModal}>
+            Editar
+          </button>
         </div>
       </div>
 
-      <div className={`cmdet-status ${abonoActivo ? "is-active" : "is-inactive"}`}>
-        {abonoActivo ? (
-          <>
-            <span className="cmdet-status-text">ABONADO HASTA</span>
-            <span className="cmdet-status-date">{formatearFechaCorta(finDerivado)}</span>
-          </>
-        ) : (
-          <span className="cmdet-status-text">ABONO EXPIRADO</span>
-        )}
-      </div>
-
       <div className="cmdet-card">
-
         {cocherasCompletas.length === 0 ? (
           <div className="cmdet-empty">
             No hay cocheras asignadas ni vehículos registrados.
@@ -680,12 +654,25 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             })();
             const vehiculos = Array.isArray(cochera.vehiculos) ? cochera.vehiculos : [];
 
+            // 🔥 Los abonos REALES salen de cliente.abonos, no de cochera.vehiculos
+            const abonosCoch = Array.isArray(cliente.abonos)
+              ? cliente.abonos.filter(
+                  a =>
+                    a.activo !== false &&
+                    cochera.vehiculos.some(
+                      v => v.patente?.toUpperCase() === a.patente?.toUpperCase()
+                    )
+                )
+              : [];
+
+            const activo = esAbonoActivoDeAbonos(abonosCoch);
+            const fin = obtenerFinAbonoDeAbonos(abonosCoch);
+
             return (
               <div key={clave} className="cmdet-cochera-bloque">
                 <h4 className="cmdet-cochera-title">
                   {editingCocheraId === cochera._id ? (
                     <span className="cmdet-cochera-editwrap">
-
                       {/* Select tipo */}
                       <select
                         className="cmdet-cochera-select"
@@ -712,12 +699,16 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
 
                       {/* Checkbox exclusiva SOLO si Fija */}
                       <label
-                        className={`cmdet-cochera-exc ${editingCocheraTipo !== "Fija" ? "disabled" : ""}`}
+                        className={`cmdet-cochera-exc ${
+                          editingCocheraTipo !== "Fija" ? "disabled" : ""
+                        }`}
                       >
                         <input
                           type="checkbox"
                           disabled={editingCocheraTipo !== "Fija"}
-                          checked={editingCocheraTipo === "Fija" ? editingCocheraExclusiva : false}
+                          checked={
+                            editingCocheraTipo === "Fija" ? editingCocheraExclusiva : false
+                          }
                           onChange={(e) => setEditingCocheraExclusiva(e.target.checked)}
                         />
                         Exclusiva
@@ -729,7 +720,6 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                       <button className="cmdet-btn-icon" onClick={cancelEditCochera}>
                         <FaTimes />
                       </button>
-
                     </span>
                   ) : (
                     <>
@@ -760,6 +750,20 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                   )}
                 </h4>
 
+                {/* Estado del abono de ESTA cochera */}
+                <div className={`cmdet-status ${activo ? "is-active" : "is-inactive"}`}>
+                  {activo ? (
+                    <>
+                      <span className="cmdet-status-text">ABONADO HASTA</span>
+                      <span className="cmdet-status-date">
+                        {fin ? formatearFechaCorta(fin) : "—"}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="cmdet-status-text">ABONO EXPIRADO</span>
+                  )}
+                </div>
+
                 {vehiculos.length === 0 ? (
                   <div className="cmdet-empty" style={{ marginBottom: 16 }}>
                     (Sin vehículos en esta cochera)
@@ -777,9 +781,13 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                     </thead>
                     <tbody>
                       {vehiculos.map((v) => {
-                        const abono = cliente.abonos.find(
-                          (a) => a.patente?.toUpperCase() === v.patente?.toUpperCase()
-                        );
+                        const abono =
+                          abonosCoch.find(
+                            (a) =>
+                              a.patente?.toUpperCase() ===
+                              v.patente?.toUpperCase()
+                          ) || null;
+
                         const expandido = vehiculoExpandido === v._id;
 
                         return (
@@ -805,13 +813,31 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                                   <div className="cmdet-expanded">
                                     <div className="cmdet-left">
                                       <div className="cmdet-kv">
-                                        <p><strong>Color:</strong> {abono?.color || "—"}</p>
-                                        <p><strong>Seguro:</strong> {abono?.companiaSeguro || "—"}</p>
+                                        <p>
+                                          <strong>Color:</strong>{" "}
+                                          {abono?.color || "—"}
+                                        </p>
+                                        <p>
+                                          <strong>Seguro:</strong>{" "}
+                                          {abono?.companiaSeguro || "—"}
+                                        </p>
                                       </div>
                                       <div className="cmdet-docs">
-                                        <button onClick={() => abrirFoto(abono, "dni")}>DNI</button>
-                                        <button onClick={() => abrirFoto(abono, "seguro")}>Seguro</button>
-                                        <button onClick={() => abrirFoto(abono, "cedulaVerde")}>Céd. Verde</button>
+                                        <button onClick={() => abrirFoto(abono, "dni")}>
+                                          DNI
+                                        </button>
+                                        <button
+                                          onClick={() => abrirFoto(abono, "seguro")}
+                                        >
+                                          Seguro
+                                        </button>
+                                        <button
+                                          onClick={() =>
+                                            abrirFoto(abono, "cedulaVerde")
+                                          }
+                                        >
+                                          Céd. Verde
+                                        </button>
                                       </div>
                                     </div>
 
@@ -857,8 +883,13 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       {/* Modal foto */}
       {modalFotoUrl && (
         <div className="cmdet-photo-overlay" onClick={cerrarModalFoto}>
-          <div className="cmdet-photo-content" onClick={(e) => e.stopPropagation()}>
-            <button className="cmdet-modal-close" onClick={cerrarModalFoto}>&times;</button>
+          <div
+            className="cmdet-photo-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="cmdet-modal-close" onClick={cerrarModalFoto}>
+              &times;
+            </button>
             <img
               src={modalFotoUrl}
               alt="Documento del cliente"
@@ -867,11 +898,12 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                 e.target.src = "";
                 setMensajeModal({
                   titulo: "Error",
-                  mensaje: "No se pudo cargar la imagen. Por favor intente nuevamente.",
+                  mensaje:
+                    "No se pudo cargar la imagen. Por favor intente nuevamente.",
                   onClose: () => {
                     setMensajeModal(null);
                     cerrarModalFoto();
-                  }
+                  },
                 });
               }}
             />
@@ -899,45 +931,101 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             <div className="cmdet-grid2">
               <div className="form-item">
                 <label>Nombre y Apellido</label>
-                <input name="nombreApellido" type="text" value={editForm.nombreApellido} onChange={handleEditChange} autoFocus />
+                <input
+                  name="nombreApellido"
+                  type="text"
+                  value={editForm.nombreApellido}
+                  onChange={handleEditChange}
+                  autoFocus
+                />
               </div>
               <div className="form-item">
                 <label>DNI / CUIT / CUIL</label>
-                <input name="dniCuitCuil" type="text" value={editForm.dniCuitCuil} onChange={handleEditChange} />
+                <input
+                  name="dniCuitCuil"
+                  type="text"
+                  value={editForm.dniCuitCuil}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Email</label>
-                <input name="email" type="email" value={editForm.email} onChange={handleEditChange} />
+                <input
+                  name="email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Localidad</label>
-                <input name="localidad" type="text" value={editForm.localidad} onChange={handleEditChange} />
+                <input
+                  name="localidad"
+                  type="text"
+                  value={editForm.localidad}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Domicilio</label>
-                <input name="domicilio" type="text" value={editForm.domicilio} onChange={handleEditChange} />
+                <input
+                  name="domicilio"
+                  type="text"
+                  value={editForm.domicilio}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Domicilio de Trabajo</label>
-                <input name="domicilioTrabajo" type="text" value={editForm.domicilioTrabajo} onChange={handleEditChange} />
+                <input
+                  name="domicilioTrabajo"
+                  type="text"
+                  value={editForm.domicilioTrabajo}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Tel. Particular</label>
-                <input name="telefonoParticular" type="text" value={editForm.telefonoParticular} onChange={handleEditChange} />
+                <input
+                  name="telefonoParticular"
+                  type="text"
+                  value={editForm.telefonoParticular}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Tel. Emergencia</label>
-                <input name="telefonoEmergencia" type="text" value={editForm.telefonoEmergencia} onChange={handleEditChange} />
+                <input
+                  name="telefonoEmergencia"
+                  type="text"
+                  value={editForm.telefonoEmergencia}
+                  onChange={handleEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Tel. Trabajo</label>
-                <input name="telefonoTrabajo" type="text" value={editForm.telefonoTrabajo} onChange={handleEditChange} />
+                <input
+                  name="telefonoTrabajo"
+                  type="text"
+                  value={editForm.telefonoTrabajo}
+                  onChange={handleEditChange}
+                />
               </div>
             </div>
             {editError && <div className="cmdet-form-error">{editError}</div>}
             <div className="cmdet-edit-actions">
-              <button className="cmdet-btn-ghost" onClick={() => setEditOpen(false)} disabled={editSaving}>Cancelar</button>
-              <button className="cmdet-btn-primary" onClick={saveEdit} disabled={editSaving}>
+              <button
+                className="cmdet-btn-ghost"
+                onClick={() => setEditOpen(false)}
+                disabled={editSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                className="cmdet-btn-primary"
+                onClick={saveEdit}
+                disabled={editSaving}
+              >
                 {editSaving ? "Guardando..." : "Guardar cambios"}
               </button>
             </div>
@@ -956,37 +1044,84 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             <div className="cmdet-grid2">
               <div className="form-item">
                 <label>Patente</label>
-                <input name="patente" type="text" value={vehEditForm.patente} onChange={handleVehEditChange} />
+                <input
+                  name="patente"
+                  type="text"
+                  value={vehEditForm.patente}
+                  onChange={handleVehEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Marca</label>
-                <input name="marca" type="text" value={vehEditForm.marca} onChange={handleVehEditChange} />
+                <input
+                  name="marca"
+                  type="text"
+                  value={vehEditForm.marca}
+                  onChange={handleVehEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Modelo</label>
-                <input name="modelo" type="text" value={vehEditForm.modelo} onChange={handleVehEditChange} />
+                <input
+                  name="modelo"
+                  type="text"
+                  value={vehEditForm.modelo}
+                  onChange={handleVehEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Año</label>
-                <input name="anio" type="text" value={vehEditForm.anio} onChange={handleVehEditChange} placeholder="Ej: 2016" />
+                <input
+                  name="anio"
+                  type="text"
+                  value={vehEditForm.anio}
+                  onChange={handleVehEditChange}
+                  placeholder="Ej: 2016"
+                />
               </div>
               <div className="form-item">
                 <label>Color</label>
-                <input name="color" type="text" value={vehEditForm.color} onChange={handleVehEditChange} />
+                <input
+                  name="color"
+                  type="text"
+                  value={vehEditForm.color}
+                  onChange={handleVehEditChange}
+                />
               </div>
               <div className="form-item">
                 <label>Tipo de Vehículo</label>
-                <input name="tipoVehiculo" type="text" value={vehEditForm.tipoVehiculo} onChange={handleVehEditChange} placeholder="Auto / Camioneta / Moto" />
+                <input
+                  name="tipoVehiculo"
+                  type="text"
+                  value={vehEditForm.tipoVehiculo}
+                  onChange={handleVehEditChange}
+                  placeholder="Auto / Camioneta / Moto"
+                />
               </div>
               <div className="form-item">
                 <label>Compañía de Seguro</label>
-                <input name="companiaSeguro" type="text" value={vehEditForm.companiaSeguro} onChange={handleVehEditChange} />
+                <input
+                  name="companiaSeguro"
+                  type="text"
+                  value={vehEditForm.companiaSeguro}
+                  onChange={handleVehEditChange}
+                />
               </div>
             </div>
             {vehEditError && <div className="cmdet-form-error">{vehEditError}</div>}
             <div className="cmdet-edit-actions">
-              <button className="cmdet-btn-ghost" onClick={() => setVehEditOpen(false)} disabled={vehEditSaving}>Cancelar</button>
-              <button className="cmdet-btn-primary" onClick={saveVehiculo} disabled={vehEditSaving}>
+              <button
+                className="cmdet-btn-ghost"
+                onClick={() => setVehEditOpen(false)}
+                disabled={vehEditSaving}
+              >
+                Cancelar
+              </button>
+              <button
+                className="cmdet-btn-primary"
+                onClick={saveVehiculo}
+                disabled={vehEditSaving}
+              >
                 {vehEditSaving ? "Guardando..." : "Guardar vehículo"}
               </button>
             </div>
@@ -998,17 +1133,31 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       {confirmDel && (
         <ModalMensaje
           titulo="Eliminar Vehículo"
-          mensaje={`¿Seguro que querés dar de baja el vehículo ${confirmDel.patente || ""}? Esta acción lo quitará del abono y dejará de figurar como abonado.`}
+          mensaje={`¿Seguro que querés dar de baja el vehículo ${
+            confirmDel.patente || ""
+          }? Esta acción lo quitará del abono y dejará de figurar como abonado.`}
           onClose={() => setConfirmDel(null)}
         >
           <div className="cmdet-confirm-actions">
-            <button className="cmdet-btn-ghost" onClick={() => setConfirmDel(null)} disabled={vehEditSaving}>Cancelar</button>
-            <button className="cmdet-btn-danger" onClick={deleteVehiculo} disabled={vehEditSaving}>
+            <button
+              className="cmdet-btn-ghost"
+              onClick={() => setConfirmDel(null)}
+              disabled={vehEditSaving}
+            >
+              Cancelar
+            </button>
+            <button
+              className="cmdet-btn-danger"
+              onClick={deleteVehiculo}
+              disabled={vehEditSaving}
+            >
               Dar de baja
             </button>
           </div>
         </ModalMensaje>
       )}
+
+      {/* Confirmar baja cochera */}
       {confirmDelCochera && (
         <ModalMensaje
           titulo="Eliminar cochera"
@@ -1022,10 +1171,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             >
               Cancelar
             </button>
-            <button
-              className="cmdet-btn-danger"
-              onClick={deleteCochera}
-            >
+            <button className="cmdet-btn-danger" onClick={deleteCochera}>
               Eliminar
             </button>
           </div>

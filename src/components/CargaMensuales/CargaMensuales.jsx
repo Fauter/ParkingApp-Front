@@ -848,10 +848,11 @@ export default function CargaMensuales() {
     }
   };
 
-  const [loadingSave, setLoadingSave] = useState(false);
+    const [loadingSave, setLoadingSave] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, files, type, checked } = e.target;
+
     if (name === "cochera") {
       setFormData((prev) => {
         const next = { ...prev, cochera: value };
@@ -860,12 +861,14 @@ export default function CargaMensuales() {
       });
       return;
     }
+
     if (name === "exclusiva" && type === "checkbox") {
       if (normCocheraFront(formData.cochera) === "Fija") {
         setFormData((prev) => ({ ...prev, exclusiva: Boolean(checked) }));
       }
       return;
     }
+
     if (name === "patente") {
       setFormData((prev) => ({
         ...prev,
@@ -873,6 +876,7 @@ export default function CargaMensuales() {
       }));
       return;
     }
+
     if (name === "mesesAbonar") {
       setFormData((prev) => ({
         ...prev,
@@ -880,210 +884,134 @@ export default function CargaMensuales() {
       }));
       return;
     }
+
     if (files && files.length > 0) {
       setFormData((prev) => ({ ...prev, [name]: files[0] }));
       setFileUploaded((prev) => ({ ...prev, [name]: true }));
       return;
     }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // abre el modal de confirmación de abono con info de precios / prorrateos
+  // CONFIRMACIÓN SIMPLE (SIN PREVIEW)
   const abrirConfirmacionDeAbono = () => {
-    const patente = (formData.patente || "").toUpperCase();
-    const tipo = formData.tipoVehiculo;
-    const tierName = getTierName(formData.cochera || "Móvil", formData.exclusiva);
-
-    const baseMensual = getAbonoPrecioByMetodo(
-      tipo,
-      DEFAULT_METODO_PAGO,
-      formData.cochera || "Móvil",
-      formData.cochera === "Fija" ? formData.exclusiva : false
-    );
-
-    if (!Number.isFinite(baseMensual) || baseMensual <= 0) {
-      return showModal(
-        "Error",
-        `No hay precio cargado para "${(tipo || "").toLowerCase()}" en tier "${tierName}" (${DEFAULT_METODO_PAGO}).`
-      );
-    }
-
-    const { proporcional, diasRestantes, totalDiasMes } =
-      prorratearMontoFront(baseMensual);
-
-    const meses = Math.max(
-      1,
-      Math.min(12, Number(formData.mesesAbonar) || 1)
-    );
-    const mesesCompletos = meses > 1 ? meses - 1 : 0;
-    const montoMesesCompletos = mesesCompletos * baseMensual;
-    const totalCobrar = proporcional + montoMesesCompletos;
-
-    const hoy = new Date();
-    const venceEl = getUltimoDiaMesOffsetFront(hoy, meses - 1);
-    const dd = String(venceEl.getDate()).padStart(2, "0");
-    const mm = String(venceEl.getMonth() + 1).padStart(2, "0");
-    const yyyy = venceEl.getFullYear();
-
-    const ucfirst = (s) => {
-      const str = String(s || "").trim();
-      return str
-        ? str.charAt(0).toLocaleUpperCase("es-AR") + str.slice(1)
-        : "";
-    };
-
-    const tierPretty = ucfirst(tierName);
-
-    const msg =
-      `Patente: ${patente}\n` +
-      `Tipo: ${tipo}\n` +
-      `Meses a abonar: ${meses}\n\n` +
-      `Cochera: ${formData.cochera || "-"}\n` +
-      `N° de Cochera: ${formData.piso || "-"}\n` +
-      `Exclusiva: ${formData.exclusiva ? "Sí" : "No"}\n\n` +
-      `[${tierPretty}] Precio mensual: $${formatARS(baseMensual)}\n` +
-      `Mes actual (proporcional ${diasRestantes}/${totalDiasMes}): $${formatARS(
-        proporcional
-      )}\n` +
-      (mesesCompletos > 0
-        ? `Meses completos siguientes (${mesesCompletos}): $${formatARS(
-            montoMesesCompletos
-          )}\n`
-        : "") +
-      `Vence el: ${dd}/${mm}/${yyyy}\n\n` +
-      `TOTAL a cobrar: $${formatARS(totalCobrar)}`;
+    const patente = (formData.patente || "").toUpperCase().trim();
 
     setConfirmAbono({
       open: true,
-      titulo: "Confirmar alta de Abono",
-      mensaje: msg,
-      onConfirm: confirmarYGuardar,
+      titulo: "Confirmar Alta de Abono",
+      mensaje: `¿Confirmar creación de abono para la patente ${patente}?\n(No se realiza ningún cobro)`,
+      onConfirm: () => {
+        setConfirmAbono((s) => ({ ...s, open: false }));
+        confirmarYGuardar();
+      },
       onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
     });
   };
 
+  // GUARDAR SIN MOVIMIENTO / SIN TICKET (SIN PREVIEW)
   const confirmarYGuardar = async () => {
-    setConfirmAbono((s) => ({ ...s, open: false }));
     setLoadingSave(true);
     try {
-      const patente = (formData.patente || "").toUpperCase();
+      const patente = (formData.patente || "").toUpperCase().trim();
       const clienteId = await ensureCliente();
 
-      const tierName = getTierName(
-        formData.cochera || "Móvil",
-        formData.exclusiva
-      );
-      const baseMensual = getAbonoPrecioByMetodo(
-        formData.tipoVehiculo,
-        DEFAULT_METODO_PAGO,
-        formData.cochera || "Móvil",
-        formData.cochera === "Fija" ? formData.exclusiva : false
-      );
-
-      if (!Number.isFinite(baseMensual) || baseMensual <= 0) {
-        throw new Error(
-          `No hay precio cargado para "${(formData.tipoVehiculo || "").toLowerCase()}" en tier "${tierName}" (${DEFAULT_METODO_PAGO}).`
-        );
-      }
-
-      const { proporcional } = prorratearMontoFront(baseMensual);
+      const meses = Math.max(1, Math.min(12, Number(formData.mesesAbonar) || 1));
 
       const fd = new FormData();
-      Object.entries(formData).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) fd.append(k, v);
-      });
-      fd.set("mesesAbonar", String(formData.mesesAbonar || 1));
-      fd.set("patente", patente);
       fd.set("cliente", clienteId);
-      fd.set(
-        "operador",
-        operador?.username || operador?.nombre || "Sistema"
-      );
+      fd.set("patente", patente);
+      fd.set("tipoVehiculo", formData.tipoVehiculo);
+      fd.set("cochera", formData.cochera || "");
+      fd.set("piso", formData.piso || "");
       fd.set("exclusiva", formData.exclusiva ? "true" : "false");
-      fd.set("tierAbono", tierName);
-      fd.set("precio", String(baseMensual));
-      fd.set("precioProrrateadoHoy", String(proporcional));
+      fd.set("mesesAbonar", String(meses));
+      fd.set("nombreApellido", formData.nombreApellido);
+      fd.set("dniCuitCuil", formData.dniCuitCuil);
+      fd.set("email", formData.email);
+
+      fd.set("marca", formData.marca || "");
+      fd.set("modelo", formData.modelo || "");
+      fd.set("color", formData.color || "");
+      fd.set("anio", formData.anio || "");
+      fd.set("companiaSeguro", formData.companiaSeguro || "");
+
+      // 💥 SIN PREVIEW → TIER POR FRONT Y PRECIO = 0
+      fd.set("tierAbono", getTierName(formData.cochera, formData.exclusiva));
+      fd.set("precio", "0");
+      fd.set("precioProrrateadoHoy", "0");
+
+      fd.set("sinMovimiento", "true");
+      fd.set("sinTicket", "true");
+      fd.set("metodoPago", DEFAULT_METODO_PAGO);
+      fd.set("origen", "carga-mensuales");
+
+      // 🔥 ELIMINADO → previewJson, no existe + no lo querés
+      ["fotoDNI", "fotoSeguro", "fotoCedulaVerde"].forEach((k) => {
+        if (formData[k] instanceof File) fd.append(k, formData[k]);
+      });
 
       const resp = await fetch(`${BASE_URL}/api/abonos/registrar-abono`, {
         method: "POST",
         headers: authHeaders,
         body: fd,
       });
+
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}));
-        throw new Error(
-          err?.error || err?.message || "Error al registrar abono."
-        );
+        throw new Error(err?.error || err?.message || "Error al registrar abono.");
       }
 
-      // Vincular Vehículo ↔ Cochera (como Abonos, pero sin tickets/movimientos)
+      // vincular vehículo ↔ cochera
       try {
         let vehiculoId = null;
 
-        try {
-          const r = await fetch(
-            `${BASE_URL}/api/vehiculos/patente/${encodeURIComponent(
-              patente
-            )}`,
-            {
-              cache: "no-store",
-              headers: authHeaders,
-            }
-          );
-          if (r.ok) {
-            const v = await r.json().catch(() => null);
-            if (v && (v._id || v?.data?._id)) {
-              vehiculoId = v._id || v?.data?._id;
-            }
-          }
-        } catch {}
+        const r1 = await fetch(
+          `${BASE_URL}/api/vehiculos/patente/${encodeURIComponent(patente)}`,
+          { headers: authHeaders, cache: "no-store" }
+        );
+        if (r1.ok) {
+          const v = await r1.json().catch(() => null);
+          vehiculoId = v?._id || v?.data?._id || null;
+        }
 
         if (!vehiculoId) {
-          try {
-            const r2 = await fetch(
-              `${BASE_URL}/api/vehiculos?patente=${encodeURIComponent(
-                patente
-              )}`,
-              { cache: "no-store", headers: authHeaders }
-            );
-            if (r2.ok) {
-              const arr = await r2.json().catch(() => null);
-              if (Array.isArray(arr) && arr.length) {
-                vehiculoId = arr[0]?._id || null;
-              }
+          const r2 = await fetch(
+            `${BASE_URL}/api/vehiculos?patente=${encodeURIComponent(patente)}`,
+            { headers: authHeaders, cache: "no-store" }
+          );
+          if (r2.ok) {
+            const arr = await r2.json().catch(() => null);
+            if (Array.isArray(arr) && arr.length) {
+              vehiculoId = arr[0]?._id || null;
             }
-          } catch {}
+          }
         }
 
         if (vehiculoId) {
           await asignarVehiculoACocheraFront(clienteId, vehiculoId);
         }
-      } catch (errLink) {
-        console.warn(
-          "⚠️ Vinculación vehículo↔cochera:",
-          errLink?.message || errLink
-        );
+      } catch (e) {
+        console.warn("⚠️ Error vinculando vehículo↔cochera:", e);
       }
 
-      // Ejecutar sync (igual que Abonos)
       fetch(`${BASE_URL}/api/sync/run-now`, {
         method: "POST",
         headers: authHeaders,
       }).catch(() => {});
 
       await softRefreshClientes();
-      // 🔥 Limpio cocheras cacheadas, así se recargan correctamente
       setCocherasMap({});
       setSelectedCliente(null);
       setSelectedCocheraSnap(null);
 
       showModal(
         "Éxito",
-        `Abono registrado correctamente para ${patente}. (Sin movimiento / sin ticket)`
+        `Abono registrado correctamente para ${patente}.\n(Sin movimiento / sin ticket)`
       );
 
-      setFormData((prev) => ({
-        ...prev,
+      setFormData({
         nombreApellido: "",
         dniCuitCuil: "",
         domicilio: "",
@@ -1107,84 +1035,66 @@ export default function CargaMensuales() {
         piso: "",
         exclusiva: false,
         mesesAbonar: 1,
-      }));
+      });
+
       setFileUploaded({
         fotoSeguro: false,
         fotoDNI: false,
         fotoCedulaVerde: false,
       });
-      setSelectedCliente(null);
     } catch (err) {
       console.error(err);
-      showModal(
-        "Error",
-        err?.message || "Ocurrió un error al guardar el abono."
-      );
+      showModal("Error", err.message || "Error general al registrar abono.");
     } finally {
       setLoadingSave(false);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validaciones rápidas
     try {
-      const patente = (formData.patente || "").trim();
-      if (!patente) throw new Error("Debe ingresar la patente.");
+      if (!formData.patente) throw new Error("Debe ingresar la patente.");
       if (!formData.tipoVehiculo)
-        throw new Error("Debe seleccionar el tipo de vehículo.");
-      if (!formData.nombreApellido?.trim())
-        throw new Error("Debe ingresar el nombre y apellido.");
+        throw new Error("Debe seleccionar un tipo de vehículo.");
+      if (!formData.nombreApellido.trim())
+        throw new Error("Debe ingresar nombre y apellido.");
       if (!validarDNI(formData.dniCuitCuil))
         throw new Error("DNI/CUIT/CUIL inválido.");
-      if (!formData.email?.trim())
+      if (!formData.email.trim())
         throw new Error("Debe ingresar un email.");
       if (!formData.cochera)
         throw new Error("Debe seleccionar Cochera (Fija o Móvil).");
     } catch (err) {
-      return showModal("Error", err.message);
+      showModal("Error", err.message);
+      return;
     }
 
-    // Modal previo si el DNI ya existe
-    try {
-      const dni = (formData.dniCuitCuil || "").trim();
-      const clienteExistente = (clientes || []).find(
-        (c) => String(c.dniCuitCuil || "").trim() === dni
-      );
+    // Si el DNI ya existe → modal previo
+    const dni = String(formData.dniCuitCuil || "").trim();
+    const existente = (clientes || []).find(
+      (c) => String(c.dniCuitCuil || "").trim() === dni
+    );
 
-      if (clienteExistente) {
-        setConfirmAbono({
-          open: true,
-          titulo: "DNI ya existente",
-          mensaje:
-            `El DNI ${dni} ya está registrado a nombre de:\n\n` +
-            `${clienteExistente.nombreApellido}\n\n` +
-            `¿Deseás continuar y actualizar su información / agregar abono?`,
-          onConfirm: () => {
-            setConfirmAbono((s) => ({ ...s, open: false }));
-            abrirConfirmacionDeAbono();
-          },
-          onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
-        });
-        return;
-      }
-    } catch (err) {
-      return showModal(
-        "Error",
-        err?.message || "No se pudo verificar el DNI."
-      );
+    if (existente) {
+      setConfirmAbono({
+        open: true,
+        titulo: "DNI ya existente",
+        mensaje:
+          `El DNI ${dni} ya está registrado a nombre de:\n\n` +
+          `${existente.nombreApellido}\n\n` +
+          `¿Desea continuar y agregar / modificar abono?`,
+        onConfirm: async () => {
+          setConfirmAbono((s) => ({ ...s, open: false }));
+          await abrirConfirmacionDeAbono();
+        },
+        onCancel: () => setConfirmAbono((s) => ({ ...s, open: false })),
+      });
+      return;
     }
 
-    // Si el DNI no existe, directamente confirmación de abono
-    try {
-      abrirConfirmacionDeAbono();
-    } catch (err) {
-      return showModal(
-        "Error",
-        err?.message || "No se pudo preparar la confirmación."
-      );
-    }
+    // Si no existe → directo a preview
+    await abrirConfirmacionDeAbono();
   };
 
   const renderFileInput = (label, name) => (
