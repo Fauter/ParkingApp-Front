@@ -192,30 +192,31 @@ function DatosPago({
   const metodoEsEfectivo = (m) => m === "Efectivo";
   const metodoEsOtros = (m) => m && m !== "Efectivo";
 
-  // ✅ CORE: Elegir costo según método usando lo que llegó o lo que calculó el fallback
+  // NUEVO: precio = 0 hasta elegir método
   useEffect(() => {
     group("RECALC por método/tarifa/vehiculo");
     log("metodoPago:", metodoPago);
 
+    // ⛔ Si NO eligió método → mostrar 0 siempre
+    if (!metodoPago) {
+      log("Sin método → costoTotal = 0");
+      setCostoTotal(0);
+      groupEnd();
+      return;
+    }
+
+    // ✔ Si eligió método → usar la tarifa que vino
     let elegido = null;
 
     if (metodoEsEfectivo(metodoPago)) {
-      elegido = tarifaCalculada?.costoEfectivo ?? tarifaCalculada?.costo;
-    } else if (metodoEsOtros(metodoPago)) {
-      elegido = tarifaCalculada?.costoOtros ?? tarifaCalculada?.costo;
+      elegido = tarifaCalculada?.costoEfectivo ?? tarifaCalculada?.costo ?? 0;
     } else {
-      // sin método: si vino un costo genérico lo usamos; si no, 0
-      elegido = tarifaCalculada?.costo ?? null;
+      elegido = tarifaCalculada?.costoOtros ?? tarifaCalculada?.costo ?? 0;
     }
 
-    const fallback = vehiculoLocal?.estadiaActual?.costoTotal ?? 0;
-    const base = (elegido ?? (metodoPago ? fallback : 0) ?? 0);
+    log("→ base que se setea en costoTotal:", elegido);
+    setCostoTotal(elegido);
 
-    log("valor elegido por método:", elegido);
-    log("fallback (estadiaActual.costoTotal):", fallback);
-    log("→ base que se setea en costoTotal:", base);
-
-    setCostoTotal(base);
     groupEnd();
   }, [metodoPago, tarifaCalculada, vehiculoLocal]);
 
@@ -569,33 +570,7 @@ function DatosPago({
 
   return (
     <div className="datosPago">
-      <div className="precioTotal">
-        <div className="precioContainer">
-          ${totalConDescuento.toLocaleString("es-AR")}
-        </div>
-        <div className="promo">
-          <select className="promoSelect" value={promoSeleccionada?._id || "none"} onChange={handleSeleccionPromo}>
-            <option value="none">Seleccioná una Promo</option>
-            {promos?.map((promo) => (
-              <option key={promo._id} value={promo._id}>{promo.nombre} ({promo.descuento}%)</option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            className={`iconContainer ${promoFoto ? "withPhoto" : ""}`}
-            onClick={abrirModalCam}
-            title={promoFoto ? "Foto de promo cargada" : "Tomar foto para promo"}
-          >
-            {!promoFoto ? (
-              <img src="https://www.svgrepo.com/show/904/photo-camera.svg" alt="" className="camIcon" />
-            ) : (
-              <span className="promoCheck">✔</span>
-            )}
-          </button>
-        </div>
-      </div>
-
+      {/* === AHORA ARRIBA: MÉTODO DE PAGO + FACTURA === */}
       <div className="precioEspecificaciones">
         <div>
           <div className="title">Método de Pago</div>
@@ -625,6 +600,36 @@ function DatosPago({
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* === AHORA ABAJO: PRECIO FINAL + PROMO + FOTO === */}
+      <div className="precioTotal">
+        <div className="precioContainer">
+          ${totalConDescuento.toLocaleString("es-AR")}
+        </div>
+        <div className="promo">
+          <select className="promoSelect" value={promoSeleccionada?._id || "none"} onChange={handleSeleccionPromo}>
+            <option value="none">Seleccioná una Promo</option>
+            {promos?.map((promo) => (
+              <option key={promo._id} value={promo._id}>
+                {promo.nombre} ({promo.descuento}%)
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            className={`iconContainer ${promoFoto ? "withPhoto" : ""}`}
+            onClick={abrirModalCam}
+            title={promoFoto ? "Foto de promo cargada" : "Tomar foto para promo"}
+          >
+            {!promoFoto ? (
+              <img src="https://www.svgrepo.com/show/904/photo-camera.svg" alt="" className="camIcon" />
+            ) : (
+              <span className="promoCheck">✔</span>
+            )}
+          </button>
         </div>
       </div>
 
