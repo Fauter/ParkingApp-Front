@@ -367,35 +367,73 @@ export default function CargaMensuales() {
     });
   }, [clientes, q]);
 
-  /* —— Cocheras por cliente (modelo nuevo) —— */
+   /* —— Cocheras por cliente (igual que DatosClientesAbonos) —— */
   const [cocherasMap, setCocherasMap] = useState({});
   const [cocherasLoading, setCocherasLoading] = useState({});
 
   const fetchCocherasByCliente = useCallback(
-    async (clienteId) => {
+    async (cliente) => {
+      const clienteId = cliente?._id;
       if (!clienteId) return;
 
-      if (cocherasMap[clienteId]) return; // ya cargadas
+      // Si ya tenemos cocheras cacheadas para este cliente, no volvemos a pedir
+      if (cocherasMap[clienteId]) return;
+
+      // Si ya se está cargando para este cliente, no duplicamos
+      if (cocherasLoading[clienteId]) return;
+
+      const cocherasRefs = Array.isArray(cliente.cocheras)
+        ? cliente.cocheras
+        : [];
+
+      // Si el cliente no tiene cocheras asociadas, guardamos array vacío y salimos
+      if (cocherasRefs.length === 0) {
+        setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
+        return;
+      }
 
       setCocherasLoading((prev) => ({ ...prev, [clienteId]: true }));
+
       try {
-        const res = await fetch(`${BASE_URL}/api/cocheras/cliente/${clienteId}`, {
-          headers: authHeaders,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setCocherasMap((prev) => ({ ...prev, [clienteId]: data }));
-        } else {
-          setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
-        }
+        const richCocheras = await Promise.all(
+          cocherasRefs.map(async (ref) => {
+            const id = ref?.cocheraId;
+            if (!id) return null;
+
+            try {
+              const res = await fetch(`${BASE_URL}/api/cocheras/${id}`, {
+                headers: authHeaders,
+              });
+              if (!res.ok) return null;
+              const data = await res.json();
+              return data && data._id ? data : null;
+            } catch (err) {
+              console.error(
+                "[CargaMensuales] error fetch cochera por id",
+                err
+              );
+              return null;
+            }
+          })
+        );
+
+        const filtered = richCocheras.filter(Boolean);
+
+        setCocherasMap((prev) => ({
+          ...prev,
+          [clienteId]: filtered,
+        }));
       } catch (e) {
-        console.error(e);
+        console.error(
+          "[CargaMensuales] error general fetch cocheras cliente",
+          e
+        );
         setCocherasMap((prev) => ({ ...prev, [clienteId]: [] }));
       } finally {
         setCocherasLoading((prev) => ({ ...prev, [clienteId]: false }));
       }
     },
-    [cocherasMap, authHeaders]
+    [cocherasMap, cocherasLoading, authHeaders]
   );
 
   const buildCocheraLabel = (k) => {
@@ -1321,7 +1359,7 @@ export default function CargaMensuales() {
                             !cocherasMap[clienteId] &&
                             !cocherasLoading[clienteId]
                           ) {
-                            fetchCocherasByCliente(clienteId);
+                            fetchCocherasByCliente(c);
                           }
 
                           const cocheras = cocherasMap[clienteId] || [];

@@ -451,14 +451,36 @@ export default function CargaEstadias() {
 
     group("CALC auto");
     try {
-      const diffMs = dSalida - dEntrada;
-      const horas = Math.max(Math.ceil(diffMs / (1000 * 60 * 60)), 1);
-      setTiempoHoras(horas);
+      // =========================
+      // FIX SEMANA + cálculo oficial
+      // =========================
 
-      const { dias, horasFormateadas } = armarParametrosTiempo(entradaISO, salidaISO);
+      // Obtener parámetros base de tiempo
+      let { dias, horasFormateadas } = armarParametrosTiempo(entradaISO, salidaISO);
+
+      // Detectar si existen precios de "semana" en el tipo
+      const preciosTipo =
+        (preciosEfectivo?.[tipoParaCalculo]) ||
+        (preciosOtros?.[tipoParaCalculo]) ||
+        {};
+
+      const tieneSemana = preciosTipo["semana"] != null;
+
+      // Regla: Si supera 6 días y existe precio semana, se aplica semana
+      if (tieneSemana && dias >= 7) {
+        dias = 7;
+        horasFormateadas = "00:00";
+      }
+
+      // Calcular horas aprox solo para UI
+      const [hh, mm] = horasFormateadas.split(":").map(Number);
+      const horasAprox = dias * 24 + (mm > 0 ? hh + 1 : hh);
+      setTiempoHoras(horasAprox);
+
+      // Cálculo oficial de tarifas
       const { costoEfectivo: ce, costoOtros: co } = await calcularAmbosPrecios({
         tipoVehiculo: tipoParaCalculo,
-        inicio: new Date(entradaISO).toISOString(),
+        inicio: entradaISO,
         dias,
         hora: horasFormateadas,
         tarifas,
@@ -778,7 +800,7 @@ export default function CargaEstadias() {
                 aria-current="page"
                 onClick={() => navigate("/operador/carga-estadias")}
               >
-                Estadías
+                Forzar Ticket Manual
               </button>
             </nav>
 

@@ -334,38 +334,41 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
               // 🔥 MERGE INTELIGENTE: evita que el abono PISE datos del vehículo
               const mergeAbonoVehiculo = (vehiculo, abono) => {
-                if (!vehiculo && !abono) return null;
-                if (!vehiculo) return abono;
-                if (!abono) return vehiculo;
+              // 1) ID REAL del vehículo — PRIORIDAD:
+              //    a) vehiculo._id
+              //    b) abono.vehiculo (si backend lo vinculó)
+              //    c) null (pero casi nunca debe ocurrir)
+              const realVehiculoId =
+                vehiculo?._id ||
+                abono?.vehiculo ||
+                null;
 
-                return {
-                  ...vehiculo,
+              return {
+                // ID PRINCIPAL: si existe vehículo real, el ID debe ser el del vehículo
+                _id: realVehiculoId || abono._id,
 
-                  // Patente y tipo
-                  patente: abono.patente || vehiculo.patente,
-                  tipoVehiculo: abono.tipoVehiculo || vehiculo.tipoVehiculo,
+                vehiculoId: realVehiculoId,        // <── SIEMPRE EL REAL
+                abonoId: abono?._id || null,
 
-                  // 🔥 Datos del vehículo que NO pueden ser pisados por el abono
-                  marca: abono.marca || vehiculo.marca,
-                  modelo: abono.modelo || vehiculo.modelo,
-                  color: abono.color || vehiculo.color,
-                  anio: abono.anio || vehiculo.anio,
-                  companiaSeguro: abono.companiaSeguro || vehiculo.companiaSeguro,
+                patente: abono?.patente || vehiculo?.patente || '',
+                tipoVehiculo: abono?.tipoVehiculo || vehiculo?.tipoVehiculo || '',
 
-                  // 🔵 Datos que sí vienen del ABONO (y no rompen)
-                  precio: abono.precio ?? vehiculo.precio,
-                  fechaExpiracion: abono.fechaExpiracion ?? vehiculo.fechaExpiracion,
-                  fechaCreacion: abono.fechaCreacion ?? vehiculo.fechaCreacion,
-                  activo: abono.activo ?? vehiculo.activo,
+                marca: abono?.marca || vehiculo?.marca || '',
+                modelo: abono?.modelo || vehiculo?.modelo || '',
+                color: abono?.color || vehiculo?.color || '',
+                anio: abono?.anio || vehiculo?.anio || '',
+                companiaSeguro: abono?.companiaSeguro || vehiculo?.companiaSeguro || '',
 
-                  cochera: abono.cochera || vehiculo.cochera,
-                  piso: abono.piso ?? vehiculo.piso,
-                  exclusiva: (abono.exclusiva !== undefined ? abono.exclusiva : vehiculo.exclusiva),
+                precio: abono?.precio ?? vehiculo?.precio ?? null,
+                fechaExpiracion: abono?.fechaExpiracion ?? vehiculo?.fechaExpiracion ?? null,
+                fechaCreacion: abono?.fechaCreacion ?? vehiculo?.fechaCreacion ?? null,
+                activo: abono?.activo ?? vehiculo?.activo ?? false,
 
-                  // ID del abono si existe, sino el del vehículo
-                  _id: abono._id || vehiculo._id,
-                };
+                cochera: abono?.cochera || vehiculo?.cochera || '',
+                piso: abono?.piso ?? vehiculo?.piso ?? '',
+                exclusiva: abono?.exclusiva ?? vehiculo?.exclusiva ?? false,
               };
+            };
 
               // 🔥 USAR MERGE REAL
               vehiculosAbonos.push(
@@ -970,19 +973,36 @@ function DetalleClienteCajero({ clienteId, volver }) {
   };
 
   /* =================== Editar / Eliminar vehículo -> ABONOS =================== */
-  const openEditVehiculo = (abono) => {
-    if (!abono) return;
+  const openEditVehiculo = (item) => {
+    if (!item) return;
     setVehEditError('');
-    setVehEditAbonoId(abono._id);
+
+    // ⚠️ item puede venir como:
+    // - { abonoId, vehiculoId, ... } (cocheras)
+    // - { _id del abono, vehiculo: ObjectId } (legacy sin cochera)
+
+    const abonoIdReal =
+      item.abonoId ||                   // merge inteligente (cocheras)
+      (item._id && item.vehiculoId ? item._id : null) ||   // fallback legacy
+      null;
+
+    if (!abonoIdReal) {
+      setVehEditError('No se pudo identificar el abono para editar.');
+      return;
+    }
+
+    setVehEditAbonoId(abonoIdReal);
+
     setVehEditForm({
-      patente: abono.patente || '',
-      marca: abono.marca || '',
-      modelo: abono.modelo || '',
-      anio: abono.anio || '',
-      color: abono.color || '',
-      tipoVehiculo: abono.tipoVehiculo || '',
-      companiaSeguro: abono.companiaSeguro || '',
+      patente: item.patente || '',
+      marca: item.marca || '',
+      modelo: item.modelo || '',
+      anio: item.anio || '',
+      color: item.color || '',
+      tipoVehiculo: item.tipoVehiculo || '',
+      companiaSeguro: item.companiaSeguro || '',
     });
+
     setVehEditOpen(true);
   };
 
@@ -1075,77 +1095,85 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
-  const askDeleteVehiculo = (abono) => {
-    setConfirmDel({ abonoId: abono._id, patente: abono.patente || '' });
+  // 🔥 Ahora guardamos también la cochera de la que sale el vehículo
+  const askDeleteVehiculo = (item, cocheraId = null) => {
+    setConfirmDel({
+      patente: item.patente || '',
+      cocheraId: cocheraId || null,
+      vehiculoId:
+        item.vehiculoId ||                  // merge inteligente
+        (item.vehiculo ? item.vehiculo._id : null) ||   // fallback backend
+        null,
+      abonoId:
+        item.abonoId ||                     // merge inteligente
+        (item._id && !item.vehiculoId ? item._id : null) ||  // fallback legacy
+        null,
+    });
   };
 
   const deleteVehiculo = async () => {
-    if (!confirmDel?.abonoId) return;
+    if (!confirmDel) return;
+
     try {
       setLoading(true);
 
-      // 1) Desactivar el abono (activo=false)
-      const res1 = await fetch(`${API_ABONOS}/${confirmDel.abonoId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ activo: false })
-      });
-      const data1 = await res1.json().catch(() => ({}));
-      if (!res1.ok) throw new Error(data1?.msg || data1?.message || 'No se pudo desactivar el abono');
+      const vehiculoIdReal = confirmDel.vehiculoId;
+      if (!vehiculoIdReal) throw new Error("ID de vehículo inexistente.");
 
-      // 2) Desabonarlo en Vehículos y sacarlo del array cliente.vehiculos
-      const res2 = await fetch(`${API_VEHICULOS}/${encodeURIComponent(confirmDel.patente)}/abonado`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ abonado: false, detachFromCliente: true })
-      });
-      const data2 = await res2.json().catch(() => ({}));
-      if (!res2.ok) throw new Error(data2?.msg || data2?.message || 'No se pudo actualizar el vehículo');
+      // 1) Si viene de una cochera → removerlo correctamente
+      if (confirmDel.cocheraId) {
+        const r1 = await fetch(`${API_COCHERAS}/remover-vehiculo`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            cocheraId: confirmDel.cocheraId,
+            vehiculoId: vehiculoIdReal,
+          }),
+        });
 
-      // 3) (Opcional) Desvincular el vehículo del abono (si existe el endpoint)
-      fetch(`${API_ABONOS}/${confirmDel.abonoId}/vehiculo`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ vehiculoId: null })
-      }).catch(() => { /* es opcional */ });
+        const d1 = await r1.json().catch(() => ({}));
+        if (!r1.ok) throw new Error(d1?.message || d1?.msg || "Error removiendo vehículo de la cochera.");
+      }
 
-      // 4) Optimistic UI
-      setCliente(prev => {
-        if (!prev) return prev;
-        const nuevo = { ...prev };
-        if (Array.isArray(nuevo.abonos)) {
-          nuevo.abonos = nuevo.abonos.filter(a => a && a._id !== confirmDel.abonoId);
-        }
-        if (Array.isArray(nuevo.vehiculos)) {
-          nuevo.vehiculos = nuevo.vehiculos.filter(v => v && v.patente !== confirmDel.patente);
-        }
-        return nuevo;
-      });
+      // 2) ⚠️ NO HACER NADA ACÁ
+      // El vehículo YA fue correctamente desabonado en:
+      // POST /api/cocheras/remover-vehiculo
+      // Volver a tocar el flag rompe la consistencia con Abonos / Sync.
 
+      // 3) Si hay abonoId → desvincular
+      if (confirmDel.abonoId) {
+        await fetch(`${API_ABONOS}/${confirmDel.abonoId}/vehiculo`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({ vehiculoId: null }),
+        }).catch(() => {});
+      }
+
+      // 4) Refrescar vista
       setConfirmDel(null);
       setMensajeModal({
-        titulo: 'Vehículo dado de baja',
-        mensaje: 'Se desactivó el abono y se quitó el vehículo del listado.',
+        titulo: "Vehículo eliminado",
+        mensaje: "El vehículo fue removido correctamente.",
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
-        }
+        },
       });
+
     } catch (err) {
       console.error(err);
+      // cierro el modal de confirmación para que no quede "debajo"
+      setConfirmDel(null);
       setMensajeModal({
-        titulo: 'Error',
-        mensaje: err.message || 'Error al dar de baja el vehículo',
-        onClose: () => setMensajeModal(null)
+        titulo: "Error",
+        mensaje: err.message || "Error al eliminar vehículo.",
+        onClose: () => setMensajeModal(null),
       });
     } finally {
       setLoading(false);
@@ -1194,15 +1222,17 @@ function DetalleClienteCajero({ clienteId, volver }) {
     ? cliente.abonos.filter(a => a && a.activo !== false)
     : [];
 
-  // Abonos activos que ya están asignados a alguna cochera (por cocheraId)
+  // Abonos activos que ya están asignados a alguna cochera (por abonoId REAL)
   const abonosEnCocherasIds = new Set();
   cocherasConVehiculos.forEach(c => {
     (c.vehiculos || []).forEach(v => {
-      if (v && v._id) abonosEnCocherasIds.add(String(v._id));
+      if (v && v.abonoId) abonosEnCocherasIds.add(String(v.abonoId));
     });
   });
 
-  const abonosSinCochera = abonosActivos.filter(a => !abonosEnCocherasIds.has(String(a._id)));
+  const abonosSinCochera = abonosActivos.filter(a => 
+    !abonosEnCocherasIds.has(String(a._id)) && a.vehiculo !== null
+  );
 
   return (
     <div className="detalle-cliente-cajero">
@@ -1241,7 +1271,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       <div className="vehiculos-header">
         <div className="vehiculos-title">
-          <h3>Vehículos ({abonosActivos.length})</h3>
+          <h3>
+            Vehículos ({
+              cocherasConVehiculos.reduce((acc, c) => acc + (c.vehiculos?.length || 0), 0)
+            })
+          </h3>
           {multipleCocheras && clienteCocherasArr.length > 0 && (
             <span className="cocheras-count">
               ({clienteCocherasArr.length} cocheras)
@@ -1487,7 +1521,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                             className="btn-vehiculo eliminar"
                                             onClick={(e) => {
                                               e.stopPropagation();
-                                              askDeleteVehiculo(abono);
+                                              askDeleteVehiculo(abono, coch.cocheraId); // ← ABONO YA TIENE vehiculoId REAL
                                             }}
                                             title="Eliminar vehículo"
                                           >
@@ -1570,7 +1604,10 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                       </button>
                                       <button
                                         className="btn-vehiculo eliminar"
-                                        onClick={(e) => { e.stopPropagation(); askDeleteVehiculo(abono); }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          askDeleteVehiculo(abono, null);
+                                        }}
                                         title="Eliminar vehículo"
                                       >
                                         <FaTrashAlt /> <span>Eliminar</span>
