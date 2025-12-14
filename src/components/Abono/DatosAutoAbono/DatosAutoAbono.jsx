@@ -993,6 +993,58 @@ function DatosAutoAbono({ datosVehiculo, clienteSeleccionado, user }) {
         (c) => String(c.dniCuitCuil || "").trim() === dni
       );
       const esClienteNuevo = !clienteExistente;
+      // =======================================================
+      // 🔥 REGLA DURA: COCHERA MÓVIL = SIEMPRE NUEVA COCHERA
+      // =======================================================
+      const tipoCocheraNorm =
+        String(formData.cochera || '').toLowerCase() === 'fija'
+          ? 'Fija'
+          : 'Móvil';
+
+      // Si el cliente YA existe y la cochera es MÓVIL → forzar nueva cochera
+      if (!esClienteNuevo && tipoCocheraNorm === 'Móvil') {
+        const baseMensual = getAbonoPrecioByMetodo(
+          formData.tipoVehiculo,
+          formData.metodoPago,
+          'Móvil',
+          false
+        );
+
+        const pr = prorratearMontoFront(baseMensual || 0);
+
+        setConfirmModal({
+          open: true,
+          titulo: 'Nueva cochera móvil',
+          mensaje: [
+            'Estás creando una NUEVA cochera MÓVIL.',
+            'Regla del sistema: una cochera móvil no puede tener más de un vehículo.',
+            '',
+            `Precio mensual: $${formatARS(baseMensual)}`,
+            `A cobrar hoy: $${formatARS(pr.proporcional)} (${pr.diasRestantes}/${pr.totalDiasMes})`,
+            '',
+            '¿Deseás continuar?'
+          ].join('\n'),
+          onConfirm: async () => {
+            setConfirmModal(s => ({ ...s, open: false }));
+            setLoading(true);
+
+            await finalizarSubmit(null, {
+              isNew: false,
+              upgrade: false,
+              nuevaCochera: true,
+              cocheraId: null // 🔥 CLAVE: NO reutilizar cochera
+            });
+
+            setLoading(false);
+          },
+          onCancel: () => {
+            setConfirmModal(s => ({ ...s, open: false }));
+            setLoading(false);
+          }
+        });
+
+        return; // ⛔ cortar flujo normal
+      }
       // === Detectar si esta cochera es nueva para este cliente existente
       //     y resolver el ID REAL de cochera ===
       let esNuevaCochera = false;
