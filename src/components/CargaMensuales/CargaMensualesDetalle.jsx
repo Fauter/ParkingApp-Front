@@ -138,6 +138,8 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     companiaSeguro: "",
   });
 
+  const [loading, setLoading] = useState(false);
+
   // Confirmar baja vehículo
   const [confirmDel, setConfirmDel] = useState(null); // { abonoId, patente }
 
@@ -466,69 +468,63 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
     }
   };
 
-  const askDeleteVehiculo = (abono) => {
-    setConfirmDel({ abonoId: abono._id, patente: abono.patente || "" });
+    // 🔥 Igual que DetalleClienteCajero: elimina por cochera (fuente de verdad)
+  const askDeleteVehiculo = ({ cocheraId, vehiculoId, abonoId, patente }) => {
+    setConfirmDel({
+      cocheraId: cocheraId || null,
+      vehiculoId: vehiculoId || null,
+      abonoId: abonoId || null,
+      patente: patente || "",
+    });
   };
 
   const deleteVehiculo = async () => {
-    if (!confirmDel?.abonoId) return;
-    try {
-      // Desactivar abono
-      const res1 = await fetch(`${API_ABONOS}/${confirmDel.abonoId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ activo: false }),
-      });
-      const data1 = await res1.json().catch(() => ({}));
-      if (!res1.ok) throw new Error(data1?.msg || data1?.message || "No se pudo desactivar el abono");
+    if (!confirmDel) return;
 
-      // Desabonarlo en Vehículos y desvincular de cliente
-      const res2 = await fetch(
-        `${API_VEHICULOS}/${encodeURIComponent(confirmDel.patente)}/abonado`,
-        {
+    try {
+      setLoading(true);
+
+      const { cocheraId, vehiculoId, abonoId } = confirmDel;
+
+      if (!vehiculoId) throw new Error("ID de vehículo inexistente.");
+
+      // 1) Si viene de cochera → removerlo correctamente
+      if (cocheraId) {
+        const r1 = await fetch(`${API_BASE}/api/cocheras/remover-vehiculo`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            cocheraId,
+            vehiculoId,
+          }),
+        });
+
+        const d1 = await r1.json().catch(() => ({}));
+        if (!r1.ok) {
+          throw new Error(d1?.message || d1?.msg || "Error removiendo vehículo de la cochera.");
+        }
+      }
+
+      // 2) ⚠️ NO TOCAR FLAGS DE ABONO/VEHICULO ACÁ (lo hace el backend del remover-vehiculo)
+      // 3) Si hay abonoId → desvincular vehículo del abono (best-effort)
+      if (abonoId) {
+        await fetch(`${API_ABONOS}/${abonoId}/vehiculo`, {
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
-          body: JSON.stringify({ abonado: false, detachFromCliente: true }),
-        }
-      );
-      const data2 = await res2.json().catch(() => ({}));
-      if (!res2.ok) throw new Error(data2?.msg || data2?.message || "No se pudo actualizar el vehículo");
-
-      // Desvincular id vehículo del abono (opcional)
-      fetch(`${API_ABONOS}/${confirmDel.abonoId}/vehiculo`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ vehiculoId: null }),
-      }).catch(() => {});
-
-      // Optimistic UI
-      setCliente((prev) => {
-        if (!prev) return prev;
-        const nuevo = { ...prev };
-        if (Array.isArray(nuevo.abonos)) {
-          nuevo.abonos = nuevo.abonos.filter((a) => a && a._id !== confirmDel.abonoId);
-        }
-        if (Array.isArray(nuevo.vehiculos)) {
-          nuevo.vehiculos = nuevo.vehiculos.filter(
-            (v) => v && v.patente !== confirmDel.patente
-          );
-        }
-        return nuevo;
-      });
+          body: JSON.stringify({ vehiculoId: null }),
+        }).catch(() => {});
+      }
 
       setConfirmDel(null);
       setMensajeModal({
-        titulo: "Vehículo dado de baja",
-        mensaje: "Se desactivó el abono y se quitó el vehículo del listado.",
+        titulo: "Vehículo eliminado",
+        mensaje: "El vehículo fue removido correctamente.",
         onClose: async () => {
           setMensajeModal(null);
           await cargarCliente();
@@ -536,11 +532,14 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
       });
     } catch (err) {
       console.error(err);
+      setConfirmDel(null);
       setMensajeModal({
         titulo: "Error",
-        mensaje: err.message || "Error al dar de baja el vehículo",
+        mensaje: err.message || "Error al eliminar vehículo.",
         onClose: () => setMensajeModal(null),
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -843,7 +842,7 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
 
                                     <div className="cmdet-right">
                                       <div className="cmdet-actions">
-                                        <button
+                                        {/* <button
                                           className="cmdet-btn-action edit"
                                           onClick={(e) => {
                                             e.stopPropagation();
@@ -851,13 +850,18 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
                                           }}
                                         >
                                           <FaEdit /> <span>Editar</span>
-                                        </button>
+                                        </button> */}
 
                                         <button
                                           className="cmdet-btn-action del"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            askDeleteVehiculo(abono);
+                                            askDeleteVehiculo({
+                                              cocheraId: cochera._id,
+                                              vehiculoId: v._id,            // el ID real del vehículo dentro de la cochera
+                                              abonoId: abono?._id || null,  // puede ser null si no matchea
+                                              patente: v.patente || "",
+                                            });
                                           }}
                                         >
                                           <FaTrashAlt /> <span>Eliminar</span>
@@ -1113,14 +1117,14 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
               <button
                 className="cmdet-btn-ghost"
                 onClick={() => setVehEditOpen(false)}
-                disabled={vehEditSaving}
+                disabled={loading}
               >
                 Cancelar
               </button>
               <button
                 className="cmdet-btn-primary"
                 onClick={saveVehiculo}
-                disabled={vehEditSaving}
+                disabled={loading}
               >
                 {vehEditSaving ? "Guardando..." : "Guardar vehículo"}
               </button>
@@ -1142,14 +1146,14 @@ export default function CargaMensualesDetalle({ clienteId, volver }) {
             <button
               className="cmdet-btn-ghost"
               onClick={() => setConfirmDel(null)}
-              disabled={vehEditSaving}
+              disabled={loading}
             >
               Cancelar
             </button>
             <button
               className="cmdet-btn-danger"
               onClick={deleteVehiculo}
-              disabled={vehEditSaving}
+              disabled={loading}
             >
               Dar de baja
             </button>

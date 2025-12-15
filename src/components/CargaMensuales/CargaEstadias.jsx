@@ -455,27 +455,14 @@ export default function CargaEstadias() {
       // FIX SEMANA + cálculo oficial
       // =========================
 
-      // Obtener parámetros base de tiempo
-      let { dias, horasFormateadas } = armarParametrosTiempo(entradaISO, salidaISO);
+      // Obtener parámetros de tiempo EXACTOS (sin forzar tarifas)
+      const { dias, horasFormateadas } = armarParametrosTiempo(entradaISO, salidaISO);
 
-      // Detectar si existen precios de "semana" en el tipo
-      const preciosTipo =
-        (preciosEfectivo?.[tipoParaCalculo]) ||
-        (preciosOtros?.[tipoParaCalculo]) ||
-        {};
-
-      const tieneSemana = preciosTipo["semana"] != null;
-
-      // Regla: Si supera 6 días y existe precio semana, se aplica semana
-      if (tieneSemana && dias >= 7) {
-        dias = 7;
-        horasFormateadas = "00:00";
-      }
-
-      // Calcular horas aprox solo para UI
+      // Horas solo informativas (igual que en otros módulos)
       const [hh, mm] = horasFormateadas.split(":").map(Number);
       const horasAprox = dias * 24 + (mm > 0 ? hh + 1 : hh);
       setTiempoHoras(horasAprox);
+
 
       // Cálculo oficial de tarifas
       const { costoEfectivo: ce, costoOtros: co } = await calcularAmbosPrecios({
@@ -493,9 +480,15 @@ export default function CargaEstadias() {
       setCostoOtros(typeof co === "number" ? co : 0);
 
       let base = 0;
-      if (metodoPago === "Efectivo") base = ce || 0;
-      else if (metodoPago) base = co || 0;
-      else base = ce || co || 0;
+
+      // ⚠️ MISMA LÓGICA QUE DatosPago.jsx
+      if (!metodoPago) {
+        base = 0;
+      } else if (metodoPago === "Efectivo") {
+        base = typeof ce === "number" ? ce : 0;
+      } else {
+        base = typeof co === "number" ? co : 0;
+      }
 
       const desc = promoSeleccionada?.descuento || 0;
       const total = base * (1 - desc / 100);
@@ -536,9 +529,15 @@ export default function CargaEstadias() {
       return;
     }
     let base = 0;
-    if (metodoPago === "Efectivo") base = (costoEfectivo ?? 0);
-    else if (metodoPago) base = (costoOtros ?? 0);
-    else base = (costoEfectivo ?? costoOtros ?? 0);
+
+    // Misma regla que DatosPago
+    if (!metodoPago) {
+      base = 0;
+    } else if (metodoPago === "Efectivo") {
+      base = typeof costoEfectivo === "number" ? costoEfectivo : 0;
+    } else {
+      base = typeof costoOtros === "number" ? costoOtros : 0;
+    }
 
     const desc = promoSeleccionada?.descuento || 0;
     setCostoBase(base);
@@ -694,24 +693,9 @@ export default function CargaEstadias() {
       const descripcion = `Pago por ${horas} Hora${horas > 1 ? "s" : ""}`;
 
       // 2) Registrar salida
-      const resSalida = await fetch(`${BASE_URL}/api/vehiculos/${p}/registrarSalida`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({
-          salida: new Date(salidaISOlocal).toISOString(),
-          costo: totalConDescuento,
-          tarifa: tarifaAplicada || null,
-          tiempoHoras: horas,
-          metodoPago: metodoPago,
-          factura: factura,
-          tipoTarifa: "hora",
-          descripcion
-        }),
-      });
-      const jsonSalida = await resSalida.json().catch(() => ({}));
-      if (!resSalida.ok) throw new Error(jsonSalida?.msg || "Error al registrar salida.");
+      // ⚠️ registrarSalida YA CREA el movimiento en el backend
+      // ⚠️ NO registrar movimiento manualmente acá
 
-      // 3) Registrar movimiento explícito (compatibilidad)
       const operadorPayload = operador ? {
         username: operador.username,
         nombre: operador.nombre,
@@ -720,17 +704,23 @@ export default function CargaEstadias() {
         _id: operador._id || operador.id
       } : undefined;
 
-      const datosMovimiento = {
-        patente: p,
-        tipoVehiculo: (vehiculoSel?.tipoVehiculo || tipoSeleccionado || "Desconocido"),
+      const bodySalida = {
+        salida: new Date(salidaISOlocal).toISOString(),
+        costo: totalConDescuento,
+        tarifa: tarifaAplicada || null,
+        tiempoHoras: horas,
+
         metodoPago,
         factura,
-        descripcion,
-        monto: totalConDescuento,
         tipoTarifa: "hora",
+        descripcion,
+
+        // 🔑 operador COMPLETO (igual que DatosPago)
         ...(operadorPayload ? { operador: operadorPayload } : {}),
         ...(operador?.username ? { operadorUsername: operador.username } : {}),
         ...(operador?._id || operador?.id ? { operadorId: (operador._id || operador.id).toString() } : {}),
+
+        // 🔑 promo incluida en el movimiento real
         ...(promoSeleccionada ? {
           promo: {
             _id: promoSeleccionada._id,
@@ -740,13 +730,22 @@ export default function CargaEstadias() {
         } : {})
       };
 
-      const resMov = await fetch(`${BASE_URL}/api/movimientos/registrar`, {
-        method: "POST",
+      const resSalida = await fetch(`${BASE_URL}/api/vehiculos/${p}/registrarSalida`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify(datosMovimiento),
+        body: JSON.stringify(bodySalida),
       });
-      const jsonMov = await resMov.json().catch(() => ({}));
-      if (!resMov.ok || !jsonMov?.movimiento) throw new Error(jsonMov?.msg || "Error al registrar movimiento.");
+
+      const jsonSalida = await resSalida.json().catch(() => ({}));
+      if (!resSalida.ok) {
+        throw new Error(jsonSalida?.msg || "Error al registrar salida.");
+      }
+
+      // ✅ ESTE ES EL ÚNICO MOVIMIENTO QUE DEBE EXISTIR
+      const movimiento = jsonSalida?.movimiento;
+      if (!movimiento) {
+        throw new Error("Salida registrada pero no se generó movimiento.");
+      }
 
       // 4) Informar ticket
       await cargarVehiculoPorPatente(p);

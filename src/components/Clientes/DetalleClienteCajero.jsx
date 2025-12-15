@@ -1507,7 +1507,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                       </div>
                                       <div className="expandido-right">
                                         <div className="vehiculo-actions">
-                                          <button
+                                          {/* <button
                                             className="btn-vehiculo editar"
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -1516,7 +1516,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                             title="Editar vehículo"
                                           >
                                             <FaEdit /> <span>Editar</span>
-                                          </button>
+                                          </button> */}
                                           <button
                                             className="btn-vehiculo eliminar"
                                             onClick={(e) => {
@@ -1547,8 +1547,8 @@ function DetalleClienteCajero({ clienteId, volver }) {
               );
             })}
 
-            {/* Vehículos activos que no están en ninguna cochera (ej: móviles / legacy) */}
-            {abonosSinCochera.length > 0 && (
+            {/* Vehículos activos SIN cochera — SOLO si el cliente NO tiene cocheras */}
+            {clienteCocherasArr.length === 0 && abonosSinCochera.length > 0 && (
               <div className="cochera-group cochera-sin-asignar">
                 <div className="cochera-group-header">
                   <h4>Vehículos sin cochera asignada</h4>
@@ -1569,7 +1569,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
                       return (
                         <React.Fragment key={abono._id}>
                           <tr
-                            onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
+                            onClick={() =>
+                              setVehiculoExpandido(prev =>
+                                prev === abono._id ? null : abono._id
+                              )
+                            }
                             className="fila-vehiculo"
                           >
                             <td>{abono.patente?.toUpperCase() || '---'}</td>
@@ -1597,10 +1601,12 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                     <div className="vehiculo-actions">
                                       <button
                                         className="btn-vehiculo editar"
-                                        onClick={(e) => { e.stopPropagation(); openEditVehiculo(abono); }}
-                                        title="Editar vehículo"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditVehiculo(abono);
+                                        }}
                                       >
-                                        <FaEdit /> <span>Editar</span>
+                                        Editar
                                       </button>
                                       <button
                                         className="btn-vehiculo eliminar"
@@ -1608,9 +1614,8 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                           e.stopPropagation();
                                           askDeleteVehiculo(abono, null);
                                         }}
-                                        title="Eliminar vehículo"
                                       >
-                                        <FaTrashAlt /> <span>Eliminar</span>
+                                        Eliminar
                                       </button>
                                     </div>
                                   </div>
@@ -1924,7 +1929,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
       {confirmDel && (
         <ModalMensaje
           titulo="Eliminar Vehículo"
-          mensaje={`¿Seguro que querés dar de baja el vehículo ${confirmDel.patente || ''}? Esta acción lo quitará del abono y dejará de figurar como abonado.`}
+          mensaje={`¿Seguro que querés quitar el vehículo ${
+            confirmDel.patente || ""
+          } de esta cochera? El vehículo dejará de estar asignado a la cochera.`}
           onClose={() => setConfirmDel(null)}
         >
           <div className="confirm-actions">

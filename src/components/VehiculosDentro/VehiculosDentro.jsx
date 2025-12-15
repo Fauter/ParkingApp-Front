@@ -107,13 +107,19 @@ function VehiculosDentro() {
         );
 
         // 🔒 Normalizo _id a string acá para TODO el ciclo de vida en FE
-        const normalizados = filtrados.map(v => ({
-          ...v,
-          _id: getIdStr(v),
-          tipoVehiculo: toName(v.tipoVehiculo) || 'desconocido',
-        }));
+        const normalizados = filtrados
+          .map(v => ({
+            ...v,
+            _id: getIdStr(v),
+            tipoVehiculo: toName(v.tipoVehiculo) || 'desconocido',
+            _entradaTs: v?.estadiaActual?.entrada
+              ? new Date(v.estadiaActual.entrada).getTime()
+              : 0,
+          }))
+          // ⬇️ más nuevo primero
+          .sort((a, b) => b._entradaTs - a._entradaTs);
 
-        setVehiculos(normalizados.reverse());
+        setVehiculos(normalizados);
 
         // Tipos de vehículo
         const responseTipos = await fetch('http://localhost:5000/api/tipos-vehiculo');
