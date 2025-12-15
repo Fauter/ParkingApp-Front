@@ -344,10 +344,10 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 null;
 
               return {
-                // ID PRINCIPAL: si existe vehículo real, el ID debe ser el del vehículo
-                _id: realVehiculoId || abono._id,
+                // 🔒 ID VISUAL ESTABLE — SIEMPRE el vehículo
+                _id: realVehiculoId,
 
-                vehiculoId: realVehiculoId,        // <── SIEMPRE EL REAL
+                vehiculoId: realVehiculoId,
                 abonoId: abono?._id || null,
 
                 patente: abono?.patente || vehiculo?.patente || '',
@@ -359,14 +359,14 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 anio: abono?.anio || vehiculo?.anio || '',
                 companiaSeguro: abono?.companiaSeguro || vehiculo?.companiaSeguro || '',
 
-                precio: abono?.precio ?? vehiculo?.precio ?? null,
-                fechaExpiracion: abono?.fechaExpiracion ?? vehiculo?.fechaExpiracion ?? null,
-                fechaCreacion: abono?.fechaCreacion ?? vehiculo?.fechaCreacion ?? null,
-                activo: abono?.activo ?? vehiculo?.activo ?? false,
+                precio: abono?.precio ?? null,
+                fechaExpiracion: abono?.fechaExpiracion ?? null,
+                fechaCreacion: abono?.fechaCreacion ?? null,
+                activo: abono?.activo ?? false,
 
-                cochera: abono?.cochera || vehiculo?.cochera || '',
-                piso: abono?.piso ?? vehiculo?.piso ?? '',
-                exclusiva: abono?.exclusiva ?? vehiculo?.exclusiva ?? false,
+                cochera: abono?.cochera || '',
+                piso: abono?.piso ?? '',
+                exclusiva: abono?.exclusiva ?? false,
               };
             };
 
@@ -1078,14 +1078,16 @@ function DetalleClienteCajero({ clienteId, volver }) {
       }
 
       // Éxito
+      // 🔒 Forzamos refresh limpio antes de cerrar UI
+      await cargarCliente();
+
       setVehEditOpen(false);
+      setVehiculoExpandido(null);
+
       setMensajeModal({
         titulo: 'Guardado',
         mensaje: 'Vehículo/Abono actualizado correctamente.',
-        onClose: async () => {
-          setMensajeModal(null);
-          await cargarCliente();
-        }
+        onClose: () => setMensajeModal(null),
       });
     } catch (err) {
       console.error(err);
@@ -1459,9 +1461,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
                       </thead>
                       <tbody>
                         {vehiculos.map((abono) => {
-                          const expandido = vehiculoExpandido === abono._id;
+                          const expandido = vehiculoExpandido === abono.vehiculoId;
                           return (
-                            <React.Fragment key={abono._id}>
+                            <React.Fragment key={abono.vehiculoId}>
                               <tr
                                 onClick={() =>
                                   setVehiculoExpandido((prev) =>
@@ -1507,7 +1509,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                       </div>
                                       <div className="expandido-right">
                                         <div className="vehiculo-actions">
-                                          {/* <button
+                                          <button
                                             className="btn-vehiculo editar"
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -1516,7 +1518,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                             title="Editar vehículo"
                                           >
                                             <FaEdit /> <span>Editar</span>
-                                          </button> */}
+                                          </button>
                                           <button
                                             className="btn-vehiculo eliminar"
                                             onClick={(e) => {
@@ -1565,9 +1567,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
                   </thead>
                   <tbody>
                     {abonosSinCochera.map((abono) => {
-                      const expandido = vehiculoExpandido === abono._id;
+                      const expandido = vehiculoExpandido === abono.vehiculoId;
                       return (
-                        <React.Fragment key={abono._id}>
+                        <React.Fragment key={abono.vehiculoId}>
                           <tr
                             onClick={() =>
                               setVehiculoExpandido(prev =>
@@ -1653,9 +1655,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 </thead>
                 <tbody>
                   {abonosActivos.map((abono) => {
-                    const expandido = vehiculoExpandido === abono._id;
+                    const expandido = vehiculoExpandido === abono.vehiculoId;
                     return (
-                      <React.Fragment key={abono._id}>
+                      <React.Fragment key={abono.vehiculoId}>
                         <tr
                           onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
                           className="fila-vehiculo"
@@ -1889,10 +1891,10 @@ function DetalleClienteCajero({ clienteId, volver }) {
         >
           <div className="edit-form">
             <div className="grid-2">
-              <div className="form-item">
+              {/* <div className="form-item">
                 <label>Patente</label>
                 <input name="patente" type="text" value={vehEditForm.patente} onChange={handleVehEditChange} />
-              </div>
+              </div> */}
               <div className="form-item">
                 <label>Marca</label>
                 <input name="marca" type="text" value={vehEditForm.marca} onChange={handleVehEditChange} />
