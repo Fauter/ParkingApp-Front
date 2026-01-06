@@ -50,16 +50,56 @@ const handleNumericKeyDown = (e) => {
   if (!/^\d$/.test(e.key)) e.preventDefault();
 };
 
+// ================================
+// 👤 RESOLUCIÓN CANÓNICA DE OPERADOR
+// ================================
+const buildOperadorIndex = (usuarios = []) => {
+  const byId = new Map();
+  const byUsername = new Map();
+  const byNombre = new Map();
+
+  usuarios.forEach(u => {
+    if (u._id) byId.set(String(u._id), u);
+    if (u.username) byUsername.set(u.username.toLowerCase(), u);
+    if (u.nombre) byNombre.set(u.nombre.toLowerCase(), u);
+  });
+
+  return { byId, byUsername, byNombre };
+};
+
+const resolveOperador = (item, operadorIndex) => {
+  if (!item || !operadorIndex) return null;
+
+  // operadorId explícito
+  if (item.operadorId && operadorIndex.byId.has(String(item.operadorId))) {
+    return operadorIndex.byId.get(String(item.operadorId));
+  }
+
+  const raw = item.operadorNombre || item.operador;
+  if (!raw) return null;
+
+  const key = String(raw).toLowerCase();
+  if (operadorIndex.byUsername.has(key)) return operadorIndex.byUsername.get(key);
+  if (operadorIndex.byNombre.has(key)) return operadorIndex.byNombre.get(key);
+
+  return null;
+};
+
 function Interfaz() {
   const [vistaActual, setVistaActual] = useState('operador');
   const [modalActivo, setModalActivo] = useState(null);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [ticketPendiente, setTicketPendiente] = useState(null);
 
-  // Cierre de Caja
+    // Cierre de Caja
   const [recaudado, setRecaudado] = useState('');
   const [enCaja, setEnCaja] = useState('');
   const [confirmandoCaja, setConfirmandoCaja] = useState(false);
+
+  // ✅ Cálculo de caja (sistema)
+  const [calculoCaja, setCalculoCaja] = useState(null); // number | null
+  const [calculoCajaLoading, setCalculoCajaLoading] = useState(false);
+
 
   // Cierre Parcial
   const [montoParcial, setMontoParcial] = useState('');
@@ -208,6 +248,168 @@ function Interfaz() {
     const hora = ahora.toTimeString().slice(0, 5);
     return { fecha, hora };
   };
+
+    // ================================
+    // ✅ CÁLCULO DE CAJA (Total Sistema en el modal)
+    // Regla: dejoEnCaja del último cierre global
+    //      + efectivo del operador actual desde ese cierre
+    //      - parciales del operador actual desde ese cierre
+    // ================================
+
+    const normalizarOperadorStr = (op) => {
+    if (!op) return '';
+    if (typeof op === 'string') return op.trim();
+    if (typeof op === 'object') {
+      return String(
+        op.username ||
+        op.nombre ||
+        op.name ||
+        op.email ||
+        op._id ||
+        ''
+      ).trim();
+    }
+    return String(op).trim();
+  };
+
+  // ✅ Timestamp robusto: prioriza createdAt (server) y cae a fecha/hora si no existe
+  const tsItem = (item) => {
+    if (!item) return -Infinity;
+
+    // 1) createdAt/updatedAt (server UTC) = la referencia más estable
+    const src = item.createdAt || item.updatedAt;
+    const t1 = src ? new Date(src).getTime() : NaN;
+    if (Number.isFinite(t1)) return t1;
+
+    // 2) fallback: fecha + hora (local) si vino legacy sin createdAt
+    const fecha = item.fecha;
+    const hora  = item.hora;
+    if (fecha && hora) {
+      const [y, m, d] = String(fecha).split('-').map(Number);
+      const [hh, mm] = String(hora).split(':').map(Number);
+      if ([y, m, d, hh, mm].every(Number.isFinite)) {
+        const t2 = new Date(y, m - 1, d, hh, mm, 0, 0).getTime();
+        if (Number.isFinite(t2)) return t2;
+      }
+    }
+
+    // 3) último fallback: campo fecha
+    const t3 = item.fecha ? new Date(item.fecha).getTime() : NaN;
+    return Number.isFinite(t3) ? t3 : -Infinity;
+  };
+
+  // ✅ Movimientos: el movimiento puede venir envuelto o plano; usamos createdAt/fecha del movimiento
+  const tsMov = (mov) => {
+    if (!mov) return -Infinity;
+    const src = mov.createdAt || mov.fecha;
+    const t = src ? new Date(src).getTime() : NaN;
+    return Number.isFinite(t) ? t : -Infinity;
+  };
+
+
+  const formatARS = (n) => {
+    const num = Number(n) || 0;
+    return num.toLocaleString('es-AR');
+  };
+
+  useEffect(() => {
+    const calcularCaja = async () => {
+      if (modalActivo !== 'cierredecaja') return;
+
+      setCalculoCajaLoading(true);
+      setCalculoCaja(null);
+
+      const token = localStorage.getItem(TOKEN_KEY) || '';
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      try {
+        const [cierresRes, movsRes, parcRes] = await Promise.all([
+          fetch('http://localhost:5000/api/cierresdecaja', { headers }),
+          fetch('http://localhost:5000/api/movimientos', { headers }),
+          fetch('http://localhost:5000/api/cierresdecaja/parcial', { headers }),
+        ]);
+
+        if (!cierresRes.ok || !movsRes.ok || !parcRes.ok) {
+          throw new Error('Error al obtener datos');
+        }
+
+        const cierres = await cierresRes.json();
+        const movimientosRaw = await movsRes.json();
+        const parciales = await parcRes.json();
+
+        // 🧱 1. Último cierre de caja (GLOBAL)
+        const ultimoCierre = [...cierres]
+          .filter(c => c.createdAt)
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+        const hayCierre = Boolean(ultimoCierre);
+
+        const corte = hayCierre
+          ? new Date(ultimoCierre.createdAt)
+          : new Date(0); // ⬅️ inicio del tiempo
+
+        const dejoEnCaja = hayCierre
+          ? Number(ultimoCierre.dejoEnCaja) || 0
+          : 0;
+
+        // 🧱 2. Movimientos en EFECTIVO posteriores al cierre
+        const movimientosUnicos = new Map();
+
+        movimientosRaw.forEach(item => {
+          const m = item.movimiento || item;
+          if (!m || !m.idemBucket2s) return;
+
+          // Si ya existe, NO lo volvemos a contar
+          if (!movimientosUnicos.has(m.idemBucket2s)) {
+            movimientosUnicos.set(m.idemBucket2s, m);
+          }
+        });
+
+        const movimientos = [...movimientosUnicos.values()]
+          .filter(m =>
+            m.createdAt &&
+            m.metodoPago === 'Efectivo' &&
+            new Date(m.createdAt) >= corte
+          );
+
+        const totalEfectivo = movimientos.reduce(
+          (acc, m) => acc + (Number(m.monto) || 0),
+          0
+        );
+
+        // 🧱 3. Cierres parciales posteriores al cierre
+        const totalParciales = parciales
+          .filter(p =>
+            p.createdAt &&
+            new Date(p.createdAt) > corte
+          )
+          .reduce((acc, p) => acc + (Number(p.monto) || 0), 0);
+
+        // 🧮 4. Cálculo final
+        const calculoFinal = dejoEnCaja + totalEfectivo - totalParciales;
+
+        console.log('🧮 CÁLCULO CAJA', {
+          hayCierre,
+          corte: corte.toISOString(),
+          dejoEnCaja,
+          totalEfectivo,
+          totalParciales,
+          calculoFinal,
+        });
+
+        setCalculoCaja(calculoFinal);
+
+      } catch (err) {
+        console.error('Error cálculo caja:', err);
+        setCalculoCaja(null);
+      } finally {
+        setCalculoCajaLoading(false);
+      }
+    };
+
+    calcularCaja();
+  }, [modalActivo]);
+
 
   const abrirBarreraSalida = () => {
     setBarreraDerAbierta(true);
@@ -596,8 +798,31 @@ function Interfaz() {
         />
       </div>
 
-      {modalActivo === 'cierredecaja' && (
+            {modalActivo === 'cierredecaja' && (
         <ModalHeader titulo="Cierre de Caja" onClose={cerrarModal}>
+
+          {/* ✅ Cálculo de caja del sistema */}
+          <div
+            style={{
+              marginTop: 6,
+              marginBottom: 12,
+              padding: '10px 12px',
+              background: 'transparent',   // 👈
+              border: 'none',              // opcional
+              borderRadius: 0,
+              color: 'white',
+              fontWeight: 700
+            }}
+          >
+            {calculoCajaLoading ? (
+              <span>Cálculo de Caja: calculando...</span>
+            ) : (
+              <span>
+                Cálculo de Caja: ${formatARS(calculoCaja)}
+              </span>
+            )}
+          </div>
+
           {!confirmandoCaja ? (
             <>
               <label>Total en Caja</label>

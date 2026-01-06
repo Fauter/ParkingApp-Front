@@ -15,34 +15,27 @@ const API_COCHERAS = `${API_BASE}/api/cocheras`; // 👈 nuevo: endpoint de coch
 // ====================== CÁLCULO REAL DE PRECIOS ======================
 const getAbonoPrecioByMetodo = (
   tipoVehiculo,
-  metodoPago,
   cocheraTipo,
   exclusiva,
   catalogo
 ) => {
-  if (!catalogo) return 0;
-  if (!tipoVehiculo) return 0;
+  if (!catalogo || !tipoVehiculo) return 0;
 
-  // normalizar clave
-  const key = tipoVehiculo.toLowerCase().trim();
-  const cat = catalogo[key];
-  if (!cat) return 0;
+  const tipoKey = String(tipoVehiculo).toLowerCase().trim();
+  const preciosTipo = catalogo[tipoKey];
+  if (!preciosTipo) return 0;
 
-  // Determinar la key correcta según tipo de cochera
-  let cocheraKey = "móvil";
-  if (cocheraTipo === "Fija") {
-    cocheraKey = exclusiva ? "exclusiva" : "fija";
+  // 🔒 Regla ÚNICA y explícita
+  if (cocheraTipo === 'Fija') {
+    if (exclusiva && preciosTipo.exclusiva > 0) return preciosTipo.exclusiva;
+    if (preciosTipo.fija > 0) return preciosTipo.fija;
   }
 
-  // El catálogo YA VIENE filtrado por metodoPago
-  // Entonces acá simplemente tomamos el valor directo
-  const precio = cat[cocheraKey];
+  if (preciosTipo.móvil > 0) return preciosTipo.móvil;
 
-  // fallback si falta el campo
-  if (!precio || isNaN(precio)) return 0;
-
-  return precio;
+  return 0;
 };
+
 
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
@@ -62,6 +55,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const [precioRenovacion, setPrecioRenovacion] = useState(0);
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [factura, setFactura] = useState('CC');
+  const [detalleCobro, setDetalleCobro] = useState(null);
   const [diasRestantes, setDiasRestantes] = useState(0);
 
   // Catálogo Precios
@@ -334,41 +328,36 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
               // 🔥 MERGE INTELIGENTE: evita que el abono PISE datos del vehículo
               const mergeAbonoVehiculo = (vehiculo, abono) => {
-              // 1) ID REAL del vehículo — PRIORIDAD:
-              //    a) vehiculo._id
-              //    b) abono.vehiculo (si backend lo vinculó)
-              //    c) null (pero casi nunca debe ocurrir)
-              const realVehiculoId =
-                vehiculo?._id ||
-                abono?.vehiculo ||
-                null;
+                const abonoId = abono?._id || null;
+                const vehiculoId = vehiculo?._id || abono?.vehiculo || null;
 
-              return {
-                // 🔒 ID VISUAL ESTABLE — SIEMPRE el vehículo
-                _id: realVehiculoId,
+                return {
+                  // 🔒 ID ESTABLE PARA REACT (SIEMPRE ABONO)
+                  _key: abonoId || vehiculoId,   // ← NUEVO
 
-                vehiculoId: realVehiculoId,
-                abonoId: abono?._id || null,
+                  // IDs reales
+                  abonoId,
+                  vehiculoId,
 
-                patente: abono?.patente || vehiculo?.patente || '',
-                tipoVehiculo: abono?.tipoVehiculo || vehiculo?.tipoVehiculo || '',
+                  patente: abono?.patente || vehiculo?.patente || '',
+                  tipoVehiculo: abono?.tipoVehiculo || vehiculo?.tipoVehiculo || '',
 
-                marca: abono?.marca || vehiculo?.marca || '',
-                modelo: abono?.modelo || vehiculo?.modelo || '',
-                color: abono?.color || vehiculo?.color || '',
-                anio: abono?.anio || vehiculo?.anio || '',
-                companiaSeguro: abono?.companiaSeguro || vehiculo?.companiaSeguro || '',
+                  marca: abono?.marca || vehiculo?.marca || '',
+                  modelo: abono?.modelo || vehiculo?.modelo || '',
+                  color: abono?.color || vehiculo?.color || '',
+                  anio: abono?.anio || vehiculo?.anio || '',
+                  companiaSeguro: abono?.companiaSeguro || vehiculo?.companiaSeguro || '',
 
-                precio: abono?.precio ?? null,
-                fechaExpiracion: abono?.fechaExpiracion ?? null,
-                fechaCreacion: abono?.fechaCreacion ?? null,
-                activo: abono?.activo ?? false,
+                  precio: abono?.precio ?? null,
+                  fechaExpiracion: abono?.fechaExpiracion ?? null,
+                  fechaCreacion: abono?.fechaCreacion ?? null,
+                  activo: abono?.activo ?? false,
 
-                cochera: abono?.cochera || '',
-                piso: abono?.piso ?? '',
-                exclusiva: abono?.exclusiva ?? false,
+                  cochera: abono?.cochera || '',
+                  piso: abono?.piso ?? '',
+                  exclusiva: abono?.exclusiva ?? false,
+                };
               };
-            };
 
               // 🔥 USAR MERGE REAL
               vehiculosAbonos.push(
@@ -401,20 +390,29 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
   useEffect(() => {
     if (!modalRenovarVisible) return;
+    if (!catalogoPrecios) return;
+    if (!Array.isArray(abonosEnRenovacion) || abonosEnRenovacion.length === 0) return;
 
-    if (cocheraEnRenovacion && abonosEnRenovacion.length > 0) {
-      // recalcular usando los mismos datos, pero otro método de pago
-      calcularPrecioRenovacionCochera({
-        ...cocheraEnRenovacion,
-        vehiculos: abonosEnRenovacion
-      });
-      return;
-    }
+    // 🔒 COCHERA: se cobra SOLO el vehículo más caro
+    const precios = abonosEnRenovacion.map((a) =>
+      getAbonoPrecioByMetodo(
+        a.tipoVehiculo,
+        cocheraEnRenovacion?.tipo || a.cochera || 'Móvil',
+        cocheraEnRenovacion
+          ? !!cocheraEnRenovacion.exclusiva
+          : !!a.exclusiva,
+        catalogoPrecios
+      )
+    );
 
-    if (!cocheraEnRenovacion && abonosEnRenovacion.length > 0) {
-      calcularPrecioRenovacionCliente();
-    }
-  }, [metodoPago, catalogoPrecios]);
+    const precioFinal = Math.max(...precios, 0);
+    setPrecioRenovacion(Math.round(precioFinal));
+  }, [
+    metodoPago,
+    catalogoPrecios,
+    modalRenovarVisible
+  ]);
+
   
   /* =================== Formateos y labels =================== */
   const formatearFechaCorta = (fechaISO) => {
@@ -633,16 +631,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
   };
   const cerrarModalFoto = () => setModalFotoUrl(null);
 
-  /* =================== Renovación =================== */
-  const calcularPrecioProporcional = (precioMensualTotal) => {
-    const hoy = new Date();
-    const ultimoDiaMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-    const totalDiasMes = ultimoDiaMes.getDate();
-    const diaActual = hoy.getDate();
-    const diasRestantesCalculados = totalDiasMes - diaActual + 1;
-    setDiasRestantes(diasRestantesCalculados);
-    if (diaActual === 1) return precioMensualTotal;
-    return Math.round((precioMensualTotal / totalDiasMes) * diasRestantesCalculados);
+  const calcularPrecioMensual = (precioMensualTotal) => {
+    setDiasRestantes(null); // ya no aplica
+    return Math.round(precioMensualTotal);
   };
 
   // 🔹 Cochera que se está renovando (o null si es renovación legacy por cliente)
@@ -653,7 +644,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const calcularPrecioRenovacionCochera = (coch) => {
     if (!cliente || !catalogoPrecios) return;
 
-    const abonosCochera = Array.isArray(coch.vehiculos) ? coch.vehiculos : [];
+    const abonosCochera = Array.isArray(coch.vehiculos)
+      ? coch.vehiculos.filter(a => a && a.abonoId)
+      : [];
     if (!abonosCochera.length) {
       setMensajeModal({
         titulo: "Atención",
@@ -663,22 +656,18 @@ function DetalleClienteCajero({ clienteId, volver }) {
       return;
     }
 
-    let precioMensualTotal = 0;
-
-    abonosCochera.forEach((a) => {
-      const p = getAbonoPrecioByMetodo(
+    const precios = abonosCochera.map((a) =>
+      getAbonoPrecioByMetodo(
         a.tipoVehiculo,
-        metodoPago,
         coch.tipo,
         coch.exclusiva,
         catalogoPrecios
-      );
-      precioMensualTotal += p;
-    });
+      )
+    );
 
-    const precioProporcional = calcularPrecioProporcional(precioMensualTotal);
+    const precioFinal = Math.max(...precios, 0);
+    setPrecioRenovacion(Math.round(precioFinal));
 
-    setPrecioRenovacion(precioProporcional);
     setCocheraEnRenovacion({
       cocheraId: coch.cocheraId,
       tipo: coch.tipo,
@@ -739,8 +728,8 @@ function DetalleClienteCajero({ clienteId, volver }) {
         precioMensualTotal += precioFinal;
       });
 
-      const precioProporcional = calcularPrecioProporcional(precioMensualTotal);
-      setPrecioRenovacion(precioProporcional);
+      const precioFinal = calcularPrecioMensual(precioMensualTotal);
+      setPrecioRenovacion(precioFinal);
       setCocheraEnRenovacion(null); // contexto "cliente completo"
       setAbonosEnRenovacion(abonosActivos);
       setModalRenovarVisible(true);
@@ -759,6 +748,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
       setLoading(true);
       const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
 
+      // 🔒 MONTO FINAL REAL (BACKEND MANDA)
+      // fallback inicial: precio base del front
+      let montoFinalCobrado = Number(precioRenovacion) || 0;
+
+
       if (!Array.isArray(abonosEnRenovacion) || abonosEnRenovacion.length === 0) {
         setMensajeModal({
           titulo: 'Error',
@@ -770,25 +764,27 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       // 🔁 Renovamos TODOS los abonos seleccionados (una cochera o todo el cliente)
       for (const abonoRef of abonosEnRenovacion) {
-        if (!abonoRef) continue;
+        if (!abonoRef.abonoId) {
+          console.warn('[Renovar] Vehículo sin abonoId, se omite:', abonoRef.patente);
+          continue;
+        }
 
-        const tipo = (abonoRef.tipoVehiculo || cliente.precioAbono || '');
         const body = {
           clienteId,
+          abonoId: abonoRef.abonoId,   // 🔥 ESTE ERA EL BUG
+
           metodoPago,
           factura,
           operador,
 
-          patente: abonoRef.patente || 'N/A',
-          tipoVehiculo: tipo,
+          patente: abonoRef.patente,
+          mesesAbonar: 1,
 
           cochera: cocheraEnRenovacion?.tipo || abonoRef.cochera || 'Móvil',
           piso: cocheraEnRenovacion?.piso || abonoRef.piso || '',
           exclusiva: cocheraEnRenovacion
             ? !!cocheraEnRenovacion.exclusiva
             : !!abonoRef.exclusiva,
-
-          mesesAbonar: 1,
         };
 
         const response = await fetch(`${API_ABONOS}/renovar`, {
@@ -800,33 +796,50 @@ function DetalleClienteCajero({ clienteId, volver }) {
           body: JSON.stringify(body),
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData?.message || errorData?.error || 'Error al renovar abono');
+          throw new Error(data?.error || data?.message || 'Error al renovar abono');
+        }
+
+        if (data && typeof data === "object") {
+          // Guardamos detalle para UI
+          if (data.detalleCobro) {
+            setDetalleCobro(data.detalleCobro);
+          }
+
+          // 🔥 PRIORIDAD ABSOLUTA: MONTO DEFINITIVO DEL BACKEND
+          // Orden de confianza (de más fuerte a más débil)
+          const toNumberSafe = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : null;
+          };
+
+          if (toNumberSafe(data.montoFinal) !== null) {
+            montoFinalCobrado = toNumberSafe(data.montoFinal);
+          } else if (toNumberSafe(data.cobrado) !== null) {
+            montoFinalCobrado = toNumberSafe(data.cobrado);
+          } else if (data.detalleCobro) {
+            const base = toNumberSafe(data.detalleCobro.base || data.detalleCobro.baseMonto);
+            const recargo = toNumberSafe(data.detalleCobro.recargoMonto);
+            if (base !== null) {
+              montoFinalCobrado = base + (recargo || 0);
+            }
+          }
+          else if (data.detalleCobro) {
+            // fallback calculado con detalleCobro
+            const base = Number(data.detalleCobro.base || data.detalleCobro.baseMonto || 0);
+            const recargo = Number(data.detalleCobro.recargoMonto || 0);
+            if (base > 0) {
+              montoFinalCobrado = base + recargo;
+            }
+          }
         }
       }
 
       // ========= CREAR MOVIMIENTO =========
-      try {
-        const movimientoBody = {
-          tipo: "Ingreso",
-          origen: "ABONO",
-          monto: precioRenovacion,
-          metodoPago: metodoPago,
-          factura: factura,
-          descripcion: "Renovación de Abono",
-          clienteId: clienteId,
-          operador: operador,
-          detalle: {
-            cocheraId: cocheraEnRenovacion?.cocheraId || null,
-            abonos: abonosEnRenovacion.map(a => ({
-              abonoId: a._id || null,
-              patente: a.patente || null
-            }))
-          }
-        };
-
-        await fetch(`${API_BASE}/api/movimientos/registrar`, {
+        try {
+          await fetch(`${API_BASE}/api/movimientos/registrar`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -834,20 +847,23 @@ function DetalleClienteCajero({ clienteId, volver }) {
           },
           body: JSON.stringify({
             patente: abonosEnRenovacion[0]?.patente || "ABONO",
-            tipoVehiculo: abonosEnRenovacion[0]?.tipoVehiculo || "abono",                        
-            metodoPago: metodoPago,                        // obligatorio
-            factura: factura,                              // obligatorio
-            monto: precioRenovacion,                       // obligatorio
-            descripcion: "Renovación de Abono",            // obligatorio
-            cliente: clienteId,                            // opcional
-            operador: operador,                            // robusto
-            tipoTarifa: "abono",                           // opcional
-            promo: null,                                   // opcional
-            fotoUrl: null,                                 // opcional
+            tipoVehiculo: abonosEnRenovacion[0]?.tipoVehiculo || "abono",
+            metodoPago,
+            factura,
+
+            // 🔥 🔥 🔥 EL ÚNICO MONTO QUE IMPORTA
+            monto: Math.round(Number(montoFinalCobrado) || 0),
+
+            descripcion: "Renovación de Abono",
+            cliente: clienteId,
+            operador,
+            tipoTarifa: "abono",
+            promo: null,
+            fotoUrl: null,
             detalle: {
               cocheraId: cocheraEnRenovacion?.cocheraId || null,
               abonos: abonosEnRenovacion.map(a => ({
-                abonoId: a._id || null,
+                abonoId: a.abonoId || null,
                 patente: a.patente || null
               }))
             }
@@ -875,6 +891,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       setLoading(false);
       setCocheraEnRenovacion(null);
       setAbonosEnRenovacion([]);
+      setDetalleCobro(null);
     }
   };
 
@@ -1461,15 +1478,15 @@ function DetalleClienteCajero({ clienteId, volver }) {
                       </thead>
                       <tbody>
                         {vehiculos.map((abono) => {
-                          const expandido = vehiculoExpandido === abono.vehiculoId;
+                          const expandido = vehiculoExpandido === abono._key;
                           return (
-                            <React.Fragment key={abono.vehiculoId}>
+                            <React.Fragment key={abono._key}>
                               <tr
-                                onClick={() =>
+                                onClick={() => {
                                   setVehiculoExpandido((prev) =>
-                                    prev === abono._id ? null : abono._id
-                                  )
-                                }
+                                    prev === abono._key ? null : abono._key
+                                  );
+                                }}
                                 className="fila-vehiculo"
                               >
                                 <td>{abono.patente?.toUpperCase() || '---'}</td>
@@ -1567,15 +1584,15 @@ function DetalleClienteCajero({ clienteId, volver }) {
                   </thead>
                   <tbody>
                     {abonosSinCochera.map((abono) => {
-                      const expandido = vehiculoExpandido === abono.vehiculoId;
+                      const expandido = vehiculoExpandido === abono._key;
                       return (
                         <React.Fragment key={abono.vehiculoId}>
                           <tr
-                            onClick={() =>
+                            onClick={() => {
                               setVehiculoExpandido(prev =>
-                                prev === abono._id ? null : abono._id
-                              )
-                            }
+                                prev === abono._key ? null : abono._key
+                              );
+                            }}
                             className="fila-vehiculo"
                           >
                             <td>{abono.patente?.toUpperCase() || '---'}</td>
@@ -1655,9 +1672,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
                 </thead>
                 <tbody>
                   {abonosActivos.map((abono) => {
-                    const expandido = vehiculoExpandido === abono.vehiculoId;
+                    const expandido = vehiculoExpandido === abono._key;
                     return (
-                      <React.Fragment key={abono.vehiculoId}>
+                      <React.Fragment key={abono._key}>
                         <tr
                           onClick={() => setVehiculoExpandido(prev => prev === abono._id ? null : abono._id)}
                           className="fila-vehiculo"
@@ -1750,9 +1767,32 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
               <p><strong>Vehículos incluidos:</strong> {abonosEnRenovacion.length}</p>
 
-              <p><strong>Días restantes del mes:</strong> {diasRestantes}</p>
-
-              <p><strong>Precio a cobrar:</strong> ${precioRenovacion}</p>
+              <p>
+                <strong>Precio a cobrar:</strong>{" "}
+                $
+                {detalleCobro
+                  ? Math.round(
+                      Number(detalleCobro.base || 0) +
+                      Number(detalleCobro.recargoMonto || 0)
+                    )
+                  : precioRenovacion}
+              </p>
+              <div className="detalle-recargo">
+                {!detalleCobro ? (
+                  <p className="sin-recargo">
+                    Al día (sin recargo)
+                  </p>
+                ) : detalleCobro.porcentajeRecargo === 0 ? (
+                  <p className="sin-recargo">
+                    Al día (sin recargo)
+                  </p>
+                ) : (
+                  <p className="con-recargo">
+                    Recargo por atraso: +{detalleCobro.porcentajeRecargo}% 
+                    (${detalleCobro.recargoMonto}) — {detalleCobro.motivoRecargo}
+                  </p>
+                )}
+              </div>
 
               <div className="form-group">
                 <label>Método de pago:</label>
