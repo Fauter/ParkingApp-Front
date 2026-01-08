@@ -1270,21 +1270,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
       {/* Status-abono LEGACY: solo si el cliente NO tiene cocheras[] */}
       {clienteCocherasArr.length === 0 && (
         <div className="status-abono-container">
-          <div className={`status-abono ${abonoActivo ? 'activo' : 'inactivo'}`}>
-            {abonoActivo ? (
-              <>
-                <span className="status-text">ABONADO HASTA</span>
-                <span className="status-fecha">{formatearFechaCorta(finDerivado)}</span>
-              </>
-            ) : (
-              <span className="status-text">ABONO EXPIRADO</span>
-            )}
-            {!abonoActivo && (
-              <button className="btn-renovar" onClick={calcularPrecioRenovacionCliente}>
-                RENOVAR
-              </button>
-            )}
-          </div>
         </div>
       )}
 
