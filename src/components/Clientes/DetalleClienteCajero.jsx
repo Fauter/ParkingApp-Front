@@ -146,7 +146,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
     if (!Array.isArray(abonosCliente) || !patenteUpper) return null;
 
     const mismos = abonosCliente.filter(a =>
-      a && String(a.patente || '').toUpperCase() === patenteUpper
+      a &&
+      true &&                                   // 🔥 CLAVE
+      String(a.patente || '').toUpperCase() === patenteUpper
     );
     if (!mismos.length) return null;
 
@@ -258,7 +260,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
         const data = await res.json();
 
         const propios = Array.isArray(data)
-          ? data.filter(v => v.cliente && String(v.cliente._id) === String(cliente._id))
+          ? data.filter(v =>
+              cliente.vehiculos?.some(cv => String(cv._id) === String(v._id))
+            )
           : [];
 
         setVehiculosCliente(propios);
@@ -277,7 +281,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
   /* =================== Carga cocheras del cliente =================== */
   useEffect(() => {
     const fetchCocherasCliente = async () => {
-      if (!cliente || !Array.isArray(cliente.cocheras) || cliente.cocheras.length === 0) {
+      if (!cliente?._id) {
         setCocherasConVehiculos([]);
         return;
       }
@@ -285,108 +289,97 @@ function DetalleClienteCajero({ clienteId, volver }) {
       try {
         setCocherasLoading(true);
 
-        const abonosCliente = Array.isArray(cliente.abonos) ? cliente.abonos : [];
-        const resultado = [];
-
-        for (const c of cliente.cocheras) {
-          if (!c || !c.cocheraId) continue;
-
-          try {
-            const res = await fetch(`${API_COCHERAS}/${c.cocheraId}`, {
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              }
-            });
-            if (!res.ok) continue;
-
-            const cocheraData = await res.json();
-            const vehiculosCochera = Array.isArray(cocheraData.vehiculos)
-              ? cocheraData.vehiculos
-              : [];
-            const vehiculosAbonos = [];
-
-            for (const v of vehiculosCochera) {
-              const patenteUpper = (v?.patente || '').toUpperCase();
-
-              // 🔹 1) Buscar el VEHÍCULO real del cliente
-              const vehiculoDoc = vehiculosCliente.find((veh) =>
-                (veh._id && v._id && String(veh._id) === String(v._id)) ||
-                ((veh.patente || '').toUpperCase() === patenteUpper)
-              );
-
-              // 🔹 2) Buscar el ABONO por patente (activo o el último que matchee)
-              const abonoMatch = elegirAbonoPorPatente(cliente.abonos || [], patenteUpper);;
-
-              if (!vehiculoDoc && !abonoMatch) {
-                console.warn(
-                  '[DetalleClienteCajero] Vehículo en cochera sin datos de vehículo ni abono:',
-                  patenteUpper
-                );
-                continue;
-              }
-
-              // 🔥 MERGE INTELIGENTE: evita que el abono PISE datos del vehículo
-              const mergeAbonoVehiculo = (vehiculo, abono) => {
-                const abonoId = abono?._id || null;
-                const vehiculoId = vehiculo?._id || abono?.vehiculo || null;
-
-                return {
-                  // 🔒 ID ESTABLE PARA REACT (SIEMPRE ABONO)
-                  _key: abonoId || vehiculoId,   // ← NUEVO
-
-                  // IDs reales
-                  abonoId,
-                  vehiculoId,
-
-                  patente: abono?.patente || vehiculo?.patente || '',
-                  tipoVehiculo: abono?.tipoVehiculo || vehiculo?.tipoVehiculo || '',
-
-                  marca: abono?.marca || vehiculo?.marca || '',
-                  modelo: abono?.modelo || vehiculo?.modelo || '',
-                  color: abono?.color || vehiculo?.color || '',
-                  anio: abono?.anio || vehiculo?.anio || '',
-                  companiaSeguro: abono?.companiaSeguro || vehiculo?.companiaSeguro || '',
-
-                  precio: abono?.precio ?? null,
-                  fechaExpiracion: abono?.fechaExpiracion ?? null,
-                  fechaCreacion: abono?.fechaCreacion ?? null,
-                  activo: abono?.activo ?? false,
-
-                  cochera: abono?.cochera || '',
-                  piso: abono?.piso ?? '',
-                  exclusiva: abono?.exclusiva ?? false,
-                };
-              };
-
-              // 🔥 USAR MERGE REAL
-              vehiculosAbonos.push(
-                mergeAbonoVehiculo(vehiculoDoc, abonoMatch)
-              );
-            }
-
-            resultado.push({
-              cocheraId: cocheraData._id || c.cocheraId,
-              tipo: cocheraData.tipo ?? c.cochera,
-              piso: cocheraData.piso ?? c.piso,
-              exclusiva: typeof cocheraData.exclusiva === 'boolean'
-                ? cocheraData.exclusiva
-                : !!c.exclusiva,
-              vehiculos: vehiculosAbonos, // 🔥 Ahora son los abonos correctos
-            });
-          } catch (err) {
-            console.error('Error cargando cochera cliente:', c.cocheraId, err);
+        // 1) Traigo TODAS las cocheras y filtro por cliente (igual que el remoto)
+        const res = await fetch(`${API_COCHERAS}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
           }
+        });
+
+        if (!res.ok) {
+          setCocherasConVehiculos([]);
+          return;
         }
 
+        const all = await res.json();
+        const cocherasCliente = Array.isArray(all)
+          ? all.filter(c => String(c?.cliente?._id) === String(cliente._id))
+          : [];
+
+        // 2) Armo cocherasConVehiculos usando vehiculos[] de la cochera
+        const resultado = cocherasCliente.map((cocheraData) => {
+          const vehiculosCochera = Array.isArray(cocheraData.vehiculos)
+            ? cocheraData.vehiculos
+            : [];
+
+          const vehiculosAbonos = vehiculosCochera
+            .map((v) => {
+              const patenteUpper = (v?.patente || '').toUpperCase();
+
+              const vehiculoDoc = vehiculosCliente.find((veh) =>
+                (
+                  (veh._id && v._id && String(veh._id) === String(v._id)) ||
+                  ((veh.patente || '').toUpperCase() === patenteUpper)
+                ) &&
+                veh.abonado === true                                   // 🔥 CLAVE
+              );
+
+              const abonoMatch = elegirAbonoPorPatente(cliente.abonos || [], patenteUpper);
+
+              if (!vehiculoDoc && !abonoMatch) return null;
+
+              const abonoId = abonoMatch?._id || null;
+              const vehiculoId = vehiculoDoc?._id || abonoMatch?.vehiculo || v?._id || null;
+
+              return {
+                _key: abonoId || vehiculoId,   // ID estable para React
+                abonoId,
+                vehiculoId,
+
+                patente: abonoMatch?.patente || vehiculoDoc?.patente || v?.patente || '',
+                tipoVehiculo: abonoMatch?.tipoVehiculo || vehiculoDoc?.tipoVehiculo || '',
+
+                marca: abonoMatch?.marca || vehiculoDoc?.marca || '',
+                modelo: abonoMatch?.modelo || vehiculoDoc?.modelo || '',
+                color: abonoMatch?.color || vehiculoDoc?.color || '',
+                anio: abonoMatch?.anio || vehiculoDoc?.anio || '',
+                companiaSeguro: abonoMatch?.companiaSeguro || vehiculoDoc?.companiaSeguro || '',
+
+                precio: abonoMatch?.precio ?? null,
+                fechaExpiracion: abonoMatch?.fechaExpiracion ?? null,
+                fechaCreacion: abonoMatch?.fechaCreacion ?? null,
+                activo: abonoMatch?.activo ?? false,
+
+                cochera: cocheraData.tipo || abonoMatch?.cochera || '',
+                piso: cocheraData.piso ?? abonoMatch?.piso ?? '',
+                exclusiva: typeof cocheraData.exclusiva === 'boolean'
+                  ? cocheraData.exclusiva
+                  : !!abonoMatch?.exclusiva,
+              };
+            })
+            .filter(Boolean);
+
+          return {
+            cocheraId: cocheraData._id,
+            tipo: cocheraData.tipo,
+            piso: cocheraData.piso,
+            exclusiva: !!cocheraData.exclusiva,
+            vehiculos: vehiculosAbonos,
+          };
+        });
+
         setCocherasConVehiculos(resultado);
+      } catch (err) {
+        console.error('Error cargando cocheras del cliente:', err);
+        setCocherasConVehiculos([]);
       } finally {
         setCocherasLoading(false);
       }
     };
 
     fetchCocherasCliente();
-  }, [cliente, vehiculosCliente]);
+  }, [cliente?._id, vehiculosCliente, cliente?.abonos]);
 
   useEffect(() => {
     if (!modalRenovarVisible) return;
@@ -743,10 +736,26 @@ function DetalleClienteCajero({ clienteId, volver }) {
     }
   };
 
+  const operador = (() => {
+    try {
+      const raw = localStorage.getItem("operador");
+      if (!raw) return "Sistema";
+
+      const o = JSON.parse(raw);
+      return (
+        o.username ||
+        (o.nombre && o.apellido ? `${o.nombre} ${o.apellido}` : null) ||
+        o.nombre ||
+        "Sistema"
+      );
+    } catch {
+      return "Sistema";
+    }
+  })();
+
   const handleRenovarAbono = async () => {
     try {
       setLoading(true);
-      const operador = localStorage.getItem('nombreUsuario') || 'Cajero';
 
       // 🔒 MONTO FINAL REAL (BACKEND MANDA)
       // fallback inicial: precio base del front
@@ -1249,9 +1258,25 @@ function DetalleClienteCajero({ clienteId, volver }) {
     });
   });
 
-  const abonosSinCochera = abonosActivos.filter(a => 
-    !abonosEnCocherasIds.has(String(a._id)) && a.vehiculo !== null
-  );
+  const abonosSinCochera = abonosActivos.filter(a => {
+    if (!a || !a.vehiculo) return false;
+
+    // el abono NO puede estar ya en una cochera
+    if (abonosEnCocherasIds.has(String(a._id))) return false;
+
+    // buscar el vehículo real
+    const vehiculoReal = vehiculosCliente.find(
+      v => String(v._id) === String(a.vehiculo)
+    );
+
+    // si el vehículo no existe, NO mostrar
+    if (!vehiculoReal) return false;
+
+    // si el vehículo NO está abonado, NO mostrar
+    if (vehiculoReal.abonado !== true) return false;
+
+    return true;
+  });
 
   return (
     <div className="detalle-cliente-cajero">
