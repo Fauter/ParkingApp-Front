@@ -324,10 +324,19 @@ function DatosAutoEntrada({
       if (!resAsociar.ok) throw new Error(dataAsociar.msg || "Error al asociar ticket");
 
       // Registrar entrada
+      // Registrar entrada
       const checkResponse = await fetch(`${BASE_URL}/api/vehiculos/${patente}`);
-      const precioHora = precios[norm(tipoVehiculo)]?.hora ?? precios[norm(tipoVehiculo)]?.["hora"] ?? null;
+      let esAbonado = false;
+
+      const precioHora =
+      precios[norm(tipoVehiculo)]?.hora ??
+      precios[norm(tipoVehiculo)]?.["hora"] ??
+      null;
 
       if (checkResponse.ok) {
+        const vehiculoExistente = await checkResponse.json();
+        esAbonado = vehiculoExistente?.abonado === true;
+
         const entradaResponse = await fetch(
           `${BASE_URL}/api/vehiculos/${patente}/registrarEntrada`,
           {
@@ -363,22 +372,28 @@ function DatosAutoEntrada({
 
       await eliminarFotoTemporal();
 
-      // 🖨️ Imprimir AHORA con meta
-      try {
-        const ticketNumFormateado = String(ticketPendiente.ticket).padStart(6, '0');
-        await fetch(`${BASE_URL}/api/ticket/imprimir`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            texto: ticketNumFormateado,
-            ticketNumero: ticketNumFormateado,
-            valorHora: (precioHora != null ? `$${Number(precioHora).toLocaleString('es-AR')}` : `${tipoVehiculo || ''}`),
-            patente: patente,
-            tipoVehiculo: tipoVehiculo 
-          }),
-        });
-      } catch (e) {
-        console.warn("Impresión con meta falló, se ignora:", e);
+      // 🖨️ Imprimir SOLO si NO es abonado
+      if (!esAbonado) {
+        try {
+          const ticketNumFormateado = String(ticketPendiente.ticket).padStart(6, '0');
+          await fetch(`${BASE_URL}/api/ticket/imprimir`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              texto: ticketNumFormateado,
+              ticketNumero: ticketNumFormateado,
+              valorHora: (precioHora != null
+                ? `$${Number(precioHora).toLocaleString('es-AR')}`
+                : `${tipoVehiculo || ''}`),
+              patente: patente,
+              tipoVehiculo: tipoVehiculo
+            }),
+          });
+        } catch (e) {
+          console.warn("Impresión con meta falló, se ignora:", e);
+        }
+      } else {
+        console.log(`[Entrada] Vehículo abonado (${patente}) → no se imprime ticket`);
       }
 
       // Aviso al padre para cancelar el fallback de 20s

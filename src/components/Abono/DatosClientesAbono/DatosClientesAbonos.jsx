@@ -164,20 +164,55 @@ export default function DatosClientesAbonos({ onPickCliente }) {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return clientes;
-    return clientes.filter((c) => {
-      const nombre = String(c?.nombreApellido || "").toLowerCase();
-      const dni = String(c?.dniCuitCuil || "").toLowerCase();
-      const email = String(c?.email || "").toLowerCase();
-      const patente = String(c?.patente || "").toLowerCase();
-      return (
-        nombre.includes(term) ||
-        dni.includes(term) ||
-        email.includes(term) ||
-        patente.includes(term)
+
+    const base = !term
+      ? clientes
+      : clientes.filter((c) => {
+          const nombre = String(c?.nombreApellido || "").toLowerCase();
+          const dni = String(c?.dniCuitCuil || "").toLowerCase();
+          const email = String(c?.email || "").toLowerCase();
+          const patente = String(c?.patente || "").toLowerCase();
+          return (
+            nombre.includes(term) ||
+            dni.includes(term) ||
+            email.includes(term) ||
+            patente.includes(term)
+          );
+        });
+
+    const withCochera = [];
+    const withoutCochera = [];
+
+    const sortByNombre = (a, b) =>
+      String(a?.nombreApellido || "").localeCompare(
+        String(b?.nombreApellido || ""),
+        "es",
+        { sensitivity: "base" }
       );
-    });
-  }, [clientes, q]);
+
+    for (const c of base) {
+      const id = c?._id;
+
+      // 1) Si ya resolvimos cocherasMap, ESO manda.
+      const resolved = id ? cocherasMap[id] : undefined;
+      if (Array.isArray(resolved)) {
+        (resolved.length > 0 ? withCochera : withoutCochera).push(c);
+        continue;
+      }
+
+      // 2) Si todavía no resolvimos, consideramos "tiene cochera" SOLO si hay refs con cocheraId válido
+      const refs = Array.isArray(c?.cocheras) ? c.cocheras : [];
+      const hasValidRef = refs.some((r) => r?.cocheraId);
+
+      (hasValidRef ? withCochera : withoutCochera).push(c);
+    }
+
+    withCochera.sort(sortByNombre);
+    withoutCochera.sort(sortByNombre);
+
+    return [...withCochera, ...withoutCochera];
+  }, [clientes, q, cocherasMap]);
+
 
   const showSkeleton = loading || isRefreshing;
 

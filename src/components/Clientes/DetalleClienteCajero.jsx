@@ -11,6 +11,8 @@ const API_CLIENTES = `${API_BASE}/api/clientes`;
 const API_ABONOS = `${API_BASE}/api/abonos`;
 const API_VEHICULOS = `${API_BASE}/api/vehiculos`;
 const API_COCHERAS = `${API_BASE}/api/cocheras`; // 👈 nuevo: endpoint de cocheras
+const API_ALERTAS = `${API_BASE}/api/alertas`;
+const API_PARAMETROS = `${API_BASE}/api/parametros`;
 
 // ====================== CÁLCULO REAL DE PRECIOS ======================
 const getAbonoPrecioByMetodo = (
@@ -36,6 +38,36 @@ const getAbonoPrecioByMetodo = (
   return 0;
 };
 
+const calcularDetalleCobroPorFecha = (precioBase, parametros) => {
+  if (!parametros || !precioBase) return null;
+
+  const hoy = new Date();
+  const dia = hoy.getDate();
+
+  const d11 = Number(parametros.apartirdia11);
+  const d22 = Number(parametros.apartirdia22);
+
+  let porcentajeRecargo = 0;
+  let motivo = "Al día";
+
+  if (dia >= 22) {
+    porcentajeRecargo = d22;
+    motivo = `A partir del día 22`;
+  } else if (dia >= 11) {
+    porcentajeRecargo = d11;
+    motivo = `A partir del día 11`;
+  }
+
+  const recargoMonto = Math.round(precioBase * (porcentajeRecargo / 100));
+
+  return {
+    base: precioBase,
+    porcentajeRecargo,
+    recargoMonto,
+    motivoRecargo: motivo,
+  };
+};
+
 
 function DetalleClienteCajero({ clienteId, volver }) {
   const [cliente, setCliente] = useState(null);
@@ -56,6 +88,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
   const [metodoPago, setMetodoPago] = useState('Efectivo');
   const [factura, setFactura] = useState('CC');
   const [detalleCobro, setDetalleCobro] = useState(null);
+  const [parametros, setParametros] = useState(null);
   const [diasRestantes, setDiasRestantes] = useState(0);
 
   // Catálogo Precios
@@ -76,6 +109,22 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
     cargarCatalogo();
   }, [metodoPago]);
+
+  useEffect(() => {
+    const cargarParametros = async () => {
+      try {
+        const r = await fetch(API_PARAMETROS, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        const data = await r.json();
+        setParametros(data);
+      } catch (err) {
+        console.error("Error cargando parámetros:", err);
+      }
+    };
+
+    cargarParametros();
+  }, []);
 
   // Modal editar datos del cliente
   const [editOpen, setEditOpen] = useState(false);
@@ -399,7 +448,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
     );
 
     const precioFinal = Math.max(...precios, 0);
-    setPrecioRenovacion(Math.round(precioFinal));
+    const precioBase = Math.round(precioFinal);
+    setPrecioRenovacion(precioBase);
+
+    const detalle = calcularDetalleCobroPorFecha(precioBase, parametros);
+    setDetalleCobro(detalle);
   }, [
     metodoPago,
     catalogoPrecios,
@@ -456,7 +509,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
     else if (t === 'fija') base = exclusiva ? 'Cochera Exclusiva' : 'Cochera Fija';
     else base = 'Cochera';
     if (piso !== undefined && piso !== null && piso !== '') {
-      return `${base} • N° ${piso}`;
+      return `${base} • Nro ${piso}`;
     }
     return base;
   };
@@ -533,6 +586,55 @@ function DetalleClienteCajero({ clienteId, volver }) {
         )
       );
 
+      // =============================
+      // 🖨️ IMPRIMIR TICKET DE EDICIÓN
+      // =============================
+      try {
+        // Cochera ya actualizada (payload + datos previos)
+        let cocheraTexto = "Móvil";
+
+        if (payload.tipo === "Fija") {
+          if (payload.exclusiva) {
+            cocheraTexto = `Exclusiva${payload.piso ? " Nro. " + payload.piso : ""}`;
+          } else {
+            cocheraTexto = `Fija${payload.piso ? " Nro. " + payload.piso : ""}`;
+          }
+        }
+
+        // Patentes actuales de esa cochera (desde estado ya armado)
+        const cocheraUI = cocherasConVehiculos.find(
+          c => c.cocheraId === editingCocheraId
+        );
+
+        const patentes = Array.isArray(cocheraUI?.vehiculos)
+          ? cocheraUI.vehiculos
+              .map(v => (v?.patente || "").toUpperCase())
+              .filter(Boolean)
+          : [];
+
+        const payloadImpresion = {
+          titular: cliente?.nombreApellido || "—",
+          operador,
+          cocheraTexto,
+          patentes
+        };
+
+        // 🔁 DOS IMPRESIONES SEGUIDAS (OBLIGATORIO)
+        for (let i = 0; i < 2; i++) {
+          await fetch(`${API_BASE}/api/tickets/imprimir-editar`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify(payloadImpresion),
+          });
+        }
+      } catch (err) {
+        console.error("⚠️ Error al imprimir ticket de edición:", err);
+        // ⚠️ JAMÁS romper la UX
+      }
+
       cancelEditCochera();
     } catch (err) {
       setEditingCocheraError(err.message);
@@ -547,7 +649,85 @@ function DetalleClienteCajero({ clienteId, volver }) {
     try {
       setLoading(true);
 
-      // DELETE /api/cocheras/:id
+      // =============================
+      // ✅ PRE-CHEQUEO: si la cochera a borrar está expirada (tiene algún abono activo:false)
+      //    -> crear alerta "Abono expirado: Cochera (fija/movil/exclusiva) N°(n°)"
+      //    ⚠️ Esto NO interrumpe el borrado si falla.
+      // =============================
+      try {
+        const cochId = String(confirmDelCochera.cocheraId);
+
+        // buscamos en el estado ya armado (cocherasConVehiculos) para no pegarle a más endpoints
+        const cochUI = cocherasConVehiculos.find(c => String(c?.cocheraId) === cochId);
+
+        const tieneExpirado = (() => {
+          if (!cochUI || !Array.isArray(cochUI.vehiculos) || !Array.isArray(cliente?.abonos)) {
+            return false;
+          }
+
+          // Patentes de los vehículos que están en ESTA cochera
+          const patentesCochera = cochUI.vehiculos
+            .map(v => (v?.patente || '').toUpperCase())
+            .filter(Boolean);
+
+          if (!patentesCochera.length) return false;
+
+          // Buscamos en los ABONOS reales del cliente
+          return cliente.abonos.some(a =>
+            a &&
+            a.activo === false &&
+            patentesCochera.includes((a.patente || '').toUpperCase())
+          );
+        })();
+
+        if (tieneExpirado) {
+          const tipo = (cochUI?.tipo || confirmDelCochera.tipo || '').toString().trim();
+          const piso = (cochUI?.piso ?? confirmDelCochera.piso ?? '').toString().trim();
+          const exclusiva = !!(cochUI?.exclusiva);
+
+          const tipoLower = tipo.toLowerCase();
+          const tipoTxt =
+            tipoLower === 'móvil' || tipoLower === 'movil'
+              ? 'movil'
+              : exclusiva
+                ? 'exclusiva'
+                : 'fija';
+
+          const msg = `Abono expirado eliminado: Cochera ${tipoTxt}${piso ? ` N° ${piso}` : ''}.`;
+
+          await fetch(API_ALERTAS, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify({
+              // 🔑 CLAVE NATURAL (OBLIGATORIA PARA sync / upsert)
+              codigo: `abono_expirado_cochera_delete_${confirmDelCochera.cocheraId}`,
+
+              // 🔔 MODELO LEGACY REAL
+              tipoDeAlerta: `Abono expirado eliminado: Cochera ${tipoTxt}${piso ? ` N° ${piso}` : ''}.`,
+
+              // 📎 Referencias
+              cliente: clienteId,
+              cochera: confirmDelCochera.cocheraId,
+
+              // 👤 Operador
+              operador: operador,
+
+              // 🕒 Campos legacy usados por otras alertas
+              fecha: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+              hora: new Date().toTimeString().slice(0, 5),  // HH:mm
+            }),
+          }).catch(() => {});
+        }
+      } catch (_) {
+        // silencioso: la alerta jamás debe romper el flujo de borrado
+      }
+
+      // =============================
+      // ✅ BORRADO (NO TOCAR)
+      // =============================
       const res = await fetch(`${API_COCHERAS}/${confirmDelCochera.cocheraId}`, {
         method: 'DELETE',
         headers: {
@@ -580,7 +760,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
     } finally {
       setLoading(false);
     }
-  };  
+  }; 
 
   /* =================== Fotos documentos =================== */
   const abrirFoto = (abono, tipoFoto) => {
@@ -659,7 +839,11 @@ function DetalleClienteCajero({ clienteId, volver }) {
     );
 
     const precioFinal = Math.max(...precios, 0);
-    setPrecioRenovacion(Math.round(precioFinal));
+    const precioBase = Math.round(precioFinal);
+    setPrecioRenovacion(precioBase);
+
+    const detalle = calcularDetalleCobroPorFecha(precioBase, parametros);
+    setDetalleCobro(detalle);
 
     setCocheraEnRenovacion({
       cocheraId: coch.cocheraId,
@@ -759,7 +943,12 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       // 🔒 MONTO FINAL REAL (BACKEND MANDA)
       // fallback inicial: precio base del front
-      let montoFinalCobrado = Number(precioRenovacion) || 0;
+      let montoFinalCobrado = detalleCobro
+      ? Math.round(
+          Number(detalleCobro.base || 0) +
+          Number(detalleCobro.recargoMonto || 0)
+        )
+      : Number(precioRenovacion) || 0;
 
 
       if (!Array.isArray(abonosEnRenovacion) || abonosEnRenovacion.length === 0) {
@@ -824,24 +1013,10 @@ function DetalleClienteCajero({ clienteId, volver }) {
             return Number.isFinite(n) ? n : null;
           };
 
-          if (toNumberSafe(data.montoFinal) !== null) {
-            montoFinalCobrado = toNumberSafe(data.montoFinal);
-          } else if (toNumberSafe(data.cobrado) !== null) {
-            montoFinalCobrado = toNumberSafe(data.cobrado);
-          } else if (data.detalleCobro) {
-            const base = toNumberSafe(data.detalleCobro.base || data.detalleCobro.baseMonto);
-            const recargo = toNumberSafe(data.detalleCobro.recargoMonto);
-            if (base !== null) {
-              montoFinalCobrado = base + (recargo || 0);
-            }
-          }
-          else if (data.detalleCobro) {
-            // fallback calculado con detalleCobro
-            const base = Number(data.detalleCobro.base || data.detalleCobro.baseMonto || 0);
-            const recargo = Number(data.detalleCobro.recargoMonto || 0);
-            if (base > 0) {
-              montoFinalCobrado = base + recargo;
-            }
+          // 🔒 REGLA: en renovación por cochera el monto se calcula UNA SOLA VEZ
+          // El backend puede devolver montos por abono, pero NO se pisan acá.
+          if (data?.detalleCobro) {
+            setDetalleCobro(data.detalleCobro);
           }
         }
       }
@@ -861,7 +1036,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
             factura,
 
             // 🔥 🔥 🔥 EL ÚNICO MONTO QUE IMPORTA
-            monto: Math.round(Number(montoFinalCobrado) || 0),
+            monto: montoFinalCobrado,
 
             descripcion: "Renovación de Abono",
             cliente: clienteId,
@@ -884,6 +1059,55 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
       await cargarCliente();
       setModalRenovarVisible(false);
+
+      // ================================
+      // 🖨️ IMPRIMIR TICKET RENOVACIÓN (2 COPIAS)
+      // ================================
+      try {
+        const montoTicket = Math.round(Number(montoFinalCobrado) || 0);
+        
+        const payloadImpresion = {
+          titular: cliente?.nombreApellido || "—",
+          monto: montoTicket,
+
+          // 👉 SOLO texto de cochera, sin "Cochera"
+          cocheraTexto: cocheraEnRenovacion
+            ? (
+                cocheraEnRenovacion.tipo === "Fija"
+                  ? cocheraEnRenovacion.exclusiva
+                    ? `Exclusiva${cocheraEnRenovacion.piso ? " Nro. " + cocheraEnRenovacion.piso : ""}`
+                    : `Fija${cocheraEnRenovacion.piso ? " Nro. " + cocheraEnRenovacion.piso : ""}`
+                  : "Móvil"
+              )
+            : "—",
+
+          // 👉 TODAS las patentes de la cochera renovada
+          patentes: abonosEnRenovacion
+            .map(a => (a?.patente || "").toUpperCase())
+            .filter(Boolean),
+
+          operador,
+        };
+
+        // 🔁 DOS IMPRESIONES SEGUIDAS
+        for (let i = 0; i < 2; i++) {
+          await fetch(`${API_BASE}/api/tickets/imprimir-renovar`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+            body: JSON.stringify(payloadImpresion),
+          });
+        }
+      } catch (err) {
+        console.error("Error al imprimir ticket de renovación:", err);
+        // ⚠️ JAMÁS romper la UX por impresión
+      }
+
+      // ================================
+      // ✅ MENSAJE FINAL AL USUARIO
+      // ================================
       setMensajeModal({
         titulo: 'Éxito',
         mensaje: 'Abono renovado exitosamente.',
@@ -1148,7 +1372,86 @@ function DetalleClienteCajero({ clienteId, volver }) {
       const vehiculoIdReal = confirmDel.vehiculoId;
       if (!vehiculoIdReal) throw new Error("ID de vehículo inexistente.");
 
-      // 1) Si viene de una cochera → removerlo correctamente
+      // ============================================================
+      // 🔔 ALERTA FRONT
+      // Si al remover este vehículo la cochera queda vacía
+      // Y ESA cochera tenía algún vehículo con abono expirado
+      // ============================================================
+      try {
+        if (confirmDel.cocheraId) {
+          const cochUI = cocherasConVehiculos.find(
+            c => String(c.cocheraId) === String(confirmDel.cocheraId)
+          );
+
+          if (cochUI && Array.isArray(cochUI.vehiculos)) {
+            // Vehículos que quedarían luego del delete
+            const vehiculosRestantes = cochUI.vehiculos.filter(
+              v => String(v.vehiculoId) !== String(vehiculoIdReal)
+            );
+
+            // 🔑 Regla explícita: activo === false
+            const teniaExpirado = (() => {
+              if (!Array.isArray(cliente?.abonos) || !Array.isArray(cochUI.vehiculos)) {
+                return false;
+              }
+
+              const patentesCochera = cochUI.vehiculos
+                .map(v => (v?.patente || '').toUpperCase())
+                .filter(Boolean);
+
+              if (!patentesCochera.length) return false;
+
+              return cliente.abonos.some(a =>
+                a &&
+                a.activo === false &&
+                patentesCochera.includes((a.patente || '').toUpperCase())
+              );
+            })();
+
+            // 👉 SOLO si queda vacía y tenía expirado
+            if (vehiculosRestantes.length === 0 && teniaExpirado) {
+              const tipoLower = (cochUI.tipo || '').toLowerCase();
+              const tipoTxt =
+                tipoLower === 'móvil' || tipoLower === 'movil'
+                  ? 'movil'
+                  : cochUI.exclusiva
+                    ? 'exclusiva'
+                    : 'fija';
+
+              const piso = cochUI.piso ?? '';
+
+              const msg = `Abono expirado eliminado: Cochera ${tipoTxt}${piso ? ` N° ${piso}` : ''}.`;
+
+              await fetch(API_ALERTAS, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+                body: JSON.stringify({
+                  codigo: `abono_expirado_cochera_empty_${cochUI.cocheraId}`,
+
+                  tipoDeAlerta: `Abono expirado eliminado: Cochera ${tipoTxt}${piso ? ` N° ${piso}` : ''}.`,
+
+                  cliente: clienteId,
+                  cochera: cochUI.cocheraId,
+
+                  operador: operador,
+
+                  fecha: new Date().toISOString().slice(0, 10),
+                  hora: new Date().toTimeString().slice(0, 5),
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
+      } catch (_) {
+        // 🔇 Silencioso: jamás rompe el delete
+      }
+
+      // ============================================================
+      // 1) Remover de cochera (backend puede borrar cochera)
+      // ============================================================
       if (confirmDel.cocheraId) {
         const r1 = await fetch(`${API_COCHERAS}/remover-vehiculo`, {
           method: "POST",
@@ -1163,15 +1466,14 @@ function DetalleClienteCajero({ clienteId, volver }) {
         });
 
         const d1 = await r1.json().catch(() => ({}));
-        if (!r1.ok) throw new Error(d1?.message || d1?.msg || "Error removiendo vehículo de la cochera.");
+        if (!r1.ok) {
+          throw new Error(d1?.message || d1?.msg || "Error removiendo vehículo de la cochera.");
+        }
       }
 
-      // 2) ⚠️ NO HACER NADA ACÁ
-      // El vehículo YA fue correctamente desabonado en:
-      // POST /api/cocheras/remover-vehiculo
-      // Volver a tocar el flag rompe la consistencia con Abonos / Sync.
-
-      // 3) Si hay abonoId → desvincular
+      // ============================================================
+      // 2) Desvincular vehículo del abono (si corresponde)
+      // ============================================================
       if (confirmDel.abonoId) {
         await fetch(`${API_ABONOS}/${confirmDel.abonoId}/vehiculo`, {
           method: "PATCH",
@@ -1183,7 +1485,9 @@ function DetalleClienteCajero({ clienteId, volver }) {
         }).catch(() => {});
       }
 
-      // 4) Refrescar vista
+      // ============================================================
+      // 3) UI
+      // ============================================================
       setConfirmDel(null);
       setMensajeModal({
         titulo: "Vehículo eliminado",
@@ -1196,7 +1500,6 @@ function DetalleClienteCajero({ clienteId, volver }) {
 
     } catch (err) {
       console.error(err);
-      // cierro el modal de confirmación para que no quede "debajo"
       setConfirmDel(null);
       setMensajeModal({
         titulo: "Error",
@@ -1362,7 +1665,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                 ? 'Cochera Exclusiva'
                                 : 'Cochera Fija'
                               : 'Cochera Móvil'}
-                            {coch.piso ? ` • N° ${coch.piso}` : ''}
+                            {coch.piso ? ` • N°. ${coch.piso}` : ''}
                           </span>
                         )}
 
@@ -1999,7 +2302,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
       {confirmDelCochera && (
         <ModalMensaje
           titulo="Eliminar Cochera"
-          mensaje={`¿Seguro que querés eliminar la cochera ${confirmDelCochera.tipo} Nº ${confirmDelCochera.piso}?`}
+          mensaje={`¿Seguro que querés eliminar la cochera ${confirmDelCochera.tipo} Nro ${confirmDelCochera.piso}?`}
           onClose={() => setConfirmDelCochera(null)}
         >
           <div className="confirm-actions">

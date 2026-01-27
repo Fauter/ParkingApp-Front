@@ -323,10 +323,12 @@ function Interfaz() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       try {
+        const REMOTE_API = 'https://api.garageia.com';
+
         const [cierresRes, movsRes, parcRes] = await Promise.all([
-          fetch('http://localhost:5000/api/cierresdecaja', { headers }),
-          fetch('http://localhost:5000/api/movimientos', { headers }),
-          fetch('http://localhost:5000/api/cierresdecaja/parcial', { headers }),
+          fetch(`${REMOTE_API}/api/cierresdecaja`, { headers }),
+          fetch(`${REMOTE_API}/api/movimientos`, { headers }),
+          fetch(`${REMOTE_API}/api/cierresdecaja/parcial`, { headers }),
         ]);
 
         if (!cierresRes.ok || !movsRes.ok || !parcRes.ok) {
