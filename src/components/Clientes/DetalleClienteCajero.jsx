@@ -1665,7 +1665,7 @@ function DetalleClienteCajero({ clienteId, volver }) {
                                 ? 'Cochera Exclusiva'
                                 : 'Cochera Fija'
                               : 'Cochera Móvil'}
-                            {coch.piso ? ` • N°. ${coch.piso}` : ''}
+                            {coch.piso ? ` • N° ${coch.piso}` : ''}
                           </span>
                         )}
 
